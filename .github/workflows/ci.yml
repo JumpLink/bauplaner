@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Node-free gjsify toolchain (mirrors the buchhaltung CI). Everything runs on the
+# gjsify 0.16 stack: `gjsify install --immutable` (from gjsify-lock.json), the
+# bundled `gjsify tsc` type-check, `gjsify build` for the CLI + native-app
+# bundles, and the GJS test bundle under `gjs`. Node is present only to bootstrap
+# the gjsify CLI (its published bin is Node; its work targets gjs). A Fedora
+# container ships `gjs`; no GTK/GL system libs are needed because the build only
+# bundles (it never loads the gi:// typelibs) and the tests are pure TS.
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:44
+    steps:
+      - name: Install system prerequisites (gjs)
+        run: >
+          dnf install -y --setopt=install_weak_deps=False
+          git tar xz findutils gjs
+
+      - uses: actions/checkout@v4
+
+      # Node 24 to bootstrap + run the gjsify CLI. gjsify's native install-backend
+      # prebuilds target node 24 — Fedora's default node 22 loads a mismatched ABI
+      # and segfaults `gjsify install`.
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # Content-addressed tarball store: a warm cache lets `gjsify install --immutable`
+      # skip the download phase. Keyed on the lockfile.
+      - name: Cache gjsify tarball store
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/gjsify/tarballs
+          key: gjsify-tarballs-${{ hashFiles('gjsify-lock.json') }}
+          restore-keys: gjsify-tarballs-
+
+      # Bootstrap the gjsify CLI so `gjsify install` is runnable before node_modules
+      # exists. Pin to the SAME version the deps use (0.16.5) — a global-CLI ↔
+      # pinned-libs mismatch produces broken bundles.
+      - name: Bootstrap the gjsify CLI
+        run: npm install -g @gjsify/cli@0.16.5
+
+      - name: Install dependencies (gjsify install --immutable)
+        run: gjsify install --immutable
+
+      - name: Type check (gjsify tsc)
+        run: |
+          npm run check --workspace packages/core
+          npm run check --workspace packages/materials
+          npm run check --workspace packages/diagnose
+          npm run check --workspace cli
+
+      - name: Build (CLI + native-app bundles)
+        run: |
+          npm run build --workspace cli
+          npm run build:app --workspace cli
+
+      - name: Tests (GJS test bundle under gjs)
+        run: npm run test --workspace cli

@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# gjsify
+.gjsify/
+
+# Editor / OS
+.DS_Store
+*.log

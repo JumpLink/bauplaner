@@ -1,0 +1,17 @@
+{
+  "name": "bauplaner",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Natural-building planner (CLI + native GNOME/Adwaita app on gjsify/GJS): shared kernel + thin adapters. See docs/concept/vision.md.",
+  "workspaces": [
+    "cli",
+    "packages/*"
+  ],
+  "scripts": {
+    "check": "npm run check --workspace cli",
+    "build": "npm run build --workspace cli",
+    "start": "npm run start --workspace cli"
+  }
+}

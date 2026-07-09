@@ -1,0 +1,52 @@
+{
+  "name": "@bauplaner/cli",
+  "description": "CLI for the natural-building planner: parse .sh3d, material stock, Lehmgraben/DERNOTON quantities. Runs on GJS via gjsify.",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "gjsify run dist/bauplaner.gjs.mjs",
+    "check": "gjsify tsc --noEmit",
+    "build": "gjsify run build:gjs",
+    "build:gjs": "gjsify build src/index.ts --app gjs --outfile dist/bauplaner.gjs.mjs --exclude-globals document,navigator,HTMLElement,location,Image,HTMLCanvasElement,HTMLImageElement,FontFace,matchMedia,MutationObserver,ResizeObserver,IntersectionObserver",
+    "build:node": "gjsify build src/index.ts --app node --outfile dist/bauplaner.node.mjs",
+    "start:node": "node dist/bauplaner.node.mjs",
+    "dev": "gjsify run build:gjs && gjsify run start",
+    "build:app": "gjsify build src/app/main.ts --app gjs --outfile dist/bauplaner-app.gjs.mjs --globals auto,dom",
+    "start:app": "gjsify run dist/bauplaner-app.gjs.mjs",
+    "dev:app": "gjsify run build:app && gjsify run start:app",
+    "build:test:gjs": "gjsify build tests/test.mts --app gjs --outfile dist/test.gjs.mjs --no-minify --exclude-globals document,navigator,HTMLElement,location,Image,HTMLCanvasElement,HTMLImageElement,FontFace,matchMedia,MutationObserver,ResizeObserver,IntersectionObserver",
+    "build:test:node": "gjsify build tests/test.mts --app node --outfile dist/test.node.mjs",
+    "test": "gjsify run build:test:gjs && gjsify run test:gjs",
+    "test:gjs": "gjsify run dist/test.gjs.mjs",
+    "test:node": "gjsify run build:test:node && node dist/test.node.mjs"
+  },
+  "dependencies": {
+    "@bauplaner/core": "*",
+    "@bauplaner/diagnose": "*",
+    "@bauplaner/materials": "*",
+    "@gjsify/devtools": "0.16.5",
+    "@gjsify/webgl": "0.16.5",
+    "three": "0.185.1",
+    "yargs": "^18.0.0"
+  },
+  "devDependencies": {
+    "@girs/adw-1": "^4.1.0",
+    "@girs/gio-2.0": "^4.1.0",
+    "@girs/glib-2.0": "^4.1.0",
+    "@girs/gobject-2.0": "^4.1.0",
+    "@girs/gtk-4.0": "^4.1.0",
+    "@gjsify/cli": "0.16.5",
+    "@gjsify/node-globals": "0.16.5",
+    "@gjsify/runtime": "0.16.5",
+    "@gjsify/unit": "0.16.5",
+    "@types/node": "^25.9.4",
+    "@types/three": "^0.185.0",
+    "@types/yargs": "^17.0.35",
+    "fflate": "^0.8.2",
+    "typescript": "~5.9.3"
+  }
+}

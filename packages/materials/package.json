@@ -1,0 +1,16 @@
+{
+  "name": "@bauplaner/materials",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Material master data + quantity/physics calculations for natural, diffusion-open construction. Pure TypeScript, runs on Node and GJS via gjsify.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit --project tsconfig.json"
+  },
+  "files": [
+    "src"
+  ]
+}
