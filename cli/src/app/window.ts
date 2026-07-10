@@ -85,6 +85,8 @@ export class MainWindow extends Adw.ApplicationWindow {
   private readonly stack = new Adw.ViewStack();
   private readonly contentTitle = new Adw.WindowTitle({ title: APP_NAME, subtitle: '' });
   private readonly toastOverlay = new Adw.ToastOverlay();
+  private readonly undoButton = new Gtk.Button({ iconName: 'edit-undo-symbolic', tooltipText: 'Rückgängig (Strg+Z)' });
+  private readonly redoButton = new Gtk.Button({ iconName: 'edit-redo-symbolic', tooltipText: 'Wiederholen (Strg+Y)' });
 
   constructor(app: Adw.Application) {
     super({ application: app, title: APP_NAME, defaultWidth: 1000, defaultHeight: 680 });
@@ -134,6 +136,25 @@ export class MainWindow extends Adw.ApplicationWindow {
       else if (target === 'feuchte') this.feuchteView.focusWall(wallId);
     });
     this.add_action(editWall);
+
+    // Undo / redo — driven by the store's command history; buttons + accelerators.
+    const undoAction = new Gio.SimpleAction({ name: 'undo' });
+    undoAction.set_enabled(false);
+    undoAction.connect('activate', () => this.store.undo());
+    this.add_action(undoAction);
+    const redoAction = new Gio.SimpleAction({ name: 'redo' });
+    redoAction.set_enabled(false);
+    redoAction.connect('activate', () => this.store.redo());
+    this.add_action(redoAction);
+    this.undoButton.set_action_name('win.undo');
+    this.redoButton.set_action_name('win.redo');
+    this.store.subscribe(() => {
+      undoAction.set_enabled(this.store.canUndo);
+      redoAction.set_enabled(this.store.canRedo);
+    });
+    const app2 = this.get_application();
+    app2?.set_accels_for_action('win.undo', ['<Control>z']);
+    app2?.set_accels_for_action('win.redo', ['<Control>y', '<Control><Shift>z']);
 
     // Navigate to a view by name (used by the Übersicht dashboard shortcuts).
     const showView = new Gio.SimpleAction({
@@ -378,6 +399,8 @@ export class MainWindow extends Adw.ApplicationWindow {
   private buildContent(): Adw.NavigationPage {
     const header = new Adw.HeaderBar();
     header.set_title_widget(this.contentTitle);
+    header.pack_start(this.undoButton);
+    header.pack_start(this.redoButton);
 
     this.toastOverlay.set_child(this.stack);
     this.stack.set_vexpand(true);
