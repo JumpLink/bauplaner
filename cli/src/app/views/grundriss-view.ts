@@ -18,6 +18,7 @@ import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
 import {
+  TGA_TRADE_ORDER,
   buildScene,
   deriveTgaStats,
   polygonCentroid,
@@ -26,6 +27,7 @@ import {
   type FloorSlab,
   type TgaNetwork,
   type TgaNode,
+  type TgaNodeKind,
   type TgaTrade,
   type WallSolid,
 } from '@bauplaner/core';
@@ -33,7 +35,7 @@ import {
 import type { DocumentStore } from '../document-store.ts';
 import { buildLegend, buildLevelControl, buildModeControls, ensureLegendCss } from '../model-overlays.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
-import { TRADE_META } from '../tga.ts';
+import { KINDS_BY_TRADE, KIND_LABELS, TRADE_META } from '../tga.ts';
 import { renderInspector } from '../wall-inspector-card.ts';
 import { computeWallColors, type ColoringMode } from '../wall-coloring.ts';
 
@@ -145,6 +147,10 @@ export class GrundrissView extends Gtk.Box {
   private dragMoved = false;
   private dragPreview: { x: number; z: number } | null = null;
   private idCounter = 0;
+  // Placement palette: the trade + kind a click will drop, and whether armed.
+  private placeTrade: TgaTrade = 'heizung';
+  private placeKind: TgaNodeKind = 'heizkoerper';
+  private placing = false;
 
   constructor(window: Gtk.Window, store: DocumentStore) {
     super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
@@ -567,34 +573,73 @@ export class GrundrissView extends Gtk.Box {
 
   // --- Gewerke editing (edit mode) ---
 
-  /** The floating edit card: a "Bearbeiten" toggle, plus delete + a hint when on. */
+  /** The floating edit card: a "Bearbeiten" toggle; when on, delete + a placement palette. */
   private buildEditControls(): Gtk.Widget {
     const card = new Gtk.Box({
-      orientation: Gtk.Orientation.HORIZONTAL,
+      orientation: Gtk.Orientation.VERTICAL,
       spacing: 6,
       cssClasses: ['osd', 'toolbar'],
       halign: Gtk.Align.START,
     });
+    const row1 = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6 });
     const toggle = new Gtk.ToggleButton({ label: 'Bearbeiten', active: this.editMode });
     toggle.connect('toggled', () => {
       this.editMode = toggle.get_active();
       this.selectedNode = null;
       this.selectedEdge = null;
+      this.placing = false;
       this.showPlan();
     });
-    card.append(toggle);
+    row1.append(toggle);
     if (this.editMode) {
       const del = new Gtk.Button({ iconName: 'user-trash-symbolic', tooltipText: 'Auswahl löschen', cssClasses: ['flat'] });
       del.connect('clicked', () => this.deleteSelection());
-      card.append(del);
-      const hint = new Gtk.Label({
-        label: 'ziehen · antippen → verbinden',
-        cssClasses: ['caption', 'dim-label'],
-        valign: Gtk.Align.CENTER,
-      });
-      card.append(hint);
+      row1.append(del);
+      row1.append(
+        new Gtk.Label({ label: 'ziehen · antippen → verbinden', cssClasses: ['caption', 'dim-label'], valign: Gtk.Align.CENTER }),
+      );
     }
+    card.append(row1);
+    if (this.editMode) card.append(this.buildPaletteRow());
     return card;
+  }
+
+  /** Palette row: trade + kind pickers and a "Platzieren" toggle (click to drop). */
+  private buildPaletteRow(): Gtk.Widget {
+    const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6 });
+    row.append(new Gtk.Label({ label: 'Neu:', cssClasses: ['dim-label'], valign: Gtk.Align.CENTER }));
+
+    const tradeDd = new Gtk.DropDown({ model: Gtk.StringList.new(TGA_TRADE_ORDER.map((t) => TRADE_META[t].label)) });
+    tradeDd.set_selected(Math.max(0, TGA_TRADE_ORDER.indexOf(this.placeTrade)));
+    const kindDd = new Gtk.DropDown({ model: Gtk.StringList.new([]) });
+    const fillKinds = (): void => {
+      const kinds = KINDS_BY_TRADE[this.placeTrade];
+      if (!kinds.includes(this.placeKind)) this.placeKind = kinds[0];
+      kindDd.set_model(Gtk.StringList.new(kinds.map((k) => KIND_LABELS[k])));
+      kindDd.set_selected(Math.max(0, kinds.indexOf(this.placeKind)));
+    };
+    tradeDd.connect('notify::selected', () => {
+      this.placeTrade = TGA_TRADE_ORDER[tradeDd.get_selected()] ?? 'heizung';
+      fillKinds();
+    });
+    kindDd.connect('notify::selected', () => {
+      const kinds = KINDS_BY_TRADE[this.placeTrade];
+      this.placeKind = kinds[kindDd.get_selected()] ?? kinds[0];
+    });
+    fillKinds();
+    row.append(tradeDd);
+    row.append(kindDd);
+
+    const place = new Gtk.ToggleButton({ label: 'Platzieren', active: this.placing, cssClasses: ['suggested-action'] });
+    place.connect('toggled', () => {
+      this.placing = place.get_active();
+      if (this.placing) {
+        this.selectedNode = null;
+        this.selectedEdge = null;
+      }
+    });
+    row.append(place);
+    return row;
   }
 
   /** Widget → world (metres) via the current fit, or null if not laid out yet. */
@@ -673,8 +718,25 @@ export class GrundrissView extends Gtk.Box {
     this.dragMoved = false;
   }
 
-  /** A tap in edit mode: pick a node (and connect two of the same trade) or a run. */
+  /** A tap in edit mode: place a node (palette armed), pick/connect nodes, or a run. */
   private onEditTap(x: number, y: number): void {
+    if (this.placing) {
+      const w = this.toWorld(x, y);
+      if (w) {
+        const round3 = (n: number): number => Math.round(n * 1000) / 1000;
+        const level = this.isolatedLevel ?? this.store.home?.levels[0]?.id ?? '';
+        this.activeTrades.add(this.placeTrade); // ensure the new node is visible
+        this.store.addTgaNode({
+          id: this.nextId('tga-n'),
+          levelId: level,
+          trade: this.placeTrade,
+          kind: this.placeKind,
+          x: round3(w.x),
+          z: round3(w.z),
+        });
+      }
+      return;
+    }
     const nodeId = this.nodeAt(x, y);
     if (nodeId) {
       const prev = this.selectedNode;
