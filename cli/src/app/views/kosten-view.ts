@@ -9,9 +9,11 @@ import Adw from '@girs/adw-1';
 import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
-import type { CostCategory, CostStatus } from '@bauplaner/core';
+import type { CostCategory, CostStatus, HomeData } from '@bauplaner/core';
+import { BEG_FOERDERFAEHIG, computeAmortisation, computeFoerderung, type FoerderResult } from '@bauplaner/materials';
 
 import type { DocumentStore } from '../document-store.ts';
+import { buildEnergyScreenings } from '../energy.ts';
 import { escapeMarkup, fmtEur } from '../../format.ts';
 
 const CATEGORIES: { key: CostCategory; label: string }[] = [
@@ -42,6 +44,8 @@ export class KostenView extends Gtk.Box {
 
   private readonly store: DocumentStore;
   private child?: Gtk.Widget;
+  /** Whether to add the iSFP bonus to the BEG subsidy rate (view-local). */
+  private isfp = true;
 
   constructor(store: DocumentStore) {
     super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
@@ -90,6 +94,19 @@ export class KostenView extends Gtk.Box {
       if (v != null) summary.add(this.valueRow(`… davon ${s.label.toLowerCase()}`, fmtEur(v)));
     }
     page.add(summary);
+
+    // — Subsidy (BEG-EM) + own share —
+    const totalNet = costs.reduce((s, c) => s + c.net, 0);
+    const foerderfaehigNet = costs
+      .filter((c) => BEG_FOERDERFAEHIG.includes(c.category))
+      .reduce((s, c) => s + c.net, 0);
+    const foerder = computeFoerderung(foerderfaehigNet, { isfpBonus: this.isfp });
+    const eigenanteil = Math.max(0, totalNet - foerder.foerderung);
+    page.add(this.buildFoerderung(foerder, eigenanteil));
+
+    // — Amortisation from the energy screening (Heute vs Ziel) —
+    const home = this.store.home;
+    if (home) page.add(this.buildAmortisation(home, eigenanteil));
 
     // — Register with add button + item rows —
     const group = new Adw.PreferencesGroup({ title: `Kostenposten (${costs.length})` });
@@ -142,6 +159,55 @@ export class KostenView extends Gtk.Box {
     else label.add_css_class('dim-label');
     row.add_suffix(label);
     return row;
+  }
+
+  /** BEG-EM subsidy on the eligible envelope costs + the resulting own share. */
+  private buildFoerderung(foerder: FoerderResult, eigenanteil: number): Adw.PreferencesGroup {
+    const group = new Adw.PreferencesGroup({
+      title: 'Förderung & Eigenanteil',
+      description: 'BEG-Einzelmaßnahmen (Gebäudehülle) — Schätzung, kein Bescheid.',
+    });
+    const isfpRow = new Adw.SwitchRow({
+      title: 'iSFP-Bonus (+5 %)',
+      subtitle: 'Maßnahme laut individuellem Sanierungsfahrplan',
+    });
+    isfpRow.set_active(this.isfp);
+    isfpRow.connect('notify::active', () => {
+      this.isfp = isfpRow.get_active();
+      this.render();
+    });
+    group.add(isfpRow);
+    group.add(this.valueRow('Förderfähige Kosten', fmtEur(foerder.foerderfaehigNet)));
+    group.add(this.valueRow('Fördersatz', `${Math.round(foerder.rate * 100)} %`));
+    group.add(this.valueRow('Förderung (erwartbar)', fmtEur(foerder.foerderung)));
+    group.add(this.valueRow('Eigenanteil', fmtEur(eigenanteil), true));
+    return group;
+  }
+
+  /** Payback of the own share from the energy screening (Heute vs. Ziel demand). */
+  private buildAmortisation(home: HomeData, eigenanteil: number): Adw.PreferencesGroup {
+    const energy = buildEnergyScreenings(home, (id) => this.store.wallAssemblyLayers(id));
+    const a = computeAmortisation({
+      endenergieHeuteKwhM2a: energy.heute.endenergieKwhM2a,
+      endenergieZielKwhM2a: energy.ziel.endenergieKwhM2a,
+      heatedFloorAreaM2: energy.heatedFloorAreaM2,
+      eigenanteilEur: eigenanteil,
+    });
+    const group = new Adw.PreferencesGroup({
+      title: 'Amortisation',
+      description: 'Energiekosten heute vs. saniertem Zielzustand; Payback auf Basis des erfassten Eigenanteils (Screening).',
+    });
+    group.add(this.valueRow('Heizkosten heute', `${fmtEur(a.kostenHeuteEur)} / Jahr`));
+    group.add(this.valueRow('Zielzustand (saniert)', `${fmtEur(a.kostenZielEur)} / Jahr`));
+    group.add(this.valueRow('Jährliche Ersparnis', `${fmtEur(a.ersparnisProJahrEur)} / Jahr`));
+    group.add(
+      this.valueRow(
+        'Amortisation Eigenanteil',
+        a.jahre != null ? `≈ ${a.jahre.toFixed(1).replace('.', ',')} Jahre` : '—',
+        true,
+      ),
+    );
+    return group;
   }
 
   /** Modal dialog to capture a new cost item, then store it. */

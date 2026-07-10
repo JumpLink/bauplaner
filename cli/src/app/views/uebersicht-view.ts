@@ -12,16 +12,11 @@ import GLib from '@girs/glib-2.0';
 import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
-import { deriveEnvelope, type HomeData } from '@bauplaner/core';
-import {
-  BESTAND_U,
-  computeAssembly,
-  computeEnergyScreening,
-  type EnergyElement,
-  type EnergyScreening,
-} from '@bauplaner/materials';
+import type { HomeData } from '@bauplaner/core';
+import { BEG_FOERDERFAEHIG, computeFoerderung, type EnergyScreening } from '@bauplaner/materials';
 
 import type { DocumentStore } from '../document-store.ts';
+import { buildEnergyScreenings } from '../energy.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
 import { escapeMarkup, fmtEur } from '../../format.ts';
 
@@ -41,9 +36,6 @@ const LOSS_COLORS: Record<string, string> = {
   ventilation: '#813d9c',
   floor: '#26a269',
 };
-
-/** "Retrofitted" target U-values for the Ziel marker (GEG-oriented screening). */
-const ZIEL_U = { wall: 0.24, roof: 0.2, window: 1.3, floor: 0.3 };
 
 /** Position (0..1) of a demand on the A+…H scale, matching the design's kwhPos. */
 function kwhPos(kwh: number): number {
@@ -159,45 +151,8 @@ export class UebersichtView extends Gtk.Box {
     );
   }
 
-  // --- Energy screening (Start = all Bestand, Heute = assigned, Ziel = retrofit) ---
-
-  private uForWall(id: string): number {
-    const layers = this.store.wallAssemblyLayers(id);
-    if (layers && layers.length > 0) {
-      try {
-        return computeAssembly(layers, { art: 'wall' }).U;
-      } catch {
-        return BESTAND_U.wall;
-      }
-    }
-    return BESTAND_U.wall;
-  }
-
-  private screen(home: HomeData, uWall: (id: string) => number, retrofit: boolean): EnergyScreening {
-    const env = deriveEnvelope(home);
-    const elements: EnergyElement[] = env.exteriorWalls.map((w) => ({
-      kind: 'wall' as const,
-      areaM2: w.netAreaM2,
-      u: retrofit ? ZIEL_U.wall : uWall(w.id),
-    }));
-    if (env.roofAreaM2 > 0)
-      elements.push({ kind: 'roof', areaM2: env.roofAreaM2, u: retrofit ? ZIEL_U.roof : BESTAND_U.roof });
-    if (env.windowAreaM2 > 0)
-      elements.push({ kind: 'window', areaM2: env.windowAreaM2, u: retrofit ? ZIEL_U.window : BESTAND_U.window });
-    if (env.floorAreaM2 > 0)
-      elements.push({ kind: 'floor', areaM2: env.floorAreaM2, u: retrofit ? ZIEL_U.floor : BESTAND_U.floor });
-    return computeEnergyScreening({
-      elements,
-      heatedFloorAreaM2: env.heatedFloorAreaM2,
-      heatedVolumeM3: env.heatedVolumeM3,
-      airChangeRate: retrofit ? 0.4 : 0.5,
-    });
-  }
-
   private buildDashboard(home: HomeData): Gtk.Widget {
-    const heute = this.screen(home, (id) => this.uForWall(id), false);
-    const start = this.screen(home, () => BESTAND_U.wall, false);
-    const ziel = this.screen(home, () => 0, true);
+    const { start, heute, ziel } = buildEnergyScreenings(home, (id) => this.store.wallAssemblyLayers(id));
 
     const column = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL,
@@ -228,6 +183,8 @@ export class UebersichtView extends Gtk.Box {
     const costs = this.store.costs;
     const total = costs.reduce((s, k) => s + k.net, 0);
     const paid = costs.filter((k) => k.status === 'bezahlt').reduce((s, k) => s + k.net, 0);
+    const foerderfaehigNet = costs.filter((k) => BEG_FOERDERFAEHIG.includes(k.category)).reduce((s, k) => s + k.net, 0);
+    const foerder = computeFoerderung(foerderfaehigNet, { isfpBonus: true });
 
     const classIdx = EFF_CLASSES.indexOf(heute.energieklasse);
     const badge = new Gtk.Label({ label: heute.energieklasse, valign: Gtk.Align.CENTER });
@@ -261,8 +218,8 @@ export class UebersichtView extends Gtk.Box {
       }),
       this.kpiCard({
         caption: 'Förderung',
-        value: '—',
-        sub: 'in Kosten & Förderung',
+        value: foerder.foerderung > 0 ? fmtEur(foerder.foerderung) : '—',
+        sub: foerder.foerderung > 0 ? `erwartbar · BEG ${Math.round(foerder.rate * 100)} %` : 'in Kosten & Förderung',
       }),
     ];
 
