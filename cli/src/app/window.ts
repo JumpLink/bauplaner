@@ -14,6 +14,7 @@ import Gio from '@girs/gio-2.0';
 import GLib from '@girs/glib-2.0';
 import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
+import Pango from '@girs/pango-1.0';
 
 import { APP_NAME } from './constants.ts';
 import { DocumentStore } from './document-store.ts';
@@ -52,6 +53,7 @@ export class MainWindow extends Adw.ApplicationWindow {
   private readonly feuchteView = new FeuchteView(this.store);
   private readonly splitView = new Adw.NavigationSplitView();
   private readonly navList = new Gtk.ListBox({ cssClasses: ['navigation-sidebar'] });
+  private readonly projectHeader = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
   private readonly stack = new Adw.ViewStack();
   private readonly contentTitle = new Adw.WindowTitle({ title: APP_NAME, subtitle: '' });
   private readonly toastOverlay = new Adw.ToastOverlay();
@@ -71,6 +73,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     const saveAction = new Gio.SimpleAction({ name: 'save-project' });
     saveAction.set_enabled(false);
     this.store.subscribe(() => saveAction.set_enabled(this.store.hasDocument));
+    this.store.subscribe(() => this.refreshProjectHeader());
     saveAction.connect('activate', () => {
       const written = this.store.save();
       this.toastOverlay.add_toast(
@@ -184,13 +187,100 @@ export class MainWindow extends Adw.ApplicationWindow {
     const scroller = new Gtk.ScrolledWindow({ child: this.navList, vexpand: true });
     scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
 
+    const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
+    content.append(this.projectHeader);
+    content.append(scroller);
+    this.refreshProjectHeader();
+
     const toolbar = new Adw.ToolbarView();
     toolbar.add_top_bar(header);
-    toolbar.set_content(scroller);
+    toolbar.set_content(content);
 
     const page = new Adw.NavigationPage({ child: toolbar, title: APP_NAME });
     page.set_tag('sidebar');
     return page;
+  }
+
+  /** The v2 sidebar project card (name + area/levels) + a budget-spent bar. */
+  private refreshProjectHeader(): void {
+    let c = this.projectHeader.get_first_child();
+    while (c) {
+      const next = c.get_next_sibling();
+      this.projectHeader.remove(c);
+      c = next;
+    }
+    if (!this.store.hasDocument) return;
+
+    const home = this.store.home;
+    const name = this.store.project?.meta?.name || 'Bauplan';
+    const roomArea = home ? home.rooms.reduce((s, r) => s + r.area, 0) : 0;
+    const levels = home ? home.levels.length : 0;
+    const subtitle =
+      home && roomArea > 0 ? `${roomArea.toFixed(0)} m² · ${levels} Ebenen` : 'Sweet Home 3D-Modell';
+
+    const card = new Gtk.Box({
+      orientation: Gtk.Orientation.HORIZONTAL,
+      spacing: 11,
+      marginTop: 8,
+      marginBottom: 4,
+      marginStart: 8,
+      marginEnd: 8,
+    });
+    card.add_css_class('card');
+    const inner = new Gtk.Box({
+      orientation: Gtk.Orientation.HORIZONTAL,
+      spacing: 11,
+      marginTop: 10,
+      marginBottom: 10,
+      marginStart: 12,
+      marginEnd: 12,
+      hexpand: true,
+    });
+    const icon = Gtk.Image.new_from_icon_name('user-home-symbolic');
+    icon.set_pixel_size(26);
+    icon.add_css_class('accent');
+    icon.set_valign(Gtk.Align.CENTER);
+    const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, valign: Gtk.Align.CENTER });
+    const nameLabel = new Gtk.Label({ label: name, xalign: 0, ellipsize: Pango.EllipsizeMode.END });
+    nameLabel.add_css_class('heading');
+    const subLabel = new Gtk.Label({ label: subtitle, xalign: 0 });
+    subLabel.add_css_class('caption');
+    subLabel.add_css_class('dim-label');
+    text.append(nameLabel);
+    text.append(subLabel);
+    inner.append(icon);
+    inner.append(text);
+    card.append(inner);
+    this.projectHeader.append(card);
+
+    // Budget-spent bar (only with a cost register): paid / total by amount.
+    const costs = this.store.costs;
+    const total = costs.reduce((s, k) => s + k.net, 0);
+    if (total > 0) {
+      const paid = costs.filter((k) => k.status === 'bezahlt').reduce((s, k) => s + k.net, 0);
+      const frac = paid / total;
+      const box = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 5,
+        marginTop: 4,
+        marginBottom: 6,
+        marginStart: 12,
+        marginEnd: 12,
+      });
+      const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL });
+      const l1 = new Gtk.Label({ label: 'Budget verausgabt', xalign: 0, hexpand: true });
+      l1.add_css_class('caption');
+      l1.add_css_class('dim-label');
+      const l2 = new Gtk.Label({ label: `${Math.round(frac * 100)} %`, xalign: 1 });
+      l2.add_css_class('caption');
+      l2.add_css_class('dim-label');
+      row.append(l1);
+      row.append(l2);
+      const bar = new Gtk.ProgressBar({ fraction: frac });
+      box.append(row);
+      box.append(bar);
+      this.projectHeader.append(box);
+    }
   }
 
   private buildContent(): Adw.NavigationPage {
