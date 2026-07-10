@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/adwaita-design-system-11f51e8f-1a41-4db3-bbaf-a682315b2773/colors_and_type.css">
+  <link rel="stylesheet" href="_ds/adwaita-design-system-11f51e8f-1a41-4db3-bbaf-a682315b2773/adwaita.css">
+  <link rel="stylesheet" href="_ds/adwaita-design-system-11f51e8f-1a41-4db3-bbaf-a682315b2773/styles.css">
+  <script src="_ds/adwaita-design-system-11f51e8f-1a41-4db3-bbaf-a682315b2773/_ds_bundle.js"></script>
+  <script src="image-slot.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
+    a { color: var(--accent-color); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .bp-scroll { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, currentColor 25%, transparent) transparent; }
+    @keyframes bp-fade-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes bp-slide-left { from { transform: translateX(-24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes bp-toast-in { from { transform: translate(-50%, 16px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+    @keyframes bp-pop-in { from { transform: scale(.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .bp-window [style*="position:fixed"], .bp-window [style*="position: fixed"] { position: absolute !important; }
+  </style>
+</helmet>
+
+<div class="bp-desk" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;gap:16px;padding:22px 22px 40px;overflow:auto;background:radial-gradient(circle at 28% 18%, #3b4149, #23262b 58%, #17191c);">
+
+  <!-- ============ HARNESS-LEISTE (nicht Teil des App-Fensters) ============ -->
+  <div class="bp-chrome" style="flex:0 0 auto;display:flex;align-items:center;gap:20px;flex-wrap:wrap;justify-content:center;padding:8px 12px;border-radius:12px;background:rgba(18,20,24,.72);backdrop-filter:blur(14px);box-shadow:0 2px 12px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.06);color:#fff;">
+    <div style="display:flex;align-items:center;gap:9px;">
+      <span style="font-size:12px;font-weight:600;opacity:.55;">Gerät</span>
+      <div style="display:inline-flex;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.08);">
+        <sc-for list="{{ deviceChips }}" as="d" hint-placeholder-count="3"><button onClick="{{ d.on }}" style="{{ d.style }}">{{ d.label }}</button></sc-for>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px;">
+      <span style="font-size:12px;font-weight:600;opacity:.55;">Darstellung</span>
+      <div style="display:inline-flex;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.08);">
+        <sc-for list="{{ schemeChips }}" as="s" hint-placeholder-count="2"><button onClick="{{ s.on }}" style="{{ s.style }}">{{ s.label }}</button></sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div class="adw-root bp-window {{ schemeClass }}" style="position:relative;flex:0 0 auto;display:flex;overflow:hidden;background:var(--window-bg-color);color:var(--window-fg-color);font-size:14px;font-family:var(--font-sans);border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 30px 70px rgba(0,0,0,.55);{{ winStyle }}{{ accentVars }}">
+
+  <!-- ============ SIDEBAR (Desktop) ============ -->
+  <sc-if value="{{ showSidebar }}" hint-placeholder-val="{{ true }}">
+    <div style="width:252px;flex:0 0 252px;background:var(--sidebar-bg-color);color:var(--sidebar-fg-color);display:flex;flex-direction:column;border-right:1px solid var(--headerbar-shade-color);">
+      <div style="padding:12px 12px 6px;display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:11px;padding:10px 10px;border-radius:10px;background:color-mix(in srgb, currentColor 6%, transparent);">
+          <span style="width:34px;height:34px;border-radius:9px;background:color-mix(in srgb, var(--accent-bg-color) 22%, transparent);color:var(--accent-color);display:flex;align-items:center;justify-content:center;flex:0 0 34px;">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.6 14.6 7.4l-.9 1L13 7.8V14h-3.6v-3.8H6.6V14H3V7.8l-.7.6-.9-1z"></path></svg>
+          </span>
+          <div style="flex:1;min-width:0;line-height:1.25;">
+            <div style="font-weight:700;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Beispielhaus</div>
+            <div style="font-size:11px;opacity:.55;">Baujahr 1962 · 156 m²</div>
+          </div>
+        </div>
+        <div style="padding:0 4px;display:flex;flex-direction:column;gap:7px;">
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;opacity:.6;"><span>Sanierungsfortschritt</span><span>23 %</span></div>
+          <div style="height:6px;border-radius:9999px;background:color-mix(in srgb, currentColor 10%, transparent);overflow:hidden;"><div style="height:100%;border-radius:9999px;background:var(--accent-bg-color);width:23%;"></div></div>
+        </div>
+      </div>
+      <div class="bp-scroll" style="flex:1;overflow-y:auto;padding:8px 8px 12px;display:flex;flex-direction:column;gap:2px;">
+        <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="8">
+          <div onClick="{{ n.on }}" style="{{ n.style }}" style-hover="background:color-mix(in srgb, currentColor 7%, transparent)">
+            <span style="opacity:.75;flex:0 0 16px;display:flex;" dangerouslySetInnerHTML="{{ n.icon }}"></span>
+            <span style="flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ n.label }}</span>
+            <sc-if value="{{ n.badge }}" hint-placeholder-val="{{ false }}"><span style="{{ n.badgeStyle }}">{{ n.badge }}</span></sc-if>
+          </div>
+        </sc-for>
+      </div>
+      <div style="padding:10px 14px;border-top:1px solid var(--headerbar-shade-color);font-size:11.5px;opacity:.5;line-height:1.4;">Demo · Beispielhaus.bauplan — SH3D-kompatibel</div>
+    </div>
+  </sc-if>
+
+  <!-- ============ NAV DRAWER (Tablet/Mobil) ============ -->
+  <sc-if value="{{ navOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeNav }}" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:70;animation:bp-fade-in .15s var(--ease-out-quad);"></div>
+    <div style="position:fixed;top:0;left:0;bottom:0;width:272px;background:var(--sidebar-bg-color);color:var(--sidebar-fg-color);z-index:71;display:flex;flex-direction:column;box-shadow:0 0 40px rgba(0,0,0,.4);animation:bp-slide-left .18s var(--ease-out-quad);">
+      <div style="display:flex;align-items:center;gap:11px;padding:14px 14px 8px;">
+        <span style="width:34px;height:34px;border-radius:9px;background:color-mix(in srgb, var(--accent-bg-color) 22%, transparent);color:var(--accent-color);display:flex;align-items:center;justify-content:center;flex:0 0 34px;">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.6 14.6 7.4l-.9 1L13 7.8V14h-3.6v-3.8H6.6V14H3V7.8l-.7.6-.9-1z"></path></svg>
+        </span>
+        <div style="flex:1;min-width:0;line-height:1.25;">
+          <div style="font-weight:700;font-size:13.5px;">Beispielhaus</div>
+          <div style="font-size:11px;opacity:.55;">Baujahr 1962 · 156 m²</div>
+        </div>
+        <button class="adw-btn flat circular" onClick="{{ closeNav }}" title="Schließen"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4.2 4.2 11.8 11.8M11.8 4.2 4.2 11.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg></button>
+      </div>
+      <div class="bp-scroll" style="flex:1;overflow-y:auto;padding:8px 8px 12px;display:flex;flex-direction:column;gap:2px;">
+        <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="8">
+          <div onClick="{{ n.on }}" style="{{ n.style }}" style-hover="background:color-mix(in srgb, currentColor 7%, transparent)">
+            <span style="opacity:.75;flex:0 0 16px;display:flex;" dangerouslySetInnerHTML="{{ n.icon }}"></span>
+            <span style="flex:1;min-width:0;font-size:14px;">{{ n.label }}</span>
+            <sc-if value="{{ n.badge }}" hint-placeholder-val="{{ false }}"><span style="{{ n.badgeStyle }}">{{ n.badge }}</span></sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ HAUPTSPALTE ============ -->
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+
+    <!-- Header bar -->
+    <div style="display:flex;align-items:center;gap:6px;padding:10px 12px;min-height:56px;background:var(--headerbar-bg-color);box-shadow:inset 0 -1px var(--headerbar-shade-color);position:relative;z-index:5;">
+      <sc-if value="{{ showHamburger }}" hint-placeholder-val="{{ false }}">
+        <button class="adw-btn flat icon-only" onClick="{{ openNav }}" title="Navigation"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2.5 4.3h11v1.4h-11zM2.5 7.3h11v1.4h-11zM2.5 10.3h11v1.4h-11z"></path></svg></button>
+      </sc-if>
+      <div style="flex:1;min-width:0;text-align:center;line-height:1.2;">
+        <div style="font-weight:700;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ headerTitle }}</div>
+        <sc-if value="{{ showHeaderSub }}" hint-placeholder-val="{{ true }}"><div style="font-size:11.5px;opacity:.55;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ headerSub }}</div></sc-if>
+      </div>
+    </div>
+
+    <!-- ============ INHALT ============ -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;position:relative;background:var(--window-bg-color);">
+
+      <!-- ===== ÜBERSICHT ===== -->
+      <sc-if value="{{ is.home }}" hint-placeholder-val="{{ true }}">
+        <div class="bp-scroll" data-screen-label="Übersicht" style="flex:1;overflow-y:auto;">
+          <div style="max-width:1080px;margin:0 auto;padding:24px 20px 48px;display:flex;flex-direction:column;gap:20px;">
+
+            <!-- KPIs -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px;">
+              <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:16px 18px;display:flex;flex-direction:column;gap:6px;">
+                <div style="font-size:12.5px;opacity:.6;">Endenergiebedarf</div>
+                <div style="display:flex;align-items:baseline;gap:9px;">
+                  <span class="numeric" style="font-size:26px;font-weight:800;">209</span>
+                  <span style="font-size:12px;opacity:.55;">kWh/m²a</span>
+                  <span style="margin-left:auto;font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 8px;background:#e66100;color:#fff;">G</span>
+                </div>
+                <div style="font-size:12px;opacity:.55;">Start 218 · Ziel 62 (Klasse B)</div>
+              </div>
+              <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:16px 18px;display:flex;flex-direction:column;gap:6px;">
+                <div style="font-size:12.5px;opacity:.6;">CO₂-Ausstoß</div>
+                <div style="display:flex;align-items:baseline;gap:9px;">
+                  <span class="numeric" style="font-size:26px;font-weight:800;">6,5</span>
+                  <span style="font-size:12px;opacity:.55;">t/Jahr</span>
+                </div>
+                <div style="font-size:12px;opacity:.55;">Ziel 1,4 t — mit Wärmepumpe und PV</div>
+              </div>
+              <div onClick="{{ goKosten }}" style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:16px 18px;display:flex;flex-direction:column;gap:6px;cursor:pointer;" style-hover="background:color-mix(in srgb, var(--card-bg-color) 96%, var(--card-fg-color))">
+                <div style="font-size:12.5px;opacity:.6;">Budget verausgabt</div>
+                <div style="display:flex;align-items:baseline;gap:9px;">
+                  <span class="numeric" style="font-size:26px;font-weight:800;">25.700 €</span>
+                </div>
+                <div style="height:6px;border-radius:9999px;background:color-mix(in srgb, currentColor 10%, transparent);overflow:hidden;"><div style="height:100%;border-radius:9999px;background:var(--accent-bg-color);width:16%;"></div></div>
+                <div style="font-size:12px;opacity:.55;">von 165.000 € Gesamtplanung →</div>
+              </div>
+              <div onClick="{{ goKosten }}" style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:16px 18px;display:flex;flex-direction:column;gap:6px;cursor:pointer;" style-hover="background:color-mix(in srgb, var(--card-bg-color) 96%, var(--card-fg-color))">
+                <div style="font-size:12.5px;opacity:.6;">Förderung</div>
+                <div style="display:flex;align-items:baseline;gap:9px;">
+                  <span class="numeric" style="font-size:26px;font-weight:800;color:{{ GREEN }};">5.720 €</span>
+                  <span style="font-size:12px;opacity:.55;">beantragt</span>
+                </div>
+                <div style="font-size:12px;opacity:.55;">46.800 € über alle Pakete erwartet →</div>
+              </div>
+            </div>
+
+            <!-- Effizienzklassen-Band -->
+            <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:18px 20px 14px;">
+              <div class="heading" style="margin-bottom:4px;">Energetische Einordnung</div>
+              <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:12.5px;opacity:.55;margin-bottom:14px;">Endenergiebedarf nach Energieausweis-Skala — jede Maßnahme verschiebt den Marker nach links</div></sc-if>
+              <div style="position:relative;padding:26px 0 30px;">
+                <div style="display:flex;height:22px;border-radius:9999px;overflow:hidden;">
+                  <sc-for list="{{ effSegments }}" as="s" hint-placeholder-count="9">
+                    <div style="flex:1;background:{{ s.color }};display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:800;color:rgba(255,255,255,.92);">{{ s.label }}</div>
+                  </sc-for>
+                </div>
+                <sc-for list="{{ effMarkers }}" as="m" hint-placeholder-count="3">
+                  <div style="position:absolute;{{ m.pos }}display:flex;flex-direction:column;align-items:center;transform:translateX(-50%);line-height:1.1;">
+                    <span style="font-size:10.5px;font-weight:700;opacity:.65;white-space:nowrap;">{{ m.label }}</span>
+                    <span class="numeric" style="font-size:11.5px;font-weight:800;color:{{ m.color }};white-space:nowrap;">{{ m.value }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <!-- Als Nächstes -->
+            <div>
+              <div class="heading" style="margin-bottom:10px;">Als Nächstes</div>
+              <div class="adw-list">
+                <sc-for list="{{ tasks }}" as="t" hint-placeholder-count="3">
+                  <div class="adw-row" onClick="{{ t.on }}" style="cursor:pointer;">
+                    <span style="flex:0 0 26px;height:26px;border-radius:9999px;background:color-mix(in srgb, {{ t.color }} 18%, transparent);color:{{ t.color }};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;">{{ t.n }}</span>
+                    <div class="row-text"><div class="row-title">{{ t.title }}</div><div class="row-subtitle">{{ t.sub }}</div></div>
+                    <div class="row-suffix"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="opacity:.5"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.6"></path></svg></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;">
+              <!-- Wärmeverluste -->
+              <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:18px 20px;">
+                <div class="heading" style="margin-bottom:4px;">Wärmeverluste der Hülle</div>
+                <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:12.5px;opacity:.55;margin-bottom:14px;">Anteile am Transmissions- und Lüftungsverlust im Bestand</div></sc-if>
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                  <sc-for list="{{ lossBars }}" as="c" hint-placeholder-count="5">
+                    <div style="display:flex;flex-direction:column;gap:5px;">
+                      <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;"><span>{{ c.name }}</span><span class="numeric" style="opacity:.7;">{{ c.pct }}</span></div>
+                      <div style="height:8px;border-radius:9999px;background:color-mix(in srgb, currentColor 8%, transparent);overflow:hidden;"><div style="height:100%;border-radius:9999px;width:{{ c.w }};background:{{ c.color }};"></div></div>
+                      <div style="font-size:11.5px;opacity:.5;">{{ c.sub }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <!-- Raumklima -->
+              <div onClick="{{ goKlima }}" style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:18px 20px;display:flex;flex-direction:column;cursor:pointer;" style-hover="background:color-mix(in srgb, var(--card-bg-color) 96%, var(--card-fg-color))">
+                <div class="heading" style="margin-bottom:4px;">Raumklima jetzt</div>
+                <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:12.5px;opacity:.55;margin-bottom:14px;">Live-Werte der Sensoren — zwei Räume brauchen Aufmerksamkeit</div></sc-if>
+                <div style="display:flex;flex-direction:column;gap:2px;">
+                  <sc-for list="{{ klimaShort }}" as="r" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 2px;font-size:13.5px;">
+                      <span style="width:9px;height:9px;border-radius:9999px;background:{{ r.dot }};flex:0 0 9px;"></span>
+                      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}</span>
+                      <span class="numeric" style="opacity:.75;white-space:nowrap;">{{ r.vals }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="margin-top:auto;padding-top:10px;font-size:12.5px;color:var(--accent-color);font-weight:600;">Alle Räume anzeigen →</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== MODELL ===== -->
+      <sc-if value="{{ is.modell }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Modell" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap;">
+            <div style="display:flex;gap:0;border-radius:9px;overflow:hidden;background:color-mix(in srgb, currentColor 8%, transparent);">
+              <sc-for list="{{ modeChips }}" as="c" hint-placeholder-count="2"><button onClick="{{ c.on }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+            </div>
+            <div style="display:flex;gap:0;border-radius:9px;overflow:hidden;background:color-mix(in srgb, currentColor 8%, transparent);">
+              <sc-for list="{{ levelChips }}" as="c" hint-placeholder-count="3"><button onClick="{{ c.on }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+            </div>
+            <div style="display:flex;gap:0;border-radius:9px;overflow:hidden;background:color-mix(in srgb, currentColor 8%, transparent);">
+              <sc-for list="{{ layerChips }}" as="c" hint-placeholder-count="4"><button onClick="{{ c.on }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <sc-for list="{{ gewerkChips }}" as="g" hint-placeholder-count="4">
+                <button onClick="{{ g.on }}" style="{{ g.style }}"><span style="{{ g.dotStyle }}"></span>{{ g.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:1;display:flex;overflow:hidden;">
+
+            <!-- Werkzeugleiste (Desktop, vertikal) -->
+            <sc-if value="{{ toolsVertical }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:0 0 52px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0;background:var(--sidebar-bg-color);border-right:1px solid var(--headerbar-shade-color);">
+                <sc-for list="{{ tools }}" as="t" hint-placeholder-count="8">
+                  <button onClick="{{ t.on }}" title="{{ t.title }}" style="{{ t.style }}" style-hover="background:color-mix(in srgb, currentColor 8%, transparent)"><span style="display:flex;" dangerouslySetInnerHTML="{{ t.icon }}"></span></button>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;">
+              <!-- Werkzeugleiste (Mobil, horizontal) -->
+              <sc-if value="{{ toolsHorizontal }}" hint-placeholder-val="{{ false }}">
+                <div class="bp-scroll" style="display:flex;gap:4px;padding:6px 10px;overflow-x:auto;flex:0 0 auto;">
+                  <sc-for list="{{ tools }}" as="t" hint-placeholder-count="8">
+                    <button onClick="{{ t.on }}" style="{{ t.hStyle }}"><span style="display:flex;" dangerouslySetInnerHTML="{{ t.icon }}"></span><span style="font-size:10.5px;font-weight:600;white-space:nowrap;">{{ t.title }}</span></button>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <div style="flex:1;position:relative;overflow:hidden;background:var(--view-bg-color);">
+
+                <!-- 2D-Grundriss -->
+                <sc-if value="{{ is2d }}" hint-placeholder-val="{{ true }}">
+                  <svg viewBox="0 0 620 420" preserveAspectRatio="xMidYMid meet" onClick="{{ onCanvas }}" style="position:absolute;inset:0;width:100%;height:100%;display:block;cursor:{{ canvasCursor }};">
+                    <sc-for list="{{ planRooms }}" as="r" hint-placeholder-count="5">
+                      <rect x="{{ r.x }}" y="{{ r.y }}" width="{{ r.w }}" height="{{ r.h }}" fill="currentColor" opacity="0.045" rx="2"></rect>
+                      <text x="{{ r.tx }}" y="{{ r.ty }}" text-anchor="middle" font-size="12.5" font-weight="600" fill="currentColor" opacity="0.7" dangerouslySetInnerHTML="{{ r.labelHtml }}"></text>
+                      <text x="{{ r.tx }}" y="{{ r.ty2 }}" text-anchor="middle" font-size="10.5" fill="currentColor" opacity="0.42" dangerouslySetInnerHTML="{{ r.areaHtml }}"></text>
+                    </sc-for>
+                    <sc-for list="{{ planWalls }}" as="w" hint-placeholder-count="8">
+                      <rect x="{{ w.x }}" y="{{ w.y }}" width="{{ w.w }}" height="{{ w.h }}" fill="{{ w.fill }}" stroke="{{ w.stroke }}" stroke-width="2" rx="2" style="cursor:pointer;" onClick="{{ w.on }}"></rect>
+                    </sc-for>
+                    <sc-for list="{{ tgaLines }}" as="l" hint-placeholder-count="4">
+                      <polyline points="{{ l.pts }}" fill="none" stroke="{{ l.color }}" stroke-width="{{ l.width }}" stroke-dasharray="{{ l.dash }}" stroke-linejoin="round" stroke-linecap="round" opacity="{{ l.op }}"></polyline>
+                    </sc-for>
+                    <sc-for list="{{ tgaNodes }}" as="n" hint-placeholder-count="4">
+                      <circle cx="{{ n.x }}" cy="{{ n.y }}" r="5" fill="{{ n.color }}" stroke="var(--view-bg-color)" stroke-width="2"></circle>
+                    </sc-for>
+                    <sc-if value="{{ hasDraft }}" hint-placeholder-val="{{ false }}">
+                      <polyline points="{{ draftPts }}" fill="none" stroke="{{ draftColor }}" stroke-width="3" stroke-dasharray="5 5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+                      <sc-for list="{{ draftDots }}" as="d"><circle cx="{{ d.x }}" cy="{{ d.y }}" r="4" fill="{{ draftColor }}"></circle></sc-for>
+                    </sc-if>
+                    <sc-if value="{{ measureOn }}" hint-placeholder-val="{{ false }}">
+                      <line x1="{{ mLine.x1 }}" y1="{{ mLine.y1 }}" x2="{{ mLine.x2 }}" y2="{{ mLine.y2 }}" stroke="var(--accent-bg-color)" stroke-width="2" stroke-dasharray="2 4"></line>
+                      <circle cx="{{ mLine.x1 }}" cy="{{ mLine.y1 }}" r="3.5" fill="var(--accent-bg-color)"></circle>
+                      <circle cx="{{ mLine.x2 }}" cy="{{ mLine.y2 }}" r="3.5" fill="var(--accent-bg-color)"></circle>
+                      <text x="{{ mLine.tx }}" y="{{ mLine.ty }}" text-anchor="middle" font-size="13" font-weight="800" fill="var(--accent-color)" dangerouslySetInnerHTML="{{ mLine.labelHtml }}"></text>
+                    </sc-if>
+                    <text x="596" y="30" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor" opacity="0.4">N</text>
+                    <path d="M596 22 592 12 596 15 600 12z" fill="currentColor" opacity="0.4"></path>
+                  </svg>
+                </sc-if>
+
+                <!-- 3D-Modell (Isometrie) -->
+                <sc-if value="{{ is3d }}" hint-placeholder-val="{{ false }}">
+                  <svg viewBox="0 0 900 620" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;display:block;">
+                    <sc-for list="{{ isoPolys }}" as="p" hint-placeholder-count="30">
+                      <polygon points="{{ p.pts }}" fill="{{ p.fill }}" opacity="{{ p.op }}" stroke="{{ p.stroke }}" stroke-width="1" style="cursor:{{ p.cursor }};" onClick="{{ p.on }}"></polygon>
+                    </sc-for>
+                    <sc-for list="{{ isoLines }}" as="l" hint-placeholder-count="4">
+                      <polyline points="{{ l.pts }}" fill="none" stroke="{{ l.color }}" stroke-width="{{ l.width }}" stroke-dasharray="{{ l.dash }}" stroke-linejoin="round" stroke-linecap="round" opacity="{{ l.op }}"></polyline>
+                    </sc-for>
+                    <sc-for list="{{ isoNodes }}" as="n" hint-placeholder-count="4">
+                      <circle cx="{{ n.x }}" cy="{{ n.y }}" r="4.5" fill="{{ n.color }}" stroke="var(--view-bg-color)" stroke-width="1.5"></circle>
+                    </sc-for>
+                  </svg>
+                  <sc-if value="{{ showPlanHint }}" hint-placeholder-val="{{ true }}">
+                    <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--popover-bg-color);color:var(--popover-fg-color);border-radius:9999px;padding:6px 14px;font-size:12px;box-shadow:var(--shadow-popover);white-space:nowrap;">Geometrie im Grundriss bearbeiten — hier prüfen, Bauteil antippen für Daten</div>
+                  </sc-if>
+                </sc-if>
+
+                <!-- Werkzeug-Hinweis -->
+                <sc-if value="{{ toolHint }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);max-width:88%;background:var(--popover-bg-color);color:var(--popover-fg-color);border-radius:9999px;padding:6px 14px;font-size:12px;box-shadow:var(--shadow-popover);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ toolHint }}</div>
+                </sc-if>
+
+                <!-- Zeichnen: Fertig / Verwerfen -->
+                <sc-if value="{{ draftBar }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:var(--popover-bg-color);color:var(--popover-fg-color);border-radius:9999px;padding:7px 8px 7px 16px;box-shadow:var(--shadow-popover);">
+                    <span style="font-size:12.5px;white-space:nowrap;">{{ draftInfo }}</span>
+                    <button class="adw-btn flat" onClick="{{ draftCancel }}">Verwerfen</button>
+                    <button class="adw-btn suggested" onClick="{{ draftCommit }}" disabled="{{ draftCommitDisabled }}">Fertig</button>
+                  </div>
+                </sc-if>
+
+                <!-- Legende -->
+                <sc-if value="{{ legendShow }}" hint-placeholder-val="{{ true }}">
+                  <div style="position:absolute;bottom:18px;left:18px;width:236px;background:var(--popover-bg-color);color:var(--popover-fg-color);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow-popover);display:flex;flex-direction:column;gap:9px;">
+                    <sc-if value="{{ legendUwert }}" hint-placeholder-val="{{ true }}">
+                      <div>
+                        <div style="font-weight:700;font-size:12px;margin-bottom:7px;">U-Wert der Außenbauteile</div>
+                        <div style="height:8px;border-radius:9999px;background:linear-gradient(90deg, #26a269, #e5a50a, #e66100, #c01c28);"></div>
+                        <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:5px;opacity:.75;"><span>0,15 gut</span><span>≥ 1,2 W/m²K</span></div>
+                      </div>
+                    </sc-if>
+                    <sc-for list="{{ legendItems }}" as="g" hint-placeholder-count="2">
+                      <div style="display:flex;align-items:center;gap:9px;font-size:12px;">
+                        <span style="{{ g.swatch }}"></span>
+                        <span style="flex:1;min-width:0;">{{ g.label }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <!-- Bauteil-Inspektor -->
+                <sc-if value="{{ inspOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="{{ inspStyle }}">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                      <span style="font-weight:700;font-size:15px;">{{ insp.name }}</span>
+                      <button class="adw-btn flat circular" onClick="{{ closeInsp }}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4.2 4.2 11.8 11.8M11.8 4.2 4.2 11.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg></button>
+                    </div>
+                    <sc-for list="{{ insp.rows }}" as="r" hint-placeholder-count="5">
+                      <div style="display:flex;gap:12px;padding:3.5px 0;font-size:13.5px;">
+                        <span style="flex:0 0 92px;opacity:.55;">{{ r.k }}</span>
+                        <span style="flex:1;font-weight:{{ r.w }};color:{{ r.c }};">{{ r.v }}</span>
+                      </div>
+                    </sc-for>
+                    <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:12px;">
+                      <button class="adw-btn flat" onClick="{{ inspAttach }}">+ Daten</button>
+                      <button class="adw-btn flat" onClick="{{ inspGoBauteile }}">Aufbau</button>
+                      <sc-if value="{{ insp.feucht }}" hint-placeholder-val="{{ false }}"><button class="adw-btn flat" onClick="{{ inspGoFeuchte }}">Diagnose</button></sc-if>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== FAHRPLAN ===== -->
+      <sc-if value="{{ is.fahrplan }}" hint-placeholder-val="{{ false }}">
+        <div class="bp-scroll" data-screen-label="Fahrplan" style="flex:1;overflow-y:auto;">
+          <div style="max-width:760px;margin:0 auto;padding:24px 20px 48px;display:flex;flex-direction:column;gap:18px;">
+            <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:18px 20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+              <div style="flex:1;min-width:220px;">
+                <div style="font-size:12.5px;opacity:.6;">Sanierungsfahrplan 2025–2029</div>
+                <div style="font-size:19px;font-weight:800;margin-top:2px;">218 → 62 kWh/m²a</div>
+                <div style="font-size:12.5px;opacity:.55;margin-top:3px;">Fünf Maßnahmenpakete · angelehnt an den iSFP</div>
+              </div>
+              <div style="flex:0 1 260px;min-width:200px;display:flex;flex-direction:column;gap:7px;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;opacity:.6;"><span>1 von 5 Paketen abgeschlossen</span><span>23 %</span></div>
+                <div style="height:8px;border-radius:9999px;background:color-mix(in srgb, currentColor 10%, transparent);overflow:hidden;"><div style="height:100%;border-radius:9999px;background:var(--accent-bg-color);width:23%;"></div></div>
+                <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:11.5px;opacity:.45;">Reihenfolge beachtet Bauphysik: erst dicht und gedämmt, dann Wärmepumpe</div></sc-if>
+              </div>
+            </div>
+
+            <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:14px 18px;display:flex;flex-direction:column;gap:11px;">
+              <div onClick="{{ toggleFoerder }}" style="display:flex;align-items:center;gap:12px;cursor:pointer;">
+                <div style="flex:1;min-width:0;line-height:1.35;">
+                  <div style="font-weight:700;font-size:14px;">Förderung einplanen</div>
+                  <div style="font-size:12.5px;opacity:.55;">BEG-Zuschüsse und iSFP-Bonus in Kosten und Amortisation berücksichtigen</div>
+                </div>
+                <span class="adw-switch {{ foerderCls }}"></span>
+              </div>
+              <sc-if value="{{ foerderOff }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:9px;align-items:flex-start;background:color-mix(in srgb, #e5a50a 10%, transparent);border-radius:9px;padding:10px 12px;font-size:12.5px;line-height:1.5;">
+                  <span style="color:#b07e0a;font-weight:800;flex:0 0 auto;">ⓘ</span>
+                  <span>Ohne Förderung bleibt der Fahrplan eine bauphysikalische Orientierung. BEG-Zuschüsse setzen Fachunternehmer-Erklärungen voraus, der iSFP-Bonus einen gelisteten Energieberater — Eigenleistung ist dort in der Regel nicht förderfähig. Eigenanteil dann 160.000 €, Amortisation ≈ 24 Jahre</span>
+                </div>
+              </sc-if>
+            </div>
+
+            <sc-for list="{{ pakete }}" as="p" hint-placeholder-count="5">
+              <div style="display:flex;gap:14px;">
+                <div style="flex:0 0 46px;display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:14px;">
+                  <span class="numeric" style="font-size:12px;font-weight:800;opacity:.6;">{{ p.year }}</span>
+                  <span style="width:14px;height:14px;border-radius:9999px;background:{{ p.dotBg }};box-shadow:0 0 0 3px color-mix(in srgb, {{ p.dotBg }} 25%, transparent);"></span>
+                  <span style="flex:1;width:2px;background:color-mix(in srgb, currentColor 12%, transparent);border-radius:2px;"></span>
+                </div>
+                <div style="flex:1;min-width:0;background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:16px 18px;display:flex;flex-direction:column;gap:11px;">
+                  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <span style="font-weight:700;font-size:15px;flex:1;min-width:160px;">{{ p.title }}</span>
+                    <span style="{{ p.badgeStyle }}">{{ p.badge }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:7px;">
+                    <sc-for list="{{ p.items }}" as="m">
+                      <div style="display:flex;align-items:baseline;gap:9px;font-size:13.5px;">
+                        <span style="color:{{ m.c }};font-weight:800;flex:0 0 14px;">{{ m.mark }}</span>
+                        <span style="flex:1;min-width:0;">{{ m.text }}</span>
+                        <sc-if value="{{ m.eigen }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;font-weight:700;border-radius:9999px;padding:1px 8px;white-space:nowrap;color:#813d9c;background:color-mix(in srgb, #813d9c 13%, transparent);">Eigenleistung</span></sc-if>
+                        <span class="numeric" style="opacity:.6;white-space:nowrap;">{{ m.cost }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;border-top:1px solid color-mix(in srgb, currentColor 9%, transparent);padding-top:10px;">
+                    <span style="opacity:.65;">Kosten <b class="numeric">{{ p.kosten }}</b></span>
+                    <sc-if value="{{ foerderOn }}" hint-placeholder-val="{{ true }}"><span style="opacity:.65;">Förderung <b class="numeric" style="color:{{ GREEN }};">{{ p.foerder }}</b></span></sc-if>
+                    <span style="opacity:.65;margin-left:auto;">Effekt <b class="numeric" style="color:var(--accent-color);">{{ p.effekt }}</b></span>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== BAUTEILE ===== -->
+      <sc-if value="{{ is.bauteile }}" hint-placeholder-val="{{ false }}">
+        <div class="bp-scroll" data-screen-label="Bauteile" style="flex:1;overflow-y:auto;">
+          <div style="max-width:760px;margin:0 auto;padding:24px 20px 48px;display:flex;flex-direction:column;gap:14px;">
+            <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;opacity:.55;padding:0 2px;">Schichtaufbauten von innen nach außen. U-Wert, Tauwasser-Screening (Glaser, DIN 4108-3) und GEG-Prüfung werden live berechnet — die 3D-Ansicht färbt danach</div></sc-if>
+            <sc-for list="{{ assemblies }}" as="a" hint-placeholder-count="5">
+              <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);overflow:hidden;">
+                <div onClick="{{ a.onToggle }}" style="display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;flex-wrap:wrap;" style-hover="background:color-mix(in srgb, currentColor 4%, transparent)">
+                  <div style="flex:1;min-width:180px;line-height:1.3;">
+                    <div style="font-weight:700;font-size:14.5px;">{{ a.name }}</div>
+                    <div style="font-size:12px;opacity:.55;">{{ a.sub }}</div>
+                  </div>
+                  <span class="numeric" style="font-size:13px;font-weight:800;border-radius:6px;padding:3px 9px;background:color-mix(in srgb, {{ a.uColor }} 16%, transparent);color:{{ a.uColor }};white-space:nowrap;">U {{ a.u }}</span>
+                  <span style="{{ a.gegStyle }}">{{ a.geg }}</span>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="opacity:.5;transform:rotate({{ a.chev }});transition:transform .15s var(--ease-out-quad);"><path d="M4 6.5 8 10.5 12 6.5" stroke="currentColor" stroke-width="1.6"></path></svg>
+                </div>
+                <sc-if value="{{ a.open }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:2px 18px 18px;display:flex;flex-direction:column;gap:14px;animation:bp-pop-in .15s var(--ease-out-quad);">
+                    <div>
+                      <div style="display:flex;height:44px;border-radius:8px;overflow:hidden;gap:2px;">
+                        <sc-for list="{{ a.layers }}" as="l">
+                          <div style="flex:{{ l.flex }};background:{{ l.color }};min-width:14px;" title="{{ l.name }}"></div>
+                        </sc-for>
+                      </div>
+                      <div style="display:flex;justify-content:space-between;font-size:11px;opacity:.5;margin-top:5px;"><span>innen</span><span>außen</span></div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                      <sc-for list="{{ a.layers }}" as="l">
+                        <div style="display:flex;align-items:center;gap:10px;font-size:13.5px;">
+                          <span style="width:12px;height:12px;border-radius:3px;background:{{ l.color }};flex:0 0 12px;"></span>
+                          <span style="flex:1;min-width:0;">{{ l.name }}</span>
+                          <span class="numeric" style="opacity:.6;white-space:nowrap;">{{ l.dicke }}</span>
+                          <span class="numeric" style="opacity:.45;white-space:nowrap;flex:0 0 84px;text-align:right;">λ {{ l.lambda }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div class="adw-list">
+                      <sc-for list="{{ a.facts }}" as="f">
+                        <div class="adw-row" style="min-height:44px;cursor:default;">
+                          <div class="row-text"><div class="row-title" style="font-size:13.5px;">{{ f.k }}</div></div>
+                          <div class="row-suffix" style="opacity:1;"><span class="numeric" style="font-weight:700;color:{{ f.c }};">{{ f.v }}</span></div>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="font-size:12px;opacity:.5;">{{ a.note }}</div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== FEUCHTE ===== -->
+      <sc-if value="{{ is.feuchte }}" hint-placeholder-val="{{ false }}">
+        <div class="bp-scroll" data-screen-label="Feuchte-Diagnose" style="flex:1;overflow-y:auto;">
+          <div style="max-width:680px;margin:0 auto;padding:24px 20px 48px;display:flex;flex-direction:column;gap:20px;">
+
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <sc-for list="{{ fSteps }}" as="s" hint-placeholder-count="3">
+                <button onClick="{{ s.on }}" style="{{ s.style }}"><span style="{{ s.numStyle }}">{{ s.mark }}</span>{{ s.label }}</button>
+              </sc-for>
+            </div>
+
+            <sc-if value="{{ fIs1 }}" hint-placeholder-val="{{ true }}">
+              <div>
+                <div class="title-4" style="margin-bottom:4px;">Welche Wand ist betroffen?</div>
+                <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;opacity:.55;margin-bottom:14px;">Die Diagnose wird an der Wand gespeichert und im Modell markiert</div></sc-if>
+                <div class="adw-list">
+                  <sc-for list="{{ fWallRows }}" as="r" hint-placeholder-count="6">
+                    <div class="adw-row" onClick="{{ r.on }}" style="cursor:pointer;">
+                      <span style="{{ r.radioStyle }}"></span>
+                      <div class="row-text"><div class="row-title">{{ r.name }}</div><div class="row-subtitle">{{ r.sub }}</div></div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+                  <button class="adw-btn suggested" onClick="{{ fNext }}" disabled="{{ fNext1Disabled }}">Weiter</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ fIs2 }}" hint-placeholder-val="{{ false }}">
+              <div>
+                <div class="title-4" style="margin-bottom:4px;">Was ist zu beobachten?</div>
+                <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;opacity:.55;margin-bottom:14px;">Je mehr Angaben, desto sicherer die Ursachen-Einschätzung</div></sc-if>
+                <div class="adw-list">
+                  <div class="adw-row" style="cursor:default;">
+                    <div class="row-text"><div class="row-title">Ort des Schadens</div></div>
+                    <div style="display:flex;gap:0;border-radius:9px;overflow:hidden;background:color-mix(in srgb, currentColor 8%, transparent);">
+                      <sc-for list="{{ fOrtChips }}" as="c" hint-placeholder-count="3"><button onClick="{{ c.on }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+                    </div>
+                  </div>
+                  <sc-for list="{{ fSwitchRows }}" as="s" hint-placeholder-count="5">
+                    <div class="adw-row" onClick="{{ s.on }}" style="cursor:pointer;">
+                      <div class="row-text"><div class="row-title">{{ s.label }}</div></div>
+                      <div class="row-suffix" style="opacity:1;"><span class="adw-switch {{ s.cls }}"></span></div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:14px;">
+                  <button class="adw-btn" onClick="{{ fBack }}">Zurück</button>
+                  <button class="adw-btn suggested" onClick="{{ fDiagnose }}">Diagnose berechnen</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ fIs3 }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:16px;">
+                <div>
+                  <div class="title-4" style="margin-bottom:4px;">Wahrscheinliche Ursache</div>
+                  <div style="font-size:13px;opacity:.55;margin-bottom:14px;">{{ fResultWand }}</div>
+                  <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:16px 18px;display:flex;flex-direction:column;gap:12px;">
+                    <sc-for list="{{ fCauses }}" as="c" hint-placeholder-count="3">
+                      <div style="display:flex;flex-direction:column;gap:5px;">
+                        <div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px;"><span style="font-weight:{{ c.w }};">{{ c.name }}</span><span class="numeric" style="opacity:.7;">{{ c.pct }}</span></div>
+                        <div style="height:8px;border-radius:9999px;background:color-mix(in srgb, currentColor 8%, transparent);overflow:hidden;"><div style="height:100%;border-radius:9999px;width:{{ c.pct }};background:{{ c.color }};"></div></div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+                <div>
+                  <div class="heading" style="margin-bottom:10px;">Geeignete Maßnahmen — diffusionsoffen</div>
+                  <div class="adw-list">
+                    <sc-for list="{{ fMeasures }}" as="m" hint-placeholder-count="3">
+                      <div class="adw-row" style="cursor:default;">
+                        <span style="color:{{ GREEN }};font-weight:800;flex:0 0 16px;">✓</span>
+                        <div class="row-text"><div class="row-title">{{ m.t }}</div><div class="row-subtitle">{{ m.s }}</div></div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;">
+                  <button class="adw-btn" onClick="{{ fBack }}">Zurück</button>
+                  <button class="adw-btn suggested" onClick="{{ fSave }}">Diagnose speichern</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <div>
+              <div class="heading" style="margin-bottom:10px;">Diagnostizierte Wände ({{ diagCount }})</div>
+              <div class="adw-list">
+                <sc-for list="{{ diagnosed }}" as="d" hint-placeholder-count="2">
+                  <div class="adw-row" style="cursor:default;">
+                    <span style="width:26px;height:26px;flex:0 0 26px;border-radius:9999px;background:color-mix(in srgb, #2190a4 18%, transparent);color:#2190a4;display:flex;align-items:center;justify-content:center;">
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5C10.4 4.8 12.8 7.3 12.8 9.9a4.8 4.8 0 1 1-9.6 0C3.2 7.3 5.6 4.8 8 1.5z"></path></svg>
+                    </span>
+                    <div class="row-text"><div class="row-title">{{ d.name }}</div><div class="row-subtitle">{{ d.cause }}</div></div>
+                    <div class="row-suffix"><span style="font-size:12px;opacity:.55;">{{ d.date }}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== KOSTEN & FÖRDERUNG ===== -->
+      <sc-if value="{{ is.kosten }}" hint-placeholder-val="{{ false }}">
+        <div class="bp-scroll" data-screen-label="Kosten und Förderung" style="flex:1;overflow-y:auto;">
+          <div style="max-width:820px;margin:0 auto;padding:24px 20px 48px;display:flex;flex-direction:column;gap:20px;">
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;">
+              <sc-for list="{{ costKpis }}" as="k" hint-placeholder-count="4">
+                <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:14px 16px;">
+                  <div style="font-size:12px;opacity:.6;">{{ k.k }}</div>
+                  <div class="numeric" style="font-size:21px;font-weight:800;color:{{ k.c }};">{{ k.v }}</div>
+                  <div style="font-size:11.5px;opacity:.5;margin-top:2px;">{{ k.s }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:18px 20px;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+                <div class="heading">Kosten je Maßnahmenpaket</div>
+                <div style="display:flex;gap:16px;font-size:12.5px;opacity:.75;">
+                  <span style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--accent-bg-color);"></span>Eigenanteil</span>
+                  <span style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:{{ GREEN }};"></span>Förderung</span>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                <sc-for list="{{ costBars }}" as="b" hint-placeholder-count="5">
+                  <div style="display:flex;flex-direction:column;gap:5px;">
+                    <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;"><span>{{ b.name }}</span><span class="numeric" style="opacity:.7;">{{ b.total }}</span></div>
+                    <div style="height:10px;border-radius:9999px;background:color-mix(in srgb, currentColor 8%, transparent);overflow:hidden;display:flex;">
+                      <div style="height:100%;width:{{ b.wOwn }};background:var(--accent-bg-color);"></div>
+                      <div style="height:100%;width:{{ b.wSub }};background:{{ GREEN }};"></div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div>
+              <div class="heading" style="margin-bottom:10px;">Förderprogramme</div>
+              <div class="adw-list">
+                <sc-for list="{{ foerderRows }}" as="f" hint-placeholder-count="4">
+                  <div class="adw-row" style="cursor:default;align-items:flex-start;">
+                    <div class="row-text"><div class="row-title">{{ f.t }}</div><div class="row-subtitle">{{ f.s }}</div></div>
+                    <div class="row-suffix" style="opacity:1;flex-direction:column;align-items:flex-end;gap:4px;">
+                      <span style="{{ f.badgeStyle }}">{{ f.badge }}</span>
+                      <span class="numeric" style="font-weight:700;font-size:13px;">{{ f.v }}</span>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:18px 20px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
+              <div style="flex:1;min-width:220px;">
+                <div class="heading" style="margin-bottom:4px;">Amortisation</div>
+                <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:12.5px;opacity:.55;">Heizkosten heute gegen den Zielzustand nach Paket 5 — bei Energiepreisen von 2026</div></sc-if>
+                <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">
+                  <div style="display:flex;flex-direction:column;gap:4px;">
+                    <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span style="opacity:.65;">Heizkosten heute (Gas)</span><span class="numeric" style="font-weight:700;">3.740 €/a</span></div>
+                    <div style="height:9px;border-radius:9999px;background:#e66100;width:100%;"></div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:4px;">
+                    <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span style="opacity:.65;">Zielzustand (Wärmepumpe + PV)</span><span class="numeric" style="font-weight:700;">1.290 €/a</span></div>
+                    <div style="height:9px;border-radius:9999px;background:{{ GREEN }};width:34%;"></div>
+                  </div>
+                </div>
+              </div>
+              <div style="flex:0 1 220px;min-width:180px;display:flex;flex-direction:column;gap:6px;">
+                <div style="font-size:12px;opacity:.6;">Jährliche Ersparnis</div>
+                <div class="numeric" style="font-size:26px;font-weight:800;color:{{ GREEN }};">2.450 €</div>
+                <div style="font-size:12.5px;opacity:.55;line-height:1.45;">Eigenanteil 118.200 € ÷ Ersparnis ≈ <b>15 Jahre</b> — ohne Förderung wären es 24</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== MATERIAL ===== -->
+      <sc-if value="{{ is.material }}" hint-placeholder-val="{{ false }}">
+        <div class="bp-scroll" data-screen-label="Material" style="flex:1;overflow-y:auto;">
+          <div style="max-width:760px;margin:0 auto;padding:24px 20px 48px;display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;gap:0;border-radius:9px;overflow:hidden;background:color-mix(in srgb, currentColor 8%, transparent);align-self:flex-start;">
+              <sc-for list="{{ matTabs }}" as="c" hint-placeholder-count="2"><button onClick="{{ c.on }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+            </div>
+
+            <sc-if value="{{ matIsEinkauf }}" hint-placeholder-val="{{ true }}">
+              <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;opacity:.55;padding:0 2px;">Mengen aus dem Modell berechnet — inklusive Verschnitt- und Verdichtungszuschlag. Status antippen zum Weiterschalten</div></sc-if>
+              <div class="adw-list">
+                <sc-for list="{{ einkauf }}" as="e" hint-placeholder-count="6">
+                  <div class="adw-row" style="cursor:default;align-items:flex-start;">
+                    <div class="row-text"><div class="row-title">{{ e.name }}</div><div class="row-subtitle">{{ e.sub }}</div></div>
+                    <div class="row-suffix" style="opacity:1;gap:10px;align-items:center;">
+                      <span class="numeric" style="font-weight:700;white-space:nowrap;">{{ e.preis }}</span>
+                      <button onClick="{{ e.onStatus }}" style="{{ e.statusStyle }}">{{ e.status }}</button>
+                    </div>
+                  </div>
+                </sc-for>
+                <div class="adw-row" style="cursor:default;">
+                  <div class="row-text"><div class="row-title" style="font-weight:800;">Summe offene Positionen</div></div>
+                  <div class="row-suffix" style="opacity:1;"><span class="numeric" style="font-weight:800;font-size:15px;">{{ einkaufSumme }}</span></div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ matIsStamm }}" hint-placeholder-val="{{ false }}">
+              <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;opacity:.55;padding:0 2px;">Natürliche, diffusionsoffene Baustoffe zuerst. Richtwerte — Herstellerangaben bestätigen</div></sc-if>
+              <div class="adw-list">
+                <sc-for list="{{ materials }}" as="m" hint-placeholder-count="8">
+                  <div class="adw-row" style="cursor:default;align-items:flex-start;">
+                    <div class="row-text">
+                      <div class="row-title" style="display:flex;align-items:center;gap:8px;">{{ m.name }}
+                        <sc-if value="{{ m.kapillar }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;font-weight:700;border-radius:9999px;padding:1px 8px;color:{{ GREEN }};background:color-mix(in srgb, {{ GREEN }} 14%, transparent);">kapillaraktiv</span></sc-if>
+                      </div>
+                      <div class="row-subtitle">{{ m.sub }}</div>
+                    </div>
+                    <div class="row-suffix" style="opacity:1;"><span class="numeric" style="font-size:12.5px;opacity:.75;white-space:nowrap;">{{ m.vals }}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== RAUMKLIMA ===== -->
+      <sc-if value="{{ is.klima }}" hint-placeholder-val="{{ false }}">
+        <div class="bp-scroll" data-screen-label="Raumklima" style="flex:1;overflow-y:auto;">
+          <div style="max-width:900px;margin:0 auto;padding:24px 20px 48px;display:flex;flex-direction:column;gap:16px;">
+            <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;opacity:.55;padding:0 2px;">Sensoren über Home Assistant angebunden · Werte alle 5 Minuten. Taupunkt-Warnungen vergleichen Raumluft mit der kältesten Wandoberfläche</div></sc-if>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">
+              <sc-for list="{{ rooms }}" as="r" hint-placeholder-count="6">
+                <div style="background:var(--card-bg-color);border-radius:12px;box-shadow:var(--shadow-card);padding:16px 18px;display:flex;flex-direction:column;gap:10px;">
+                  <div style="display:flex;align-items:center;gap:9px;">
+                    <span style="width:9px;height:9px;border-radius:9999px;background:{{ r.dot }};flex:0 0 9px;"></span>
+                    <span style="font-weight:700;font-size:14px;flex:1;min-width:0;">{{ r.name }}</span>
+                    <span style="font-size:11px;opacity:.45;">{{ r.level }}</span>
+                  </div>
+                  <div style="display:flex;align-items:baseline;gap:14px;">
+                    <span class="numeric" style="font-size:27px;font-weight:800;">{{ r.temp }}</span>
+                    <span class="numeric" style="font-size:14px;opacity:.65;">{{ r.rf }} rF</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;font-size:12.5px;">
+                    <span style="opacity:.55;">CO₂</span>
+                    <span class="numeric" style="font-weight:700;color:{{ r.co2c }};">{{ r.co2 }}</span>
+                  </div>
+                  <sc-if value="{{ r.warn }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;gap:8px;align-items:flex-start;background:color-mix(in srgb, #e5a50a 12%, transparent);border-radius:9px;padding:9px 11px;font-size:12px;line-height:1.4;">
+                      <span style="color:#e5a50a;font-weight:800;">⚠</span>
+                      <span>{{ r.warn }}</span>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== DOKUMENTATION ===== -->
+      <sc-if value="{{ is.doku }}" hint-placeholder-val="{{ false }}">
+        <div class="bp-scroll" data-screen-label="Dokumentation" style="flex:1;overflow-y:auto;">
+          <div style="max-width:680px;margin:0 auto;padding:24px 20px 48px;display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <div style="display:flex;gap:0;border-radius:9px;overflow:hidden;background:color-mix(in srgb, currentColor 8%, transparent);">
+                <sc-for list="{{ dokuChips }}" as="c" hint-placeholder-count="4"><button onClick="{{ c.on }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+              </div>
+              <button class="adw-btn suggested" onClick="{{ addDoku }}" style="margin-left:auto;">+ Eintrag</button>
+            </div>
+            <sc-if value="{{ showHints }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;opacity:.55;padding:0 2px;">Fotos, Messwerte und Notizen sind am Modell verankert — antippen einer Wand im Modell zeigt ihre Einträge</div></sc-if>
+            <div class="adw-list">
+              <sc-for list="{{ dokuRows }}" as="d" hint-placeholder-count="5">
+                <div class="adw-row" style="cursor:default;align-items:center;">
+                  <sc-if value="{{ d.slot }}" hint-placeholder-val="{{ false }}">
+                    <div style="width:76px;height:76px;flex:0 0 76px;border-radius:8px;overflow:hidden;">
+                      <image-slot id="{{ d.slot }}" shape="rounded" radius="8" placeholder="Foto"></image-slot>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ d.icon }}" hint-placeholder-val="{{ true }}">
+                    <span style="width:34px;height:34px;flex:0 0 34px;border-radius:9px;background:color-mix(in srgb, {{ d.color }} 16%, transparent);color:{{ d.color }};display:flex;align-items:center;justify-content:center;" dangerouslySetInnerHTML="{{ d.icon }}"></span>
+                  </sc-if>
+                  <div class="row-text"><div class="row-title">{{ d.title }}</div><div class="row-subtitle">{{ d.sub }}</div></div>
+                  <div class="row-suffix"><span style="font-size:12px;opacity:.55;white-space:nowrap;">{{ d.date }}</span></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- Bottom-Bar (Mobil) -->
+      <sc-if value="{{ showBottomBar }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;background:var(--headerbar-bg-color);box-shadow:inset 0 1px var(--headerbar-shade-color);padding:4px 6px calc(4px + env(safe-area-inset-bottom));gap:2px;">
+          <sc-for list="{{ bottomItems }}" as="b" hint-placeholder-count="5">
+            <button onClick="{{ b.on }}" style="{{ b.style }}">
+              <span style="display:flex;" dangerouslySetInnerHTML="{{ b.icon }}"></span>
+              <span style="font-size:10.5px;font-weight:600;">{{ b.label }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;left:50%;bottom:{{ toastBottom }};transform:translateX(-50%);z-index:90;background:rgba(32,32,36,.94);color:#fff;border-radius:9999px;padding:10px 20px;font-size:13.5px;box-shadow:var(--shadow-dialog);animation:bp-toast-in .2s var(--ease-out-quad);white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis;">{{ toastMsg }}</div>
+  </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1400, &quot;height&quot;: 1000}, &quot;farbschema&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Hell&quot;, &quot;Dunkel&quot;], &quot;default&quot;: &quot;Hell&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Darstellung&quot;}, &quot;akzentfarbe&quot;: {&quot;editor&quot;: &quot;color&quot;, &quot;options&quot;: [&quot;#3584e4&quot;, &quot;#2190a4&quot;, &quot;#3a944a&quot;, &quot;#813d9c&quot;], &quot;default&quot;: &quot;#3584e4&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Darstellung&quot;}, &quot;erklaerHinweise&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Inhalt&quot;}}">
+class Component extends DCLogic {
+  state = {
+    device: 'desktop',
+    view: 'home', navOpen: false, scheme: null,
+    mode: '2d', level: 'eg', layer: 'uwert', wall: null,
+    gewerke: { heizung: true, wasser: false, strom: false, fbh: true },
+    tool: 'select', draft: [], measure: null, seq: 1,
+    customRuns: { keller: [], eg: [], og: [] },
+    customWalls: { keller: [], eg: [], og: [] },
+    foerderOn: true,
+    openAssembly: 'aw-neu',
+    fStep: 1, fWall: null, fOrt: 'Keller', fSw: { rain: true, belowGrade: true, heating: false, salt: true, mould: false },
+    matTab: 'einkauf', einkaufStatus: {}, dokuFilter: 'Alle',
+    diagnosedExtra: [], toast: null
+  };
+
+  GREEN = '#26a269'; YEL = '#e5a50a'; RED = '#c01c28'; ORANGE = '#e66100'; TEAL = '#2190a4'; PURPLE = '#813d9c';
+
+  icons = {
+    home: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.6 14.6 7.4l-.9 1L13 7.8V14h-3.6v-3.8H6.6V14H3V7.8l-.7.6-.9-1z"/></svg>',
+    modell: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.4 13.8 4.4v7.2L8 14.6 2.2 11.6V4.4z"/><path d="M2.2 4.4 8 7.4l5.8-3M8 7.4v7.2"/></svg>',
+    fahrplan: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="3.6" cy="3.6" r="1.9"/><circle cx="12.4" cy="12.4" r="1.9"/><path d="M5.3 4.6c3.6 1.6 1.8 5.2 5.4 6.8" stroke-dasharray="2.4 2"/></svg>',
+    bauteile: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.6h12v2.6H2zM2 6.7h12v2.6H2zM2 10.8h12v2.6H2z"/></svg>',
+    feuchte: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.3C10.5 4.7 13 7.3 13 10a5 5 0 0 1-10 0C3 7.3 5.5 4.7 8 1.3z"/></svg>',
+    kosten: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.2"/><path d="M10.6 5.6a3.2 3.2 0 1 0 0 4.8M4.6 7h4M4.6 9h4"/></svg>',
+    material: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4.8 8 1.8l6 3v6.4l-6 3-6-3z"/><path d="M2 4.8l6 3 6-3M8 7.8v6.4"/></svg>',
+    klima: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.6 2.4a1.4 1.4 0 0 1 2.8 0v6a3.4 3.4 0 1 1-2.8 0z"/><circle cx="8" cy="11.4" r="1.4" fill="currentColor" stroke="none"/></svg>',
+    doku: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.8" y="4" width="12.4" height="9.2" rx="2"/><path d="M5.4 4 6.6 2.2h2.8L10.6 4"/><circle cx="8" cy="8.4" r="2.4"/></svg>',
+    foto: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.8" y="4" width="12.4" height="9.2" rx="2"/><path d="M5.4 4 6.6 2.2h2.8L10.6 4"/><circle cx="8" cy="8.4" r="2.4"/></svg>',
+    mess: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.6 2.4a1.4 1.4 0 0 1 2.8 0v6a3.4 3.4 0 1 1-2.8 0z"/><circle cx="8" cy="11.4" r="1.4" fill="currentColor" stroke="none"/></svg>',
+    notiz: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2.5h10v11H3z"/><path d="M5.4 5.5h5.2M5.4 8h5.2M5.4 10.5h3"/></svg>',
+    sun: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3.2"/><path d="M8 1.2v1.8M8 13v1.8M1.2 8h1.8M13 8h1.8M3.2 3.2l1.3 1.3M11.5 11.5l1.3 1.3M12.8 3.2l-1.3 1.3M4.5 11.5l-1.3 1.3" stroke-linecap="round"/></svg>',
+    moon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.4 9.8A5.8 5.8 0 0 1 6.2 2.6 5.8 5.8 0 1 0 13.4 9.8z"/></svg>'
+  };
+
+  headers = {
+    home: ['Übersicht', 'Kennzahlen & nächste Schritte'],
+    modell: ['Modell', 'Grundriss bearbeiten · 3D prüfen · Gewerke-Ebenen'],
+    fahrplan: ['Sanierungsfahrplan', '5 Pakete · 2025–2029'],
+    bauteile: ['Bauteile', 'Schichtaufbauten & Bauphysik'],
+    feuchte: ['Feuchte-Diagnose', 'geführte Ursachenanalyse'],
+    kosten: ['Kosten & Förderung', 'Budget · BEG · Amortisation'],
+    material: ['Material', 'Einkaufsliste & Materialstamm'],
+    klima: ['Raumklima', 'Sensoren · CO₂ · Feuchte'],
+    doku: ['Dokumentation', 'Fotos & Messwerte am Modell']
+  };
+
+  // ---------- Gebäudedaten ----------
+  wallsData = {
+    keller: [
+      { id: 'K-N', name: 'Kellerwand Nord', x: 40, y: 40, w: 540, h: 16, u: 1.9, asm: 'kellerwand', feucht: false, heiz: false, flaeche: '34,1 m²' },
+      { id: 'K-S', name: 'Kellerwand Süd', x: 40, y: 364, w: 540, h: 16, u: 1.9, asm: 'kellerwand', feucht: 'Aufstauendes Sickerwasser', heiz: false, flaeche: '34,1 m²' },
+      { id: 'K-W', name: 'Kellerwand West', x: 40, y: 40, w: 16, h: 340, u: 1.9, asm: 'kellerwand', feucht: 'Kondensat (Sommer)', heiz: false, flaeche: '21,4 m²' },
+      { id: 'K-O', name: 'Kellerwand Ost', x: 564, y: 40, w: 16, h: 340, u: 1.9, asm: 'kellerwand', feucht: false, heiz: false, flaeche: '21,4 m²' },
+      { id: 'K-I1', name: 'Innenwand Heizraum', x: 330, y: 56, w: 10, h: 324, u: 0, asm: null, feucht: false, heiz: false, flaeche: '19,8 m²' },
+      { id: 'K-I2', name: 'Innenwand Waschküche', x: 56, y: 210, w: 274, h: 10, u: 0, asm: null, feucht: false, heiz: false, flaeche: '17,2 m²' }
+    ],
+    eg: [
+      { id: 'E-N', name: 'Außenwand Nord (EG)', x: 40, y: 40, w: 540, h: 16, u: 1.49, asm: 'aw-neu', feucht: false, heiz: false, flaeche: '38,7 m²' },
+      { id: 'E-S', name: 'Außenwand Süd (EG)', x: 40, y: 364, w: 540, h: 16, u: 1.49, asm: 'aw-neu', feucht: false, heiz: true, flaeche: '38,7 m²' },
+      { id: 'E-W', name: 'Außenwand West (EG)', x: 40, y: 40, w: 16, h: 340, u: 1.49, asm: 'aw-neu', feucht: false, heiz: true, flaeche: '24,3 m²' },
+      { id: 'E-O', name: 'Außenwand Ost (EG)', x: 564, y: 40, w: 16, h: 340, u: 1.49, asm: 'aw-neu', feucht: false, heiz: false, flaeche: '24,3 m²' },
+      { id: 'E-I1', name: 'Innenwand Flur', x: 250, y: 56, w: 10, h: 154, u: 0, asm: null, feucht: false, heiz: false, flaeche: '10,8 m²' },
+      { id: 'E-I2', name: 'Innenwand Küche', x: 400, y: 56, w: 10, h: 154, u: 0, asm: null, feucht: false, heiz: false, flaeche: '10,8 m²' },
+      { id: 'E-I3', name: 'Innenwand quer', x: 56, y: 210, w: 524, h: 10, u: 0, asm: null, feucht: false, heiz: false, flaeche: '32,4 m²' }
+    ],
+    og: [
+      { id: 'O-N', name: 'Außenwand Nord (OG)', x: 40, y: 40, w: 540, h: 16, u: 1.49, asm: 'aw-neu', feucht: false, heiz: false, flaeche: '38,7 m²' },
+      { id: 'O-S', name: 'Außenwand Süd (OG)', x: 40, y: 364, w: 540, h: 16, u: 1.49, asm: 'aw-neu', feucht: false, heiz: false, flaeche: '38,7 m²' },
+      { id: 'O-W', name: 'Außenwand West (OG)', x: 40, y: 40, w: 16, h: 340, u: 1.49, asm: 'aw-neu', feucht: false, heiz: false, flaeche: '24,3 m²' },
+      { id: 'O-O', name: 'Außenwand Ost (OG)', x: 564, y: 40, w: 16, h: 340, u: 1.49, asm: 'aw-neu', feucht: false, heiz: false, flaeche: '24,3 m²' },
+      { id: 'O-I1', name: 'Innenwand Bad', x: 310, y: 56, w: 10, h: 154, u: 0, asm: null, feucht: false, heiz: false, flaeche: '10,8 m²' },
+      { id: 'O-I2', name: 'Innenwand quer', x: 56, y: 210, w: 524, h: 10, u: 0, asm: null, feucht: false, heiz: false, flaeche: '32,4 m²' }
+    ]
+  };
+  roomsData = {
+    keller: [
+      { x: 56, y: 56, w: 274, h: 154, label: 'Werkstatt', area: '20,8 m²' },
+      { x: 56, y: 220, w: 274, h: 144, label: 'Waschküche', area: '19,4 m²' },
+      { x: 340, y: 56, w: 224, h: 324, label: 'Heizungsraum · Lager', area: '35,6 m²' }
+    ],
+    eg: [
+      { x: 56, y: 56, w: 194, h: 154, label: 'Wohnzimmer', area: '24,1 m²' },
+      { x: 260, y: 56, w: 140, h: 154, label: 'Flur · Treppe', area: '10,6 m²' },
+      { x: 410, y: 56, w: 154, h: 154, label: 'Küche', area: '11,9 m²' },
+      { x: 56, y: 220, w: 508, h: 144, label: 'Esszimmer · Büro', area: '31,2 m²' }
+    ],
+    og: [
+      { x: 56, y: 56, w: 254, h: 154, label: 'Schlafzimmer', area: '18,4 m²' },
+      { x: 320, y: 56, w: 244, h: 154, label: 'Bad · Flur', area: '13,8 m²' },
+      { x: 56, y: 220, w: 244, h: 144, label: 'Kinderzimmer Luca', area: '14,2 m²' },
+      { x: 310, y: 220, w: 254, h: 144, label: 'Kinderzimmer Cleo', area: '15,1 m²' }
+    ]
+  };
+
+  // ---------- Gewerke (TGA) ----------
+  gewerkDefs = {
+    heizung: { label: 'Heizung', color: '#c01c28', paket: 'Paket 5' },
+    wasser: { label: 'Wasser', color: '#3584e4', paket: 'Paket 2' },
+    strom: { label: 'Strom', color: '#e5a50a', paket: 'Paket 4' },
+    fbh: { label: 'Flächenheizung', color: '#813d9c', paket: 'Paket 5' }
+  };
+  tgaData = {
+    keller: [
+      { g: 'heizung', status: 'bestand', pts: [[420, 100], [420, 330], [120, 330]], nodes: [[420, 100]] },
+      { g: 'heizung', status: 'geplant', pts: [[380, 100], [380, 200], [200, 200]], nodes: [[380, 100]] },
+      { g: 'wasser', status: 'bestand', pts: [[70, 340], [70, 130], [340, 130]], nodes: [[70, 340], [340, 130]] },
+      { g: 'strom', status: 'bestand', pts: [[560, 90], [370, 90], [370, 190]], nodes: [[560, 90]] }
+    ],
+    eg: [
+      { g: 'heizung', status: 'bestand', pts: [[120, 350], [520, 350]], nodes: [[160, 350], [340, 350], [500, 350]] },
+      { g: 'wasser', status: 'bestand', pts: [[430, 200], [430, 90], [540, 90]], nodes: [[540, 90]] },
+      { g: 'strom', status: 'geplant', pts: [[270, 90], [270, 200], [560, 200]], nodes: [[270, 90], [470, 200]] },
+      { g: 'fbh', status: 'geplant', pts: [[80, 245], [540, 245], [540, 270], [80, 270], [80, 295], [540, 295], [540, 320], [80, 320], [80, 345], [540, 345]], nodes: [] }
+    ],
+    og: [
+      { g: 'heizung', status: 'bestand', pts: [[330, 90], [330, 190]], nodes: [[330, 90]] },
+      { g: 'wasser', status: 'bestand', pts: [[330, 60], [420, 60], [420, 140]], nodes: [[420, 140]] },
+      { g: 'strom', status: 'bestand', pts: [[60, 240], [60, 100], [560, 100]], nodes: [[60, 240]] }
+    ]
+  };
+  toolIcons = {
+    select: '<svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1.8 12.4 8.6 8.6 9.3 10.8 13.6 9.2 14.4 7 10.1 4.2 12.6z"/></svg>',
+    wand: '<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12.8h12M2 12.8V9h5v3.8M7 9h7v3.8M4.5 9V5.2h7V9"/></svg>',
+    tuer: '<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14V2h7v12"/><path d="M10 2a9 9 0 0 1 4 8" stroke-dasharray="2 2"/><circle cx="8.4" cy="8.4" r=".9" fill="currentColor" stroke="none"/></svg>',
+    messen: '<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.6" y="9.6" width="12.8" height="4.4" rx="1" transform="rotate(-45 8 11.8)"/><path d="M5.2 9.4 6.4 10.6M7.4 7.2 8.6 8.4M9.6 5 10.8 6.2"/></svg>',
+    heizung: '<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 13.5V6.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/><path d="M4.6 13.5V7.5M7.4 13.5V7.5M10.2 13.5V7.5M13 13.5V7.5"/></svg>',
+    wasser: '<svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.6c2.2 3 4.4 5.3 4.4 7.7a4.4 4.4 0 1 1-8.8 0C3.6 6.9 5.8 4.6 8 1.6z" opacity=".9"/></svg>',
+    strom: '<svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor"><path d="M9.3 1.2 3.4 9h3.4l-1.1 5.8L11.6 7H8.2z"/></svg>',
+    fbh: '<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 13V3h4v8h4V3h4v10" stroke-linejoin="round"/></svg>'
+  };
+
+  // ---------- Bauteil-Aufbauten ----------
+  matColors = { lehmputz: '#b5835a', holzfaser: '#c0965c', ziegel: '#a04b3b', kalkputz: '#d8d4c8', beton: '#9a9996', calcium: '#e8e2d4', abdicht: '#3d3846', kies: '#77767b', dernoton: '#865e3c', daemmung: '#c0965c' };
+  assembliesData = [
+    { id: 'aw-bestand', name: 'Außenwand — Bestand', sub: 'EG + OG · 127 m² · unsaniert', u: '1,49', uColor: '#c01c28', geg: 'GEG ✗', gegOk: false,
+      layers: [ ['Kalkputz innen', 15, '0,70', 'kalkputz'], ['Vollziegel', 365, '0,79', 'ziegel'], ['Kalkzementputz', 20, '0,87', 'kalkputz'] ],
+      facts: [ ['U-Wert', '1,49 W/m²K', '#c01c28'], ['GEG-Anforderung (Außenwand)', '≤ 0,24 W/m²K', ''], ['Tauwasser (Glaser)', 'unkritisch', ''] ],
+      note: 'Wird in Paket 4 durch die Innendämmung ersetzt' },
+    { id: 'aw-neu', name: 'Außenwand — Innendämmung (geplant)', sub: 'Paket 4 · 2028 · diffusionsoffen', u: '0,46', uColor: '#e5a50a', geg: 'GEG ✓*', gegOk: true,
+      layers: [ ['Lehmputz + Wandheizung', 25, '0,91', 'lehmputz'], ['Holzfaserplatte', 60, '0,040', 'holzfaser'], ['Vollziegel (Bestand)', 365, '0,79', 'ziegel'], ['Kalkzementputz', 20, '0,87', 'kalkputz'] ],
+      facts: [ ['U-Wert', '0,46 W/m²K', '#e5a50a'], ['Verbesserung', '−69 % Wärmeverlust', '#26a269'], ['Tauwasser (Glaser)', '0,3 kg/m² — trocknet aus ✓', '#26a269'], ['sd innen / außen', '0,3 m / 1,9 m — diffusionsoffen', ''], ['Materialkosten', '≈ 96 €/m²', ''] ],
+      note: '* Innendämmung: GEG fordert hier R ≥ 1,2 m²K/W — erfüllt. Kapillaraktiv, keine Dampfsperre nötig' },
+    { id: 'kellerwand', name: 'Kellerwand — Abdichtung (Paket 1 ✓)', sub: 'Südseite · Lehmgraben ausgeführt 2025', u: '1,9', uColor: '#c01c28', geg: '—', gegOk: true,
+      layers: [ ['Kalkputz innen', 15, '0,70', 'kalkputz'], ['Beton (Bestand)', 300, '2,1', 'beton'], ['DERNOTON-Dichtschicht', 500, '—', 'dernoton'], ['Kiesverfüllung + Dränage', 400, '—', 'kies'] ],
+      facts: [ ['Lastfall', 'DIN 18533 · W2.1-E', ''], ['Dränage', 'DIN 4095 · Gefälle 1,2 % zur Wettern', ''], ['DERNOTON-Bedarf', '24 t (25 m × 0,9 m × 0,5 m)', ''] ],
+      note: 'Erdberührte Wand — U-Wert-Anforderung greift erst bei beheiztem Keller' },
+    { id: 'dach', name: 'Flachdach — Aufdopplung (geplant)', sub: 'Paket 3 · 2027 · 96 m²', u: '0,15', uColor: '#26a269', geg: 'GEG ✓', gegOk: true,
+      layers: [ ['Lehmbauplatte innen', 22, '0,35', 'lehmputz'], ['Bestandsdecke Holz', 180, '0,13', 'kalkputz'], ['Holzfaser-Aufdopplung', 240, '0,040', 'holzfaser'], ['Abdichtungsbahn diffusionsoffen', 3, '—', 'abdicht'] ],
+      facts: [ ['U-Wert', '0,15 W/m²K', '#26a269'], ['GEG-Anforderung (Dach)', '≤ 0,20 W/m²K ✓', '#26a269'], ['Tauwasser (Glaser)', 'tauwasserfrei ✓', '#26a269'], ['Materialkosten', '≈ 118 €/m²', ''] ],
+      note: 'Aufbau nach Flachdachrichtlinie, Gefälle 2 % bleibt erhalten' },
+    { id: 'kellerdecke', name: 'Kellerdecke — gedämmt (Paket 1 ✓)', sub: 'Ausgeführt 11/2025 · 88 m²', u: '0,29', uColor: '#26a269', geg: 'GEG ✓', gegOk: true,
+      layers: [ ['Dielenboden (Bestand)', 24, '0,13', 'kalkputz'], ['Betondecke', 160, '2,1', 'beton'], ['Holzfaserplatte unterseitig', 120, '0,040', 'holzfaser'] ],
+      facts: [ ['U-Wert', '0,29 W/m²K', '#26a269'], ['GEG-Anforderung (Decke gegen unbeheizt)', '≤ 0,30 W/m²K ✓', '#26a269'], ['Effekt', '−9 kWh/m²a', ''] ],
+      note: 'Fußkalt war gestern — gemessene Bodentemperatur +1,8 °C' }
+  ];
+
+  // ---------- Fahrplan ----------
+  paketeData = [
+    { year: '2025', title: 'Paket 1 — Trockenlegen & Sockel', status: 'done',
+      items: [ ['done', 'Lehmgraben Südseite: DERNOTON-Abdichtung, 25 m', '8.400 €', true], ['done', 'Dränage DIN 4095 + neues KG-Rohr zur Wettern', 'inkl.', true], ['done', 'Kellerdecke dämmen (Holzfaser 120 mm)', '4.900 €', true] ],
+      kosten: '13.300 €', foerder: '—', effekt: '−9 kWh/m²a' },
+    { year: '2026', title: 'Paket 2 — Fenster & Luftdichtheit', status: 'active',
+      items: [ ['active', 'Fenstertausch: 11 Stück, Uw 0,95 W/m²K', '24.800 €'], ['open', 'Laibungen mit Calciumsilikat-Platten', '3.200 €'], ['open', 'Lüftungskonzept nach DIN 1946-6', '900 €'] ],
+      kosten: '28.900 €', foerder: '5.720 € (BEG EM 20 %)', effekt: '−35 kWh/m²a' },
+    { year: '2027', title: 'Paket 3 — Dach & Photovoltaik', status: 'open',
+      items: [ ['open', 'Flachdach: Holzfaser-Aufdopplung 240 mm', '28.500 €'], ['open', 'PV-Anlage 9,8 kWp mit 8 kWh Speicher', '21.400 €'] ],
+      kosten: '49.900 €', foerder: '9.980 € erwartet', effekt: '−28 kWh/m²a' },
+    { year: '2028', title: 'Paket 4 — Wände & Wandheizung', status: 'open',
+      items: [ ['open', 'Innendämmung Holzfaser 60 mm, kapillaraktiv', '18.400 €', true], ['open', 'Lehmputz mit integrierter Wandheizung Süd + West', '11.600 €', true], ['open', 'Luftdichtheits-Messung (Blower-Door)', '600 €'] ],
+      kosten: '30.600 €', foerder: '6.120 € erwartet', effekt: '−41 kWh/m²a' },
+    { year: '2029', title: 'Paket 5 — Wärmepumpe', status: 'open',
+      items: [ ['open', 'Sole-Wärmepumpe 8 kW + Flächenheizung EG', '34.900 €'], ['open', 'Rückbau Gaskessel, hydraulischer Abgleich', '2.400 €'] ],
+      kosten: '37.300 €', foerder: '25.000 € erwartet (BEG 35 %)', effekt: '−43 kWh/m²a' }
+  ];
+
+  // ---------- Material ----------
+  einkaufData = [
+    { id: 'e1', name: 'Holzfaserplatte 60 mm', sub: '88 m² + 8 % Verschnitt → 95 m² · Paket 4 · Innendämmung', preis: '3.230 €', def: 'offen' },
+    { id: 'e2', name: 'Lehm-Unterputz', sub: '1.240 kg (127 m² × 15 mm) · Paket 4', preis: '620 €', def: 'offen' },
+    { id: 'e3', name: 'Calciumsilikat-Laibungsplatte 25 mm', sub: '11 Fenster · 14,6 m² · Paket 2', preis: '840 €', def: 'bestellt' },
+    { id: 'e4', name: 'Fenster Holz-Alu, Uw 0,95', sub: '11 Stück laut Aufmaß · Paket 2 · Liefertermin KW 32', preis: '19.400 €', def: 'bestellt' },
+    { id: 'e5', name: 'DERNOTON-Fertigmischung', sub: '24 t (11,3 m³ × 1,9 t + Verdichtung) · Paket 1', preis: '4.080 €', def: 'geliefert' },
+    { id: 'e6', name: 'KG-Rohr DN 110 + Formteile', sub: '28 m, Gefälle 1,2 % zur Wettern · Paket 1', preis: '310 €', def: 'geliefert' }
+  ];
+  materialsData = [
+    { name: 'Lehmputz', sub: 'Rohdichte 1.700 kg/m³ · Feuchtepuffer', vals: 'λ 0,91 · µ 8 · 0,50 €/kg', kapillar: true },
+    { name: 'Holzfaserplatte flex', sub: 'Rohdichte 50 kg/m³ · Innendämmung', vals: 'λ 0,040 · µ 3 · 34 €/m²', kapillar: true },
+    { name: 'Calciumsilikat-Platte', sub: 'Rohdichte 280 kg/m³ · schimmelpräventiv', vals: 'λ 0,065 · µ 6 · 58 €/m²', kapillar: true },
+    { name: 'DERNOTON', sub: 'Tonabdichtung erdberührt · DIN 18533', vals: 'µ ~∞ · 170 €/t', kapillar: false },
+    { name: 'Schaumglasschotter', sub: 'Rohdichte 150 kg/m³ · lastabtragend', vals: 'λ 0,08 · µ 3 · 92 €/m³', kapillar: false },
+    { name: 'Kalkputz', sub: 'Rohdichte 1.600 kg/m³ · alkalisch', vals: 'λ 0,70 · µ 10 · 0,42 €/kg', kapillar: true },
+    { name: 'Strohballen', sub: 'Rohdichte 110 kg/m³ · Ausfachung', vals: 'λ 0,052 · µ 2 · 14 €/Stk', kapillar: true },
+    { name: 'Vollziegel (Bestand)', sub: 'Rohdichte 1.800 kg/m³ · 1962', vals: 'λ 0,79 · µ 10', kapillar: true }
+  ];
+
+  // ---------- Raumklima ----------
+  roomsKlima = [
+    { name: 'Wohnzimmer', level: 'EG', temp: '21,4°', rf: '47 %', co2: '610 ppm', co2ok: true, ok: true, warn: false },
+    { name: 'Schlafzimmer', level: 'OG', temp: '17,8°', rf: '64 %', co2: '1240 ppm', co2ok: false, ok: false, warn: 'Taupunkt 10,9 °C — Wandoberfläche Nord bei 12,1 °C. Stoßlüften und Möbel 5 cm abrücken' },
+    { name: 'Kinderzimmer Luca', level: 'OG', temp: '20,1°', rf: '55 %', co2: '890 ppm', co2ok: true, ok: true, warn: false },
+    { name: 'Kinderzimmer Cleo', level: 'OG', temp: '20,4°', rf: '52 %', co2: '760 ppm', co2ok: true, ok: true, warn: false },
+    { name: 'Büro', level: 'EG', temp: '21,0°', rf: '44 %', co2: '720 ppm', co2ok: true, ok: true, warn: false },
+    { name: 'Keller', level: 'KG', temp: '13,9°', rf: '76 %', co2: '540 ppm', co2ok: true, ok: false, warn: 'Sommerkondensat-Risiko: warme Außenluft kondensiert an kalten Wänden — nur nachts lüften' }
+  ];
+
+  // ---------- Doku ----------
+  dokuData = [
+    { type: 'Messwerte', title: 'Holzfeuchte Balkenkopf: 18 %', sub: 'Flachdach · Messpunkt D-03 · Protimeter', date: '02.07.2026' },
+    { type: 'Fotos', title: 'Feuchterand Kellerwand Süd', sub: 'Wand K-S · vor der Trockenlegung', date: '14.05.2026', slot: 'doku-feuchte' },
+    { type: 'Notizen', title: 'Angebot Zimmerei Petersen — Flachdach', sub: '28.500 € · Ausführung Frühjahr 2027 · in Paperless verknüpft', date: '11.04.2026' },
+    { type: 'Messwerte', title: 'rF Keller: 76 % bei 13,9 °C', sub: 'Sensor HA-KG-01 · Trend fallend seit Trockenlegung', date: '28.03.2026' },
+    { type: 'Fotos', title: 'Lehmgraben fertig verfüllt', sub: 'Wand K-S · Abnahme Paket 1', date: '22.09.2025' },
+    { type: 'Messwerte', title: 'Blower-Door Bestand: n₅₀ = 4,8 /h', sub: 'Referenzmessung vor Fenstertausch', date: '03.03.2026' }
+  ];
+
+  diagnosedBase = [
+    { name: 'Kellerwand Süd', cause: 'Aufstauendes Sickerwasser · Maßnahme in Paket 1 umgesetzt', date: '05/2025' },
+    { name: 'Kellerwand West', cause: 'Sommerkondensat · Lüftungsregel aktiv', date: '08/2025' }
+  ];
+
+  componentWillUnmount() {
+    clearTimeout(this._toastT);
+  }
+
+  showToast(msg) {
+    clearTimeout(this._toastT);
+    this.setState({ toast: msg });
+    this._toastT = setTimeout(() => this.setState({ toast: null }), 4000);
+  }
+  go(id) { this.setState({ view: id, navOpen: false, wall: null }); }
+
+  uColor(u) {
+    if (u <= 0.25) return '#26a269';
+    if (u <= 0.5) return '#e5a50a';
+    if (u <= 1.2) return '#e66100';
+    return '#c01c28';
+  }
+
+  renderVals() {
+    const st = this.state;
+    const DIM = { desktop: [1280, 820], tablet: [900, 1024], mobile: [390, 800] };
+    const device = st.device || 'desktop';
+    const dw = DIM[device][0], dh = DIM[device][1];
+    const w = dw;
+    const isMobile = w < 700, isTablet = w < 1024;
+    const view = st.view;
+
+    // Schema & Akzent — folgt der Systemeinstellung, sofern nichts gewählt wurde
+    const sysDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const hell = st.scheme ? (st.scheme === 'Hell') : (this.props.farbschema ? this.props.farbschema === 'Hell' : !sysDark);
+    const schemeClass = hell ? '' : 'adw-dark';
+    const acc = this.props.akzentfarbe ?? '#3584e4';
+    const accentVars = acc === '#3584e4' ? '' :
+      '--accent-bg-color:' + acc + ';--accent-color:color-mix(in srgb, ' + acc + ' ' + (hell ? '80%, black' : '65%, white') + ');';
+    const showHints = this.props.erklaerHinweise ?? true;
+
+    // Harness-Steuerung (Gerät + Darstellung) — nicht Teil der App
+    const seg = (active) => 'flex:0 0 auto;border:0;background:' + (active ? acc : 'transparent') + ';color:' + (active ? '#fff' : 'rgba(255,255,255,.82)') + ';font:inherit;font-size:12.5px;font-weight:700;padding:6px 14px;cursor:pointer;transition:background .12s var(--ease-out-quad);';
+    const deviceChips = [['desktop', 'Desktop'], ['tablet', 'Tablet'], ['mobile', 'Mobile']].map(([id, label]) => ({ label, on: () => this.setState({ device: id, navOpen: false, wall: null }), style: seg(device === id) }));
+    const schemeChips = [['Hell', 'Hell'], ['Dunkel', 'Dunkel']].map(([id, label]) => ({ label, on: () => this.setState({ scheme: id }), style: seg((hell ? 'Hell' : 'Dunkel') === id) }));
+    const winStyle = 'width:' + dw + 'px;height:' + dh + 'px;';
+
+    const is = {}; ['home', 'modell', 'fahrplan', 'bauteile', 'feuchte', 'kosten', 'material', 'klima', 'doku'].forEach(id => is[id] = view === id);
+
+    const diagnosed = [...st.diagnosedExtra, ...this.diagnosedBase];
+
+    // Nav
+    const badge = (n, warn) => 'border-radius:9999px;font-size:11px;font-weight:700;padding:1px 7px;' +
+      (warn ? 'background:color-mix(in srgb, #e5a50a 20%, transparent);color:#b07e0a;' : 'background:var(--accent-bg-color);color:var(--accent-fg-color);');
+    const offenBestellungen = this.einkaufData.filter(e => (st.einkaufStatus[e.id] || e.def) === 'offen').length;
+    const navDefs = [
+      ['home', 'Übersicht', this.icons.home, 0, false],
+      ['modell', 'Modell', this.icons.modell, 0, false],
+      ['fahrplan', 'Fahrplan', this.icons.fahrplan, 0, false],
+      ['bauteile', 'Bauteile', this.icons.bauteile, 0, false],
+      ['feuchte', 'Feuchte-Diagnose', this.icons.feuchte, diagnosed.length, false],
+      ['kosten', 'Kosten & Förderung', this.icons.kosten, 0, false],
+      ['material', 'Material', this.icons.material, offenBestellungen, false],
+      ['klima', 'Raumklima', this.icons.klima, 2, true],
+      ['doku', 'Dokumentation', this.icons.doku, 0, false]
+    ];
+    const navItems = navDefs.map(([id, label, icon, b, warn]) => ({
+      label, icon: { __html: icon }, badge: b || false, badgeStyle: badge(b, warn),
+      on: () => this.go(id),
+      style: 'display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:7px;cursor:pointer;' +
+        (view === id ? 'background:color-mix(in srgb, var(--accent-bg-color) 22%, transparent);' : '')
+    }));
+    const bottomDefs = [['home', 'Übersicht', this.icons.home], ['modell', 'Modell', this.icons.modell], ['fahrplan', 'Fahrplan', this.icons.fahrplan], ['kosten', 'Kosten', this.icons.kosten]];
+    const bottomItems = [
+      ...bottomDefs.map(([id, label, icon]) => ({
+        label, icon: { __html: icon }, on: () => this.go(id),
+        style: 'flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;border-radius:9px;min-height:48px;' +
+          (view === id ? 'color:var(--accent-color);' : 'opacity:.6;')
+      })),
+      {
+        label: 'Mehr', icon: { __html: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13" cy="8" r="1.6"/></svg>' },
+        on: () => this.setState({ navOpen: true }),
+        style: 'flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;border-radius:9px;min-height:48px;opacity:.6;'
+      }
+    ];
+
+    const chip = (label, active, on) => ({
+      label, on,
+      style: 'border:0;padding:8px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:inherit;' +
+        (active ? 'background:var(--accent-bg-color);color:var(--accent-fg-color);' : 'background:transparent;opacity:.72;')
+    });
+
+    // ---- Übersicht ----
+    const effColors = ['#1a7e3c', '#26a269', '#5bc236', '#a8c22e', '#e5a50a', '#e07f0e', '#e66100', '#d4441c', '#c01c28'];
+    const effSegments = ['A+', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((label, i) => ({ label, color: effColors[i] }));
+    const kwhPos = (kwh) => {
+      const b = [0, 30, 50, 75, 100, 130, 160, 200, 250, 300];
+      for (let i = 0; i < 9; i++) if (kwh <= b[i + 1]) return ((i + (kwh - b[i]) / (b[i + 1] - b[i])) / 9 * 100);
+      return 100;
+    };
+    const effMarkers = [
+      { label: 'Start', value: '218', color: 'inherit', pos: 'top:0;left:' + kwhPos(218).toFixed(1) + '%;' },
+      { label: 'Heute', value: '209', color: '#e66100', pos: 'bottom:0;left:' + kwhPos(209).toFixed(1) + '%;' },
+      { label: 'Ziel 2029', value: '62', color: '#26a269', pos: 'bottom:0;left:' + kwhPos(62).toFixed(1) + '%;' }
+    ];
+    const tasks = [
+      { n: '§', color: this.YEL, title: 'Förderantrag Fenster einreichen', sub: 'BEG EM · 5.720 € Zuschuss · Frist vor Auftragsbestätigung', on: () => this.go('kosten') },
+      { n: '2', color: this.TEAL, title: '2 Räume mit Klimawarnung', sub: 'Schlafzimmer: Taupunkt-Risiko · Keller: Sommerkondensat', on: () => this.go('klima') },
+      { n: '!', color: this.ORANGE, title: 'Lieferung Calciumsilikat-Platten prüfen', sub: 'Bestellt am 24.06. · angekündigt für diese Woche', on: () => this.go('material') }
+    ];
+    const lossBars = [
+      { name: 'Außenwände', pct: '31 %', w: '31%', color: '#c01c28', sub: 'Maßnahme: Paket 4 · Innendämmung 2028' },
+      { name: 'Flachdach', pct: '26 %', w: '26%', color: '#e66100', sub: 'Maßnahme: Paket 3 · Aufdopplung 2027' },
+      { name: 'Fenster & Türen', pct: '19 %', w: '19%', color: '#e5a50a', sub: 'Maßnahme: Paket 2 · läuft gerade' },
+      { name: 'Lüftung & Fugen', pct: '15 %', w: '15%', color: '#813d9c', sub: 'Lüftungskonzept nach Fenstertausch' },
+      { name: 'Kellerdecke', pct: '9 %', w: '9%', color: '#26a269', sub: 'Erledigt in Paket 1 ✓' }
+    ];
+    const klimaShort = [
+      { name: 'Schlafzimmer', vals: '17,8° · 64 % · 1240 ppm', dot: this.YEL },
+      { name: 'Keller', vals: '13,9° · 76 % rF', dot: this.YEL },
+      { name: 'Wohnzimmer', vals: '21,4° · 47 % · 610 ppm', dot: this.GREEN }
+    ];
+
+    // ---- Modell ----
+    const mode3d = st.mode === '3d';
+    const lvl2d = st.level === 'alle' ? 'eg' : st.level;
+    const modeChips = [['2d', 'Grundriss'], ['3d', '3D']].map(([id, l]) => chip(l, st.mode === id, () => this.setState({ mode: id, draft: [], measure: null, level: id === '2d' && st.level === 'alle' ? 'eg' : st.level })));
+    const levelDefs = mode3d ? [['alle', 'Alle'], ['keller', 'Keller'], ['eg', 'EG'], ['og', 'OG']] : [['keller', 'Keller'], ['eg', 'EG'], ['og', 'OG']];
+    const levelChips = levelDefs.map(([id, l]) => chip(l, st.level === id, () => this.setState({ level: id, wall: null, draft: [], measure: null })));
+    const layerChips = [['neutral', 'Neutral'], ['uwert', 'U-Wert'], ['feuchte', 'Feuchte'], ['daemm', 'Dämmung']].map(([id, l]) => chip(l, st.layer === id, () => this.setState({ layer: id })));
+    const gewerkChips = Object.entries(this.gewerkDefs).map(([id, g]) => {
+      const on = st.gewerke[id];
+      return {
+        label: g.label,
+        on: () => this.setState({ gewerke: { ...st.gewerke, [id]: !on } }),
+        style: 'display:inline-flex;align-items:center;gap:7px;border:0;border-radius:9999px;padding:7px 13px 7px 10px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;color:inherit;' +
+          (on ? 'background:color-mix(in srgb, ' + g.color + ' 15%, transparent);' : 'background:color-mix(in srgb, currentColor 7%, transparent);opacity:.55;'),
+        dotStyle: 'width:9px;height:9px;border-radius:9999px;background:' + g.color + ';flex:0 0 9px;'
+      };
+    });
+
+    // Werkzeuge
+    const toolDefs = [
+      ['select', 'Auswählen'], ['wand', 'Wand'], ['tuer', 'Tür/Fenster'], ['messen', 'Messen'],
+      ['heizung', 'Heizungsrohr'], ['wasser', 'Wasserleitung'], ['strom', 'Stromleitung'], ['fbh', 'Flächenheizung']
+    ];
+    const tools = toolDefs.map(([id, title]) => ({
+      title, icon: { __html: this.toolIcons[id] },
+      on: () => {
+        const upd = { tool: id, draft: [], measure: null };
+        if (id !== 'select' && mode3d) { upd.mode = '2d'; if (st.level === 'alle') upd.level = 'eg'; }
+        this.setState(upd);
+      },
+      style: 'width:38px;height:38px;display:flex;align-items:center;justify-content:center;border:0;border-radius:9px;cursor:pointer;font:inherit;color:inherit;' +
+        (st.tool === id ? 'background:color-mix(in srgb, var(--accent-bg-color) 24%, transparent);color:var(--accent-color);' : 'background:transparent;opacity:.72;'),
+      hStyle: 'flex:0 0 auto;display:flex;align-items:center;gap:6px;border:0;border-radius:9px;padding:7px 11px;cursor:pointer;font:inherit;color:inherit;' +
+        (st.tool === id ? 'background:color-mix(in srgb, var(--accent-bg-color) 24%, transparent);color:var(--accent-color);' : 'background:color-mix(in srgb, currentColor 6%, transparent);opacity:.8;')
+    }));
+
+    const daemmColor = { fehlt: '#c01c28', geplant: '#e5a50a', ok: '#26a269' };
+    const daemmOf = (wd) => wd.asm === 'kellerwand' ? 'fehlt' : wd.asm === 'aw-neu' ? 'geplant' : null;
+    const wallColor = (wd) => {
+      if (st.layer === 'uwert' && wd.u) return this.uColor(wd.u);
+      if (st.layer === 'feuchte' && wd.feucht) return '#2190a4';
+      if (st.layer === 'daemm') { const d = daemmOf(wd); if (d) return daemmColor[d]; }
+      return null;
+    };
+    const walls = [...this.wallsData[lvl2d], ...st.customWalls[lvl2d]];
+    const planWalls = walls.map(wd => ({
+      x: wd.x, y: wd.y, w: wd.w, h: wd.h,
+      fill: wallColor(wd) || 'color-mix(in srgb, currentColor 55%, transparent)',
+      stroke: st.wall === wd.id ? 'var(--accent-bg-color)' : 'none',
+      on: (e) => { if (this.state.tool !== 'select') return; e.stopPropagation(); this.setState({ wall: this.state.wall === wd.id ? null : wd.id }); }
+    }));
+    const planRooms = this.roomsData[lvl2d].map(r => ({
+      ...r, tx: r.x + r.w / 2, ty: r.y + r.h / 2 - 2, ty2: r.y + r.h / 2 + 15,
+      labelHtml: { __html: r.label }, areaHtml: { __html: r.area }
+    }));
+
+    // Gewerke-Ebenen (TGA)
+    const runsFor = (lv) => [...(this.tgaData[lv] || []), ...st.customRuns[lv]];
+    const activeRuns2d = runsFor(lvl2d).filter(r => st.gewerke[r.g]);
+    const tgaLines = activeRuns2d.map(r => ({
+      pts: r.pts.map(p => p.join(',')).join(' '),
+      color: this.gewerkDefs[r.g].color,
+      width: r.g === 'fbh' ? 6 : 3,
+      dash: r.status === 'geplant' && r.g !== 'fbh' ? '7 5' : 'none',
+      op: r.g === 'fbh' ? '0.45' : '0.92'
+    }));
+    const tgaNodes = activeRuns2d.flatMap(r => (r.nodes || []).map(([x, y]) => ({ x, y, color: this.gewerkDefs[r.g].color })));
+
+    // Zeichnen & Messen
+    const drawTools = ['heizung', 'wasser', 'strom', 'fbh'];
+    const mLen = (pts) => { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return l * 0.022; };
+    const fmtM = (m) => m.toFixed(1).replace('.', ',') + ' m';
+    const draftColor = drawTools.includes(st.tool) ? this.gewerkDefs[st.tool].color : 'var(--accent-bg-color)';
+    const hasDraft = st.draft.length > 0;
+    const draftPts = st.draft.map(p => p.join(',')).join(' ');
+    const draftDots = st.draft.map(([x, y]) => ({ x, y }));
+    const draftBar = drawTools.includes(st.tool) && st.draft.length > 0;
+    const draftInfo = st.draft.length + (st.draft.length === 1 ? ' Punkt' : ' Punkte') + (st.draft.length > 1 ? ' · ' + fmtM(mLen(st.draft)) : '');
+    const svgPt = (e) => {
+      const svg = e.currentTarget;
+      const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+      const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+      return [Math.round(p.x), Math.round(p.y)];
+    };
+    const onCanvas = (e) => {
+      const tool = this.state.tool, d = this.state.draft;
+      if (tool === 'select') { this.setState({ wall: null }); return; }
+      const p = svgPt(e);
+      if (tool === 'tuer') { this.showToast('Öffnung an der nächstgelegenen Wand eingepasst — Demo'); return; }
+      if (tool === 'messen') {
+        if (this.state.measure) { this.setState({ measure: null, draft: [p] }); return; }
+        if (d.length === 1) { this.setState({ measure: [d[0], p], draft: [] }); return; }
+        this.setState({ draft: [p] }); return;
+      }
+      if (tool === 'wand') {
+        if (d.length === 1) {
+          const [x1, y1] = d[0], [x2, y2] = p;
+          const horiz = Math.abs(x2 - x1) >= Math.abs(y2 - y1);
+          const nw = horiz
+            ? { x: Math.min(x1, x2), y: y1 - 5, w: Math.max(Math.abs(x2 - x1), 20), h: 10 }
+            : { x: x1 - 5, y: Math.min(y1, y2), w: 10, h: Math.max(Math.abs(y2 - y1), 20) };
+          const len = (horiz ? nw.w : nw.h) * 0.022;
+          const wallObj = { id: 'NW-' + this.state.seq, name: 'Neue Innenwand', ...nw, u: 0, asm: null, feucht: false, heiz: false, flaeche: (len * 2.6).toFixed(1).replace('.', ',') + ' m²' };
+          this.setState({ customWalls: { ...this.state.customWalls, [lvl2d]: [...this.state.customWalls[lvl2d], wallObj] }, draft: [], seq: this.state.seq + 1 });
+          this.showToast('Wand eingefügt — ' + fmtM(len) + ' · Aufbau „Innenwand Ziegel 11,5 cm“');
+          return;
+        }
+        this.setState({ draft: [p] }); return;
+      }
+      this.setState({ draft: [...d, p] });
+    };
+    const draftCommit = () => {
+      const d = this.state.draft, tool = this.state.tool;
+      if (d.length < 2) return;
+      const g = this.gewerkDefs[tool];
+      const run = { g: tool, status: 'geplant', pts: d, nodes: tool === 'fbh' ? [] : [d[d.length - 1]] };
+      this.setState({ customRuns: { ...this.state.customRuns, [lvl2d]: [...this.state.customRuns[lvl2d], run] }, draft: [] });
+      this.showToast(g.label + ' gespeichert — ' + fmtM(mLen(d)) + ' · verknüpft mit ' + g.paket);
+    };
+    const draftCancel = () => this.setState({ draft: [], measure: null });
+    const mLine = st.measure ? (() => {
+      const [[x1, y1], [x2, y2]] = st.measure;
+      return { x1, y1, x2, y2, tx: (x1 + x2) / 2, ty: (y1 + y2) / 2 - 10, labelHtml: { __html: fmtM(Math.hypot(x2 - x1, y2 - y1) * 0.022) } };
+    })() : { x1: 0, y1: 0, x2: 0, y2: 0, tx: 0, ty: 0, labelHtml: { __html: '' } };
+    const toolHints = {
+      wand: 'Wand: Anfang und Ende antippen — wird rechtwinklig gerastert',
+      tuer: 'Tür/Fenster: Wand antippen, Öffnung wird eingepasst',
+      messen: 'Messen: zwei Punkte antippen',
+      heizung: 'Heizungsrohr: Verlauf antippen, dann „Fertig“',
+      wasser: 'Wasserleitung: Verlauf antippen, dann „Fertig“',
+      strom: 'Stromleitung: Verlauf antippen, dann „Fertig“',
+      fbh: 'Flächenheizung: Heizschleife antippen, dann „Fertig“'
+    };
+    const toolHint = !mode3d && st.tool !== 'select' && st.draft.length === 0 && !st.measure ? toolHints[st.tool] : false;
+
+    // Legende
+    const legendUwert = st.layer === 'uwert';
+    const swatch = (color, thick) => 'flex:0 0 20px;height:' + (thick ? '8px' : '4px') + ';border-radius:3px;background:' + color + ';';
+    const legendItems = [];
+    if (st.layer === 'feuchte') legendItems.push({ label: 'Wand mit Feuchte-Diagnose', swatch: swatch('#2190a4', true) });
+    if (st.layer === 'daemm') legendItems.push(
+      { label: 'Dämmung fehlt', swatch: swatch('#c01c28', true) },
+      { label: 'Dämmung geplant (Paket 4)', swatch: swatch('#e5a50a', true) }
+    );
+    Object.entries(this.gewerkDefs).forEach(([id, g]) => { if (st.gewerke[id]) legendItems.push({ label: g.label, swatch: swatch(g.color, false) }); });
+    if (Object.values(st.gewerke).some(Boolean)) legendItems.push({ label: 'Gestrichelt = geplant', swatch: 'flex:0 0 20px;height:4px;border-radius:3px;background:repeating-linear-gradient(90deg, color-mix(in srgb, currentColor 55%, transparent) 0 4px, transparent 4px 7px);' });
+    const legendShow = (legendUwert || legendItems.length > 0) && !draftBar;
+
+    // Inspektor — Wand über alle Geschosse auffindbar (2D + 3D)
+    const allWalls = ['keller', 'eg', 'og'].flatMap(lv => [...this.wallsData[lv], ...st.customWalls[lv]]);
+    const selWall = allWalls.find(wd => wd.id === st.wall);
+    const asm = selWall && selWall.asm ? this.assembliesData.find(a => a.id === selWall.asm) : null;
+    const dm = selWall ? daemmOf(selWall) : null;
+    const insp = selWall ? {
+      name: selWall.name,
+      feucht: !!selWall.feucht,
+      rows: [
+        { k: 'Fläche', v: selWall.flaeche, w: '400', c: 'inherit' },
+        { k: 'Aufbau', v: asm ? asm.name : 'Innenwand Ziegel 11,5 cm', w: '400', c: 'inherit' },
+        ...(selWall.u ? [{ k: 'U-Wert', v: selWall.u.toFixed(2).replace('.', ',') + ' W/m²K', w: '700', c: this.uColor(selWall.u) }] : []),
+        ...(dm ? [{ k: 'Dämmung', v: dm === 'fehlt' ? 'Fehlt — nicht geplant' : 'Geplant · Paket 4', w: '700', c: daemmColor[dm] }] : []),
+        ...(selWall.feucht ? [{ k: 'Diagnose', v: selWall.feucht, w: '700', c: '#2190a4' }] : []),
+        ...(selWall.heiz ? [{ k: 'Wandheizung', v: 'Geplant · Paket 4', w: '400', c: '#813d9c' }] : [])
+      ]
+    } : { name: '', feucht: false, rows: [] };
+
+    // 3D-Isometrie
+    const ISO = (x, y, z) => [(x - y) * 0.537 + 400, (x + y) * 0.31 - z + 262];
+    const poly = (pts3) => pts3.map(([x, y, z]) => { const c = ISO(x, y, z); return c[0].toFixed(1) + ',' + c[1].toFixed(1); }).join(' ');
+    const zBase = { keller: 2, eg: 96, og: 190 };
+    const WH = 78;
+    const isoPolys = [], isoLines = [], isoNodes = [];
+    const pushBox = (x, y, w, h, z0, z1, color, op, onFn) => {
+      [
+        { pts: poly([[x, y + h, z1], [x + w, y + h, z1], [x + w, y + h, z0], [x, y + h, z0]]), fill: 'color-mix(in srgb, ' + color + ' 80%, black)' },
+        { pts: poly([[x + w, y, z1], [x + w, y + h, z1], [x + w, y + h, z0], [x + w, y, z0]]), fill: 'color-mix(in srgb, ' + color + ' 62%, black)' },
+        { pts: poly([[x, y, z1], [x + w, y, z1], [x + w, y + h, z1], [x, y + h, z1]]), fill: color }
+      ].forEach(f => isoPolys.push({ ...f, op, stroke: 'none', cursor: onFn ? 'pointer' : 'default', on: onFn || (() => {}) }));
+    };
+    if (mode3d) {
+      const levels3d = st.level === 'alle' ? ['keller', 'eg', 'og'] : [st.level];
+      levels3d.forEach(lv => {
+        const zb = zBase[lv];
+        pushBox(34, 34, 552, 352, zb - 9, zb, lv === 'keller' ? '#77767b' : '#a6a29a', '0.97', null);
+        const lvWalls = [...this.wallsData[lv], ...st.customWalls[lv]].slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));
+        lvWalls.forEach(wd => {
+          const sel = st.wall === wd.id;
+          const c = sel ? 'var(--accent-bg-color)' : (wallColor(wd) || '#b6b2aa');
+          pushBox(wd.x, wd.y, wd.w, wd.h, zb, zb + WH, c, '0.96', (e) => { e.stopPropagation(); this.setState({ wall: sel ? null : wd.id }); });
+        });
+        runsFor(lv).filter(r => st.gewerke[r.g]).forEach(r => {
+          isoLines.push({
+            pts: r.pts.map(([x, y]) => { const c = ISO(x, y, zb + 8); return c[0].toFixed(1) + ',' + c[1].toFixed(1); }).join(' '),
+            color: this.gewerkDefs[r.g].color,
+            width: r.g === 'fbh' ? 4.5 : 2.5,
+            dash: r.status === 'geplant' && r.g !== 'fbh' ? '6 4' : 'none',
+            op: r.g === 'fbh' ? '0.6' : '0.95'
+          });
+          (r.nodes || []).forEach(([x, y]) => { const c = ISO(x, y, zb + 8); isoNodes.push({ x: c[0].toFixed(1), y: c[1].toFixed(1), color: this.gewerkDefs[r.g].color }); });
+        });
+      });
+      if (st.level === 'alle' || st.level === 'og') {
+        pushBox(30, 30, 560, 360, zBase.og + WH, zBase.og + WH + 9, st.layer === 'uwert' ? '#e66100' : st.layer === 'daemm' ? '#e5a50a' : '#8f8a86', '0.97', null);
+      }
+    }
+    const inspStyle = isMobile
+      ? 'position:absolute;left:10px;right:10px;bottom:10px;z-index:8;background:var(--popover-bg-color);color:var(--popover-fg-color);border-radius:12px;box-shadow:var(--shadow-dialog);padding:15px 17px;animation:bp-pop-in .15s var(--ease-out-quad);'
+      : 'position:absolute;top:14px;right:16px;z-index:8;width:300px;background:var(--popover-bg-color);color:var(--popover-fg-color);border-radius:12px;box-shadow:var(--shadow-dialog);padding:15px 17px;animation:bp-pop-in .15s var(--ease-out-quad);';
+
+    // ---- Fahrplan ----
+    const paketBadge = (s) => s === 'done'
+      ? ['Abgeschlossen', 'font-size:11px;font-weight:700;border-radius:9999px;padding:2px 10px;white-space:nowrap;color:#26a269;background:color-mix(in srgb, #26a269 14%, transparent);', '#26a269']
+      : s === 'active'
+        ? ['In Arbeit', 'font-size:11px;font-weight:700;border-radius:9999px;padding:2px 10px;white-space:nowrap;color:var(--accent-color);background:color-mix(in srgb, var(--accent-bg-color) 18%, transparent);', 'var(--accent-bg-color)']
+        : ['Geplant', 'font-size:11px;font-weight:700;border-radius:9999px;padding:2px 10px;white-space:nowrap;opacity:.6;background:color-mix(in srgb, currentColor 10%, transparent);', 'color-mix(in srgb, currentColor 30%, transparent)'];
+    const pakete = this.paketeData.map(p => {
+      const [bLabel, bStyle, dotBg] = paketBadge(p.status);
+      return {
+        ...p, badge: bLabel, badgeStyle: bStyle, dotBg,
+        items: p.items.map(([s, text, cost, eigen]) => ({
+          text, cost, eigen: !!eigen,
+          mark: s === 'done' ? '✓' : s === 'active' ? '◐' : '○',
+          c: s === 'done' ? '#26a269' : s === 'active' ? 'var(--accent-color)' : 'color-mix(in srgb, currentColor 40%, transparent)'
+        }))
+      };
+    });
+
+    // ---- Bauteile ----
+    const assemblies = this.assembliesData.map(a => ({
+      ...a,
+      open: st.openAssembly === a.id,
+      chev: st.openAssembly === a.id ? '180deg' : '0deg',
+      onToggle: () => this.setState({ openAssembly: st.openAssembly === a.id ? null : a.id }),
+      gegStyle: 'font-size:11px;font-weight:700;border-radius:9999px;padding:2px 9px;white-space:nowrap;' +
+        (a.gegOk ? 'color:#26a269;background:color-mix(in srgb, #26a269 14%, transparent);' : 'color:#c01c28;background:color-mix(in srgb, #c01c28 12%, transparent);'),
+      layers: a.layers.map(([name, dicke, lambda, colKey]) => ({
+        name, lambda,
+        dicke: dicke + ' mm',
+        flex: String(Math.max(Math.sqrt(dicke), 2).toFixed(1)),
+        color: this.matColors[colKey] || '#9a9996'
+      })),
+      facts: a.facts.map(([k, v, c]) => ({ k, v, c: c || 'inherit' }))
+    }));
+
+    // ---- Feuchte ----
+    const fWalls = [
+      ['K-N', 'Kellerwand Nord', 'erdberührt · unsaniert'],
+      ['K-O', 'Kellerwand Ost', 'erdberührt · unsaniert'],
+      ['E-N', 'Außenwand Nord (EG)', 'Vollziegel 36,5 · Wetterseite'],
+      ['O-N', 'Außenwand Nord (OG)', 'Vollziegel 36,5'],
+      ['E-O', 'Außenwand Ost (EG)', 'Vollziegel 36,5']
+    ];
+    const fStepDefs = ['Wand', 'Beobachtungen', 'Ergebnis'];
+    const fSteps = fStepDefs.map((label, i) => {
+      const n = i + 1, active = st.fStep === n, done = st.fStep > n;
+      return {
+        label, mark: done ? '✓' : String(n),
+        on: () => { if (n < st.fStep || (n === 2 && st.fWall)) this.setState({ fStep: n }); },
+        style: 'display:flex;align-items:center;gap:8px;border:0;border-radius:9999px;padding:7px 14px 7px 8px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:inherit;' +
+          (active ? 'background:var(--accent-bg-color);color:var(--accent-fg-color);' : 'background:color-mix(in srgb, currentColor 7%, transparent);opacity:' + (done ? '.9' : '.6') + ';'),
+        numStyle: 'width:20px;height:20px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;' +
+          (active ? 'background:rgb(255 255 255 / 25%);' : done ? 'background:color-mix(in srgb, #26a269 25%, transparent);color:#26a269;' : 'background:color-mix(in srgb, currentColor 12%, transparent);')
+      };
+    });
+    const fWallRows = fWalls.map(([id, name, sub]) => ({
+      name, sub,
+      on: () => this.setState({ fWall: id }),
+      radioStyle: 'flex:0 0 20px;height:20px;border-radius:9999px;' +
+        (st.fWall === id
+          ? 'background:var(--accent-bg-color);box-shadow:inset 0 0 0 5px var(--accent-bg-color), inset 0 0 0 8px var(--accent-fg-color);'
+          : 'box-shadow:inset 0 0 0 1.5px color-mix(in srgb, currentColor 35%, transparent);')
+    }));
+    const fOrtChips = ['Keller', 'Sockel', 'Obergeschoss'].map(o => chip(o, st.fOrt === o, () => this.setState({ fOrt: o })));
+    const swDefs = [
+      ['belowGrade', 'Schaden liegt unter Geländeniveau'],
+      ['rain', 'Schlimmer nach Regen'],
+      ['heating', 'Schlimmer in der Heizsaison'],
+      ['salt', 'Salzausblühungen oder Feuchterand'],
+      ['mould', 'Schimmel in Raumecken']
+    ];
+    const fSwitchRows = swDefs.map(([k, label]) => ({
+      label, cls: st.fSw[k] ? 'on' : '',
+      on: () => this.setState({ fSw: { ...st.fSw, [k]: !st.fSw[k] } })
+    }));
+    // Regelbasierte Diagnose
+    const s = st.fSw;
+    let scoreSicker = (s.belowGrade ? 3 : 0) + (s.rain ? 3 : 0) + (st.fOrt === 'Keller' ? 2 : 0);
+    let scoreAufst = (s.salt ? 3 : 0) + (st.fOrt !== 'Obergeschoss' ? 2 : 0) + (s.belowGrade ? 1 : 0);
+    let scoreKond = (s.heating ? 3 : 0) + (s.mould ? 3 : 0) + (st.fOrt === 'Obergeschoss' ? 1 : 0);
+    const total = Math.max(scoreSicker + scoreAufst + scoreKond, 1);
+    const causesRaw = [
+      ['Aufstauendes Sickerwasser', scoreSicker, '#2190a4'],
+      ['Aufsteigende Feuchte', scoreAufst, '#e66100'],
+      ['Kondensat / Bauphysik', scoreKond, '#813d9c']
+    ].sort((a, b) => b[1] - a[1]);
+    const fCauses = causesRaw.map(([name, sc, color], i) => ({
+      name, color, w: i === 0 ? '700' : '400',
+      pct: Math.round(sc / total * 100) + ' %'
+    }));
+    const topCause = causesRaw[0][0];
+    const measuresByCause = {
+      'Aufstauendes Sickerwasser': [
+        ['Vertikalabdichtung erneuern', 'DIN 18533 · Lastfall W2.1-E · zum Beispiel DERNOTON-Lehmgraben'],
+        ['Dränage nach DIN 4095', 'Gefälle zum Vorfluter prüfen, Kontrollschacht setzen'],
+        ['Geländegefälle vom Haus weg', 'Mindestens 2 % auf den ersten 3 m']
+      ],
+      'Aufsteigende Feuchte': [
+        ['Horizontalsperre nachrüsten', 'Injektionsverfahren, Wirksamkeitsnachweis nach WTA'],
+        ['Sanierputz WTA', 'Salzspeichernd, diffusionsoffen — kein Zementputz'],
+        ['Salzanalyse beauftragen', 'Nitrat deutet auf andere Quelle als Chlorid']
+      ],
+      'Kondensat / Bauphysik': [
+        ['Lüftungskonzept DIN 1946-6', 'Feuchtegeführte Abluft oder dezentrale WRG'],
+        ['Kapillaraktive Innendämmung', 'Calciumsilikat oder Holzfaser hebt die Oberflächentemperatur'],
+        ['Möbel von der Außenwand abrücken', 'Mindestens 5 cm Luftzirkulation']
+      ]
+    };
+    const fMeasures = (measuresByCause[topCause] || []).map(([t, s2]) => ({ t, s: s2 }));
+    const fWallDef = fWalls.find(x => x[0] === st.fWall);
+    const fWallName = fWallDef ? fWallDef[1] : '';
+
+    // ---- Kosten ----
+    const costKpis = [
+      { k: 'Gesamtplanung', v: '165.000 €', c: 'inherit', s: '5 Pakete bis 2029' },
+      { k: 'Verausgabt', v: '25.700 €', c: 'inherit', s: 'Paket 1 + Anzahlung Fenster' },
+      { k: 'Förderung erwartet', v: '46.800 €', c: this.GREEN, s: 'davon 5.720 € beantragt' },
+      { k: 'Eigenanteil', v: '118.200 €', c: 'inherit', s: 'nach Abzug aller Zuschüsse' }
+    ];
+    const costData = [
+      ['Paket 1 — Trockenlegen', 13300, 0], ['Paket 2 — Fenster', 28900, 5720],
+      ['Paket 3 — Dach & PV', 49900, 9980], ['Paket 4 — Wände', 30600, 6120], ['Paket 5 — Wärmepumpe', 37300, 25000]
+    ];
+    const costMax = 49900;
+    const costBars = costData.map(([name, total2, sub]) => ({
+      name,
+      total: total2.toLocaleString('de-DE') + ' €',
+      wOwn: ((total2 - sub) / costMax * 100).toFixed(1) + '%',
+      wSub: (sub / costMax * 100).toFixed(1) + '%'
+    }));
+    const fBadge = (kind) => kind === 'ok'
+      ? ['Beantragt', 'font-size:11px;font-weight:700;border-radius:9999px;padding:2px 9px;white-space:nowrap;color:#26a269;background:color-mix(in srgb, #26a269 14%, transparent);']
+      : kind === 'plan'
+        ? ['Geplant', 'font-size:11px;font-weight:700;border-radius:9999px;padding:2px 9px;white-space:nowrap;opacity:.6;background:color-mix(in srgb, currentColor 10%, transparent);']
+        : ['Alternative', 'font-size:11px;font-weight:700;border-radius:9999px;padding:2px 9px;white-space:nowrap;color:#b07e0a;background:color-mix(in srgb, #e5a50a 16%, transparent);'];
+    const foerderDefs = [
+      ['BEG EM — Fenster & Laibungen', 'BAFA-Zuschuss 15 % + 5 % iSFP-Bonus · Antrag vor Auftragsbestätigung', '5.720 €', 'ok'],
+      ['BEG EM — Wärmepumpe', '30 % Basis + 5 % Effizienz-Bonus · Antrag 2029', '25.000 €', 'plan'],
+      ['BEG EM — Dach & Gebäudehülle', '15 % + 5 % iSFP-Bonus auf Dämm-Maßnahmen', '16.100 €', 'plan'],
+      ['Steuerbonus §35c EStG', '20 % über 3 Jahre — Alternative zur BEG, nicht kombinierbar', 'bis 40.000 €', 'alt'],
+      ['PV: Einspeisevergütung + 0 % USt', 'EEG-Vergütung 7,9 ct/kWh · Nullsteuersatz auf Anlage', 'laufend', 'ok']
+    ];
+    const foerderRows = foerderDefs.map(([t, s2, v, kind]) => {
+      const [bl, bs] = fBadge(kind);
+      return { t, s: s2, v, badge: bl, badgeStyle: bs };
+    });
+
+    // ---- Material ----
+    const matTabs = [['einkauf', 'Einkaufsliste'], ['stamm', 'Materialstamm']].map(([id, l]) => chip(l, st.matTab === id, () => this.setState({ matTab: id })));
+    const statusCycle = { offen: 'bestellt', bestellt: 'geliefert', geliefert: 'offen' };
+    const statusStyle = (v) => 'border:0;font:inherit;font-size:11.5px;font-weight:700;border-radius:9999px;padding:4px 12px;cursor:pointer;white-space:nowrap;' + (
+      v === 'geliefert' ? 'color:#26a269;background:color-mix(in srgb, #26a269 14%, transparent);' :
+      v === 'bestellt' ? 'color:var(--accent-color);background:color-mix(in srgb, var(--accent-bg-color) 18%, transparent);' :
+      'color:#b07e0a;background:color-mix(in srgb, #e5a50a 18%, transparent);');
+    const einkauf = this.einkaufData.map(e => {
+      const v = st.einkaufStatus[e.id] || e.def;
+      return {
+        ...e, status: v.charAt(0).toUpperCase() + v.slice(1), statusStyle: statusStyle(v),
+        onStatus: () => {
+          const nv = statusCycle[v];
+          this.setState({ einkaufStatus: { ...st.einkaufStatus, [e.id]: nv } });
+          this.showToast('„' + e.name + '" → ' + nv);
+        }
+      };
+    });
+    const offene = this.einkaufData.filter(e => (st.einkaufStatus[e.id] || e.def) === 'offen');
+    const einkaufSumme = offene.reduce((a, e) => a + parseFloat(e.preis.replace(/\./g, '').replace(' €', '')), 0).toLocaleString('de-DE') + ' €';
+    const materials = this.materialsData;
+
+    // ---- Klima ----
+    const rooms = this.roomsKlima.map(r => ({
+      ...r,
+      dot: r.ok ? this.GREEN : this.YEL,
+      co2c: r.co2ok ? 'inherit' : this.YEL
+    }));
+
+    // ---- Doku ----
+    const dokuChips = ['Alle', 'Fotos', 'Messwerte', 'Notizen'].map(f => chip(f, st.dokuFilter === f, () => this.setState({ dokuFilter: f })));
+    const dokuIconFor = { Fotos: [this.icons.foto, '#3584e4'], Messwerte: [this.icons.mess, '#2190a4'], Notizen: [this.icons.notiz, '#e5a50a'] };
+    const dokuRows = this.dokuData.filter(d => st.dokuFilter === 'Alle' || d.type === st.dokuFilter).map(d => ({
+      title: d.title, sub: d.sub, date: d.date,
+      slot: d.slot || false,
+      icon: d.slot ? false : { __html: dokuIconFor[d.type][0] },
+      color: dokuIconFor[d.type][1]
+    }));
+
+    const H = this.headers[view] || ['', ''];
+
+    return {
+      schemeClass, accentVars, is, showHints,
+      GREEN: this.GREEN,
+      deviceChips, schemeChips, winStyle,
+      showSidebar: !isTablet, showHamburger: isTablet, showBottomBar: isMobile,
+      navOpen: st.navOpen,
+      openNav: () => this.setState({ navOpen: true }),
+      closeNav: () => this.setState({ navOpen: false }),
+      navItems, bottomItems,
+      headerTitle: H[0], headerSub: H[1], showHeaderSub: !isMobile && !!H[1],
+      // Übersicht
+      effSegments, effMarkers, tasks, lossBars, klimaShort,
+      goKosten: () => this.go('kosten'),
+      goKlima: () => this.go('klima'),
+      // Modell
+      modeChips, levelChips, layerChips, gewerkChips, tools,
+      toolsVertical: !isMobile, toolsHorizontal: isMobile,
+      is2d: !mode3d, is3d: mode3d,
+      onCanvas, canvasCursor: st.tool === 'select' ? 'default' : 'crosshair',
+      planWalls, planRooms, tgaLines, tgaNodes,
+      hasDraft, draftPts, draftDots, draftColor, draftBar, draftInfo, draftCommit, draftCancel,
+      draftCommitDisabled: st.draft.length < 2,
+      measureOn: !!st.measure, mLine, toolHint,
+      legendShow, legendUwert, legendItems,
+      isoPolys, isoLines, isoNodes,
+      showPlanHint: !isMobile,
+      inspOpen: !!selWall, insp, inspStyle,
+      closeInsp: () => this.setState({ wall: null }),
+      inspAttach: () => this.showToast('Foto, Messwert oder Leitung an „' + (selWall ? selWall.name : '') + '“ verankern — erscheint in der Dokumentation'),
+      inspGoBauteile: () => { this.setState({ view: 'bauteile', openAssembly: selWall && selWall.asm ? selWall.asm : st.openAssembly, wall: null }); },
+      inspGoFeuchte: () => this.go('feuchte'),
+      // Fahrplan
+      pakete, foerderOn: st.foerderOn, foerderOff: !st.foerderOn,
+      foerderCls: st.foerderOn ? 'on' : '',
+      toggleFoerder: () => this.setState({ foerderOn: !st.foerderOn }),
+      // Bauteile
+      assemblies,
+      // Feuchte
+      fSteps, fIs1: st.fStep === 1, fIs2: st.fStep === 2, fIs3: st.fStep === 3,
+      fWallRows, fNext1Disabled: !st.fWall,
+      fNext: () => { if (st.fWall) this.setState({ fStep: 2 }); },
+      fBack: () => this.setState({ fStep: Math.max(1, st.fStep - 1) }),
+      fDiagnose: () => this.setState({ fStep: 3 }),
+      fOrtChips, fSwitchRows, fCauses, fMeasures,
+      fResultWand: fWallName + ' · ' + st.fOrt + ' · ' + Object.values(st.fSw).filter(Boolean).length + ' Beobachtungen',
+      fSave: () => {
+        this.setState({
+          diagnosedExtra: [{ name: fWallName, cause: topCause + ' · Maßnahmen vorgeschlagen', date: '07/2026' }, ...st.diagnosedExtra],
+          fStep: 1, fWall: null
+        });
+        this.showToast('Diagnose an „' + fWallName + '" gespeichert — im Modell markiert');
+      },
+      diagnosed, diagCount: diagnosed.length,
+      // Kosten
+      costKpis, costBars, foerderRows,
+      // Material
+      matTabs, matIsEinkauf: st.matTab === 'einkauf', matIsStamm: st.matTab === 'stamm',
+      einkauf, einkaufSumme, materials,
+      // Klima
+      rooms,
+      // Doku
+      dokuChips, dokuRows,
+      addDoku: () => this.showToast('Neuer Eintrag — Foto, Messwert oder Notiz an einer Wand verankern'),
+      // Toast
+      toast: !!st.toast, toastMsg: st.toast || '',
+      toastBottom: isMobile ? '78px' : '24px'
+    };
+  }
+}
+</script>
+</body>
+</html>

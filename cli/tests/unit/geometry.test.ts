@@ -4,6 +4,7 @@ import { zipSync, strToU8 } from 'fflate';
 import {
   footprint,
   parseSh3dBytes,
+  polygonCentroid,
   totalGrossWallAreaM2,
   totalWallLengthM,
   wallStatsByLevel,
@@ -47,6 +48,50 @@ export default async () => {
       expect(fp?.depthM).toBe(3);
       expect(fp?.areaM2).toBe(15);
       expect(fp?.perimeterM).toBe(16);
+    });
+
+    await it('finds a polygon centroid (rectangle → its centre)', async () => {
+      const [cx, cy] = polygonCentroid([
+        [0, 0],
+        [4, 0],
+        [4, 2],
+        [0, 2],
+      ]);
+      expect(cx).toBe(2);
+      expect(cy).toBe(1);
+    });
+
+    await it('centroid is winding-independent and biases toward mass (L-shape)', async () => {
+      // Same square, reversed winding → same centre.
+      const [cx] = polygonCentroid([
+        [0, 2],
+        [4, 2],
+        [4, 0],
+        [0, 0],
+      ]);
+      expect(cx).toBe(2);
+      // An L-shape's centroid sits inside the mass, left of the bbox centre (3,3).
+      const [lx, ly] = polygonCentroid([
+        [0, 0],
+        [6, 0],
+        [6, 2],
+        [2, 2],
+        [2, 6],
+        [0, 6],
+      ]);
+      expect(lx).toBeLessThan(3);
+      expect(ly).toBeLessThan(3);
+    });
+
+    await it('falls back to the vertex average for a degenerate polygon', async () => {
+      // Collinear points → zero area → average of the vertices.
+      const [cx, cy] = polygonCentroid([
+        [0, 0],
+        [2, 0],
+        [4, 0],
+      ]);
+      expect(cx).toBe(2);
+      expect(cy).toBe(0);
     });
   });
 };

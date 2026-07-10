@@ -11,23 +11,23 @@ Status: **read-only**. Three views:
 
 - **Übersicht** — open a Sweet Home 3D `.sh3d` file and show a summary (levels,
   rooms, wall stats, footprint) via the core parser + geometry.
-- **3D** — render the building in 3D (three.js on the WebGL→`Gtk.GLArea` bridge)
-  from a core scene generator (`buildScene`): walls as extruded footprints
-  mitered at connected ends **with door/window openings cut out** (pillars +
-  lintel + sill, matched from the model's doors/windows), room floors,
-  doors/windows/furniture as their
-  **embedded OBJ meshes** (extracted from the `.sh3d`, scaled/placed like Sweet
-  Home 3D; a box is the fallback when a model can't be resolved), retrofit works,
-  orbit camera. A floating segmented control switches the wall **colouring
-  mode** — *Neutral* (plain), *U-Wert* (green good → red bad, with a legend +
-  the GEG limit), *Feuchte* (damp walls teal); switching re-tints in place.
-  **Click a wall** to open an inspector card with its geometry, U-value / GEG /
-  Tauwasser, and any moisture diagnosis (raycast pick; drag still orbits); the
-  card's buttons jump to **Bauteile** / **Feuchte** with that wall focused. A
-  *Geschoss* dropdown isolates a single storey (multi-storey models). A red
-  ground arrow marks **north** (from the model's compass) and the sun lights the
-  south façades (orientation for passive-solar work). Needs a GL-capable desktop. (Materials/textures from the models' `.mtl` are a
-  next step — meshes currently use a flat material by kind.)
+- **Modell** — the building model in two projections of the SAME core scene
+  (`buildScene`), switched by a *Grundriss / 3D* segmented control. Both share
+  the wall **colouring mode** (*Neutral* / *U-Wert* green→red with the GEG limit /
+  *Feuchte* teal), a *Geschoss* dropdown to isolate one storey, and the **click
+  inspector** (geometry + U-value / GEG / Tauwasser + moisture diagnosis, with
+  buttons jumping to **Bauteile** / **Feuchte** for that wall).
+  - **Grundriss** (default) — a 2D floor plan drawn top-down with Cairo: rooms
+    filled with name + area, mitered wall footprints, door/window openings, a
+    grid, a **north** compass and a scale bar. Read-only for now (drawing/editing
+    geometry is a later Modell sub-stage). The concept's rule "edit in 2D, inspect
+    in 3D" — so the plan is the primary surface.
+  - **3D** — render the building in 3D (three.js on the WebGL→`Gtk.GLArea` bridge):
+    walls as extruded footprints mitered at connected ends **with door/window
+    openings cut out**, room floors, doors/windows/furniture as their **embedded
+    OBJ meshes** (from the `.sh3d`; a box is the fallback), retrofit works, orbit
+    camera. North from the model's compass; the sun lights the south façades.
+    Needs a GL-capable desktop.
 - **Bauteile** — assign a wall build-up (preset) to all walls; live
   U-value / Tauwasser / GEG; the 3D view colours walls by U-value.
 - **Vorhaben** — our own earthworks (Lehmgraben, pipes) as project *works*,
@@ -63,11 +63,13 @@ system (GJS uses the real libraries via GObject-Introspection).
 - `BP_APP_ID=<app-id>` — override the application id. GNOME apps are
   single-instance per id, so a distinct id lets a *second* instance run beside
   one you already have open (used for devtools screenshots — see below).
-- `BP_APP_COLORMODE=<neutral|uwert|feuchte>` — the 3D view's initial wall
+- `BP_APP_MODELTAB=<grundriss|ansicht3d|3d>` — the Modell view's initial
+  projection (default `grundriss`).
+- `BP_APP_COLORMODE=<neutral|uwert|feuchte>` — the Modell view's initial wall
   colouring mode (default `uwert`).
-- `BP_APP_PICKWALL=<wall-id>` — open the 3D click-inspector for that wall on
+- `BP_APP_PICKWALL=<wall-id>` — open the Modell click-inspector for that wall on
   startup (the same card a click produces).
-- `BP_APP_LEVEL=<level name>` — isolate that storey in the 3D view on startup
+- `BP_APP_LEVEL=<level name>` — isolate that storey in the Modell view on startup
   (as if picked in the *Geschoss* dropdown).
 - `BP_APP_EDITWALL=<bauteile|feuchte>:<wall-id>` — fire the inspector's edit-jump
   on startup (switch to that view with the wall focused).

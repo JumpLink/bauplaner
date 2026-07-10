@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/adwaita-design-system-11f51e8f-1a41-4db3-bbaf-a682315b2773/colors_and_type.css">
+  <link rel="stylesheet" href="_ds/adwaita-design-system-11f51e8f-1a41-4db3-bbaf-a682315b2773/adwaita.css">
+  <link rel="stylesheet" href="_ds/adwaita-design-system-11f51e8f-1a41-4db3-bbaf-a682315b2773/styles.css">
+  <script src="_ds/adwaita-design-system-11f51e8f-1a41-4db3-bbaf-a682315b2773/_ds_bundle.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; }
+    body { background: #1f232b; }
+    a { color: var(--accent-color); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .bp-scroll::-webkit-scrollbar { width: 12px; height: 12px; }
+    .bp-scroll::-webkit-scrollbar-thumb { background: color-mix(in srgb, currentColor 20%, transparent); border-radius: 9999px; border: 3px solid transparent; background-clip: padding-box; }
+    .bp-scroll::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, currentColor 32%, transparent); background-clip: padding-box; }
+    .bp-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bp-ico { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto; background: var(--icon) no-repeat center / contain; }
+  </style>
+</helmet>
+
+<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; background: radial-gradient(circle at 30% 20%, #2b3140, #1a1d24 70%);">
+  <div class="adw-root adw-window {{ schemeClass }}" style="width: 1000px; height: 680px; --accent-bg-color: {{ accentVar }}; display: flex; flex-direction: column; font-family: var(--font-sans);">
+    <div style="display: flex; flex: 1 1 auto; min-height: 0;">
+
+      <!-- ============ SIDEBAR ============ -->
+      <div style="width: 260px; flex: 0 0 260px; display: flex; flex-direction: column; background: var(--sidebar-bg-color); color: var(--sidebar-fg-color); border-right: 1px solid var(--sidebar-border-color); min-height: 0;">
+        <div class="adw-headerbar" style="background: var(--sidebar-bg-color); box-shadow: none; padding-right: 10px;">
+          <div class="start">
+            <button class="adw-btn flat icon-only" title="Projekt oder Sweet Home 3D-Datei öffnen" style="color: var(--sidebar-fg-color);">
+              <span class="bp-ico" style="--icon: url(assets/icons-white/document-open-symbolic.svg);"></span>
+            </button>
+          </div>
+          <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; line-height: 1.15; padding-left: 2px;">
+            <span style="font-weight: 700; font-size: 14px;" class="bp-truncate">Bauplaner</span>
+            <span style="font-size: 11.5px; opacity: 0.55;" class="bp-truncate">Nativer Bauplaner</span>
+          </div>
+          <div class="end" style="position: relative;">
+            <button class="adw-btn flat icon-only" title="Hauptmenü" onClick="{{ toggleMenu }}" style="color: var(--sidebar-fg-color);">
+              <span class="bp-ico" style="--icon: url(assets/icons-white/open-menu-symbolic.svg);"></span>
+            </button>
+            <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; top: 40px; right: 0; z-index: 40; min-width: 210px; background: var(--popover-bg-color); color: var(--popover-fg-color); border-radius: var(--radius-popover); box-shadow: var(--shadow-popover); padding: 6px;">
+                <div style="padding: 8px 12px; border-radius: 7px; font-size: 14px; cursor: default; opacity: 0.5;">Projekt speichern</div>
+                <div style="padding: 8px 12px; border-radius: 7px; font-size: 14px; cursor: pointer;" onClick="{{ closeMenu }}">Über Bauplaner</div>
+                <div style="padding: 8px 12px; border-radius: 7px; font-size: 14px; cursor: pointer;" onClick="{{ closeMenu }}">Beenden</div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <div class="adw-sidebar bp-scroll" style="width: auto; flex: 1 1 auto; background: transparent; padding: 6px; overflow: auto; min-height: 0;">
+          <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="6">
+            <div class="sb-item {{ item.cls }}" onClick="{{ item.onClick }}">
+              <span class="bp-ico sb-icon" style="{{ item.iconStyle }}"></span>
+              <span>{{ item.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- ============ CONTENT ============ -->
+      <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; background: var(--window-bg-color); min-height: 0;">
+        <div class="adw-headerbar">
+          <div class="start" style="width: 40px;"></div>
+          <div class="title-wrap"><span class="title">{{ viewTitle }}</span></div>
+          <div class="end">
+            <button class="adw-btn circular flat" title="Schließen">
+              <span class="bp-ico" style="--icon: url(assets/icons-white/window-close-symbolic.svg);"></span>
+            </button>
+          </div>
+        </div>
+
+        <div style="flex: 1 1 auto; min-height: 0; position: relative;">
+
+          <!-- ---- ÜBERSICHT ---- -->
+          <div class="bp-scroll" style="position: absolute; inset: 0; overflow: auto; display: {{ dispUebersicht }};">
+            <div style="max-width: 600px; margin: 0 auto; padding: 28px 0 44px;">
+              <div style="margin-bottom: 26px;">
+                <div style="font-size: 15px; font-weight: 700; margin: 0 2px 3px;">Modell</div>
+                <div style="font-size: 13px; opacity: 0.55; margin: 0 2px 12px; word-break: break-all;">/home/jumplink/eco-retrofit-demo/Beispielhaus.ecoretrofit.json</div>
+                <div class="adw-list">
+                  <div class="adw-row" style="cursor: default;"><div class="row-text"><div class="row-title">Ebenen</div></div><div class="row-suffix"><span>8</span></div></div>
+                  <div class="adw-row" style="cursor: default;"><div class="row-text"><div class="row-title">Räume</div></div><div class="row-suffix"><span>22 · 250.1 m²</span></div></div>
+                  <div class="adw-row" style="cursor: default;"><div class="row-text"><div class="row-title">Wände</div></div><div class="row-suffix"><span>70 · 297.0 m · 650.5 m²</span></div></div>
+                  <div class="adw-row" style="cursor: default;"><div class="row-text"><div class="row-title">Grundriss (Bounding-Box)</div></div><div class="row-suffix"><span>15.5 × 24.1 m</span></div></div>
+                </div>
+              </div>
+              <div style="margin-bottom: 26px;">
+                <div style="font-size: 15px; font-weight: 700; margin: 0 2px 3px;">Wände je Ebene</div>
+                <div style="font-size: 13px; opacity: 0.55; margin: 0 2px 12px;">Bruttoflächen (Öffnungen nicht abgezogen)</div>
+                <div class="adw-list">
+                  <sc-for list="{{ levelStats }}" as="lvl" hint-placeholder-count="8">
+                    <div class="adw-row" style="cursor: default;"><div class="row-text"><div class="row-title">{{ lvl.name }}</div></div><div class="row-suffix"><span>{{ lvl.stat }}</span></div></div>
+                  </sc-for>
+                </div>
+              </div>
+              <div>
+                <div class="adw-list">
+                  <div class="adw-row activatable">
+                    <div class="row-icon"><span class="bp-ico" style="--icon: url(assets/icons-white/document-open-symbolic.svg);"></span></div>
+                    <div class="row-text"><div class="row-title">Andere Datei öffnen …</div></div>
+                    <div class="row-suffix"><span class="bp-ico chevron" style="--icon: url(assets/icons-white/go-next-symbolic.svg);"></span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ---- 3D ---- -->
+          <div style="position: absolute; inset: 0; display: {{ disp3d }}; overflow: hidden;">
+            <div ref="{{ glRef }}" style="position: absolute; inset: 0; background: #131417;"></div>
+
+            <div style="position: absolute; top: 20px; left: 24px; z-index: 5; background: rgba(255,255,255,0.06); border-radius: 12px; padding: 10px 12px;">
+              <div class="adw-toggle-group" style="background: rgba(255,255,255,0.09);">
+                <button class="tg-btn {{ tgNeutral }}" onClick="{{ setNeutral }}">Neutral</button>
+                <button class="tg-btn {{ tgUwert }}" onClick="{{ setUwert }}">U-Wert</button>
+                <button class="tg-btn {{ tgFeuchte }}" onClick="{{ setFeuchte }}">Feuchte</button>
+              </div>
+            </div>
+
+            <div style="position: absolute; top: 96px; left: 24px; z-index: 5; background: rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; gap: 16px;">
+              <span style="font-size: 14px;">Geschoss</span>
+              <div style="position: relative;">
+                <button class="adw-btn" style="gap: 10px;" onClick="{{ toggleLevelMenu }}">
+                  <span>{{ levelLabel }}</span>
+                  <span class="bp-ico" style="--icon: url(assets/icons-white/pan-down-symbolic.svg); width: 14px; height: 14px;"></span>
+                </button>
+                <sc-if value="{{ levelMenuOpen }}" hint-placeholder-val="{{ false }}">
+                  <div class="bp-scroll" style="position: absolute; top: 40px; left: 0; z-index: 30; min-width: 260px; max-height: 300px; overflow: auto; background: var(--popover-bg-color); border-radius: var(--radius-menu); box-shadow: var(--shadow-popover); padding: 6px;">
+                    <sc-for list="{{ levelOptions }}" as="opt" hint-placeholder-count="9">
+                      <div style="padding: 8px 12px; border-radius: 7px; font-size: 14px; cursor: pointer;" onClick="{{ opt.onClick }}">{{ opt.label }}</div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+
+            <sc-if value="{{ showUwertLegend }}" hint-placeholder-val="{{ true }}">
+              <div style="position: absolute; bottom: 24px; left: 24px; z-index: 5; width: 260px; background: rgba(30,30,34,0.86); color: #fff; border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow-popover);">
+                <div style="font-weight: 700; font-size: 13px; margin-bottom: 8px;">U-Wert (W/m²K)</div>
+                <div style="height: 10px; border-radius: 9999px; background: linear-gradient(90deg, #4caf50, #ffc107, #f44336);"></div>
+                <div style="display: flex; justify-content: space-between; font-size: 12.5px; margin-top: 7px;"><span>gut 0,15</span><span>≥0,80 schlecht</span></div>
+                <div style="font-size: 12px; opacity: 0.55; margin-top: 8px;">GEG-Grenzwert Außenwand: 0,24</div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showFeuchteLegend }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; bottom: 24px; left: 24px; z-index: 5; display: inline-flex; align-items: center; gap: 10px; background: rgba(30,30,34,0.86); color: #fff; border-radius: 9999px; padding: 8px 16px 8px 12px; box-shadow: var(--shadow-popover);">
+                <span style="width: 22px; height: 22px; border-radius: 6px; background: #26a69a; flex: 0 0 auto;"></span>
+                <span style="font-size: 13.5px;">feuchte Wand (Diagnose)</span>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ inspOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; top: 20px; right: 24px; z-index: 8; width: 300px; background: var(--popover-bg-color); color: var(--popover-fg-color); border-radius: 12px; box-shadow: var(--shadow-dialog); padding: 16px 18px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                  <span style="font-weight: 700; font-size: 15px;">Wand</span>
+                  <button class="adw-btn flat icon-only" onClick="{{ closeInsp }}"><span class="bp-ico" style="--icon: url(assets/icons-white/window-close-symbolic.svg); width: 14px; height: 14px;"></span></button>
+                </div>
+                <sc-for list="{{ inspRows }}" as="r" hint-placeholder-count="7">
+                  <div style="display: flex; gap: 12px; padding: 3px 0; font-size: 14px;">
+                    <span style="flex: 0 0 84px; opacity: 0.55;">{{ r.label }}</span>
+                    <span style="flex: 1 1 auto;">{{ r.value }}</span>
+                  </div>
+                </sc-for>
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
+                  <button class="adw-btn flat" onClick="{{ inspGoBauteile }}">Bauteile</button>
+                  <sc-if value="{{ inspHasFeuchte }}" hint-placeholder-val="{{ false }}">
+                    <button class="adw-btn flat" onClick="{{ inspGoFeuchte }}">Feuchte</button>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <!-- ---- BAUTEILE ---- -->
+          <div class="bp-scroll" style="position: absolute; inset: 0; overflow: auto; display: {{ dispBauteile }};">
+            <div style="max-width: 600px; margin: 0 auto; padding: 28px 0 44px;">
+              <div style="margin-bottom: 26px;">
+                <div style="font-size: 15px; font-weight: 700; margin: 0 2px 3px;">Alle Wände</div>
+                <div style="font-size: 13px; opacity: 0.55; margin: 0 2px 12px;">Aufbau für alle Wände wählen — die 3D-Ansicht färbt nach U-Wert.</div>
+                <div class="adw-list">
+                  <div class="adw-row" style="cursor: default; position: relative;">
+                    <div class="row-text"><div class="row-title">Aufbau (alle Wände)</div></div>
+                    <div class="row-suffix" style="opacity: 1;">
+                      <button class="adw-btn flat" style="gap: 10px; max-width: 220px;" onClick="{{ toggleGlobalCombo }}">
+                        <span class="bp-truncate" style="opacity: 0.75;">{{ globalPresetLabel }}</span>
+                        <span class="bp-ico" style="--icon: url(assets/icons-white/pan-down-symbolic.svg); width: 14px; height: 14px; flex: 0 0 auto;"></span>
+                      </button>
+                      <sc-if value="{{ globalComboOpen }}" hint-placeholder-val="{{ false }}">
+                        <div style="position: absolute; top: 46px; right: 12px; z-index: 30; min-width: 260px; background: var(--popover-bg-color); border-radius: var(--radius-menu); box-shadow: var(--shadow-popover); padding: 6px;">
+                          <sc-for list="{{ presetOptions }}" as="p" hint-placeholder-count="5">
+                            <div style="padding: 8px 12px; border-radius: 7px; font-size: 14px; cursor: pointer;" onClick="{{ p.onClick }}">{{ p.label }}</div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </div>
+                  <sc-if value="{{ globalHasAssembly }}" hint-placeholder-val="{{ true }}">
+                    <div class="adw-row" style="cursor: default;"><div class="row-text"><div class="row-title">U-Wert (Wand 1)</div></div><div class="row-suffix"><span>{{ globalU }}</span></div></div>
+                  </sc-if>
+                  <sc-if value="{{ globalHasAssembly }}" hint-placeholder-val="{{ true }}">
+                    <div class="adw-row" style="cursor: default;"><div class="row-text"><div class="row-title">Tauwasser · GEG</div></div><div class="row-suffix"><span>{{ globalTG }}</span></div></div>
+                  </sc-if>
+                </div>
+              </div>
+
+              <div>
+                <div style="font-size: 15px; font-weight: 700; margin: 0 2px 3px;">Wände einzeln</div>
+                <div style="font-size: 13px; opacity: 0.55; margin: 0 2px 12px;">Aufbau je Wand überschreiben.</div>
+                <div class="adw-list">
+                  <sc-for list="{{ bauteileLevels }}" as="lvl" hint-placeholder-count="8">
+                    <div>
+                      <div class="adw-row activatable" onClick="{{ lvl.onToggle }}">
+                        <div class="row-text"><div class="row-title">{{ lvl.name }}</div><div class="row-subtitle">{{ lvl.sub }}</div></div>
+                        <div class="row-suffix"><span class="bp-ico chevron" style="{{ lvl.chevronStyle }}"></span></div>
+                      </div>
+                      <sc-if value="{{ lvl.open }}" hint-placeholder-val="{{ false }}">
+                        <div style="background: rgba(0,0,0,0.18);">
+                          <sc-for list="{{ lvl.walls }}" as="w" hint-placeholder-count="4">
+                            <div class="adw-row" style="cursor: default; padding-left: 28px;">
+                              <div class="row-text"><div class="row-title">{{ w.name }}</div><div class="row-subtitle">{{ w.sub }}</div></div>
+                              <div class="row-suffix"><span style="opacity: 0.6;">(keiner)</span><span class="bp-ico chevron" style="--icon: url(assets/icons-white/pan-down-symbolic.svg);"></span></div>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ---- VORHABEN ---- -->
+          <div class="bp-scroll" style="position: absolute; inset: 0; overflow: auto; display: {{ dispVorhaben }};">
+            <div style="max-width: 600px; margin: 0 auto; padding: 28px 0 44px;">
+              <div style="margin-bottom: 26px;">
+                <div style="font-size: 15px; font-weight: 700; margin: 0 2px 3px;">Erdarbeiten</div>
+                <div style="font-size: 13px; opacity: 0.55; margin: 0 2px 12px;">Eigene Vorhaben, die Sweet Home 3D nicht kennt — auch in der 3D-Ansicht.</div>
+                <div class="adw-list">
+                  <div class="adw-row activatable" onClick="{{ addLehmgraben }}">
+                    <div class="row-icon"><span class="bp-ico" style="--icon: url(assets/icons-white/list-add-symbolic.svg);"></span></div>
+                    <div class="row-text"><div class="row-title">Lehmgraben hinzufügen</div><div class="row-subtitle">an der längsten Außenseite (0,5 m breit, 0,9 m tief)</div></div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div style="font-size: 15px; font-weight: 700; margin: 0 2px 12px;">Vorhaben ({{ worksCount }})</div>
+                <div class="adw-list">
+                  <sc-for list="{{ works }}" as="w" hint-placeholder-count="1">
+                    <div class="adw-row" style="cursor: default;">
+                      <div class="row-text"><div class="row-title">{{ w.title }}</div><div class="row-subtitle">{{ w.sub }}</div></div>
+                      <div class="row-suffix" style="opacity: 1;">
+                        <button class="adw-btn flat icon-only" title="Entfernen" onClick="{{ w.onRemove }}"><span class="bp-ico" style="--icon: url(assets/icons-white/user-trash-symbolic.svg);"></span></button>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ---- FEUCHTE ---- -->
+          <div class="bp-scroll" style="position: absolute; inset: 0; overflow: auto; display: {{ dispFeuchte }};">
+            <div style="max-width: 600px; margin: 0 auto; padding: 28px 0 44px;">
+              <div style="margin-bottom: 26px;">
+                <div style="font-size: 15px; font-weight: 700; margin: 0 2px 3px;">Beobachtungen</div>
+                <div style="font-size: 13px; opacity: 0.55; margin: 0 2px 12px;">Wand wählen und beobachtete Anzeichen angeben.</div>
+                <div class="adw-list">
+                  <div class="adw-row" style="cursor: default; position: relative;">
+                    <div class="row-text"><div class="row-title">Wand</div></div>
+                    <div class="row-suffix" style="opacity: 1;">
+                      <button class="adw-btn flat" style="gap: 10px; max-width: 220px;" onClick="{{ toggleWallMenu }}">
+                        <span class="bp-truncate" style="opacity: 0.75;">{{ fWallLabel }}</span>
+                        <span class="bp-ico" style="--icon: url(assets/icons-white/pan-down-symbolic.svg); width: 14px; height: 14px; flex: 0 0 auto;"></span>
+                      </button>
+                      <sc-if value="{{ fWallMenuOpen }}" hint-placeholder-val="{{ false }}">
+                        <div class="bp-scroll" style="position: absolute; top: 46px; right: 12px; z-index: 30; min-width: 260px; max-height: 280px; overflow: auto; background: var(--popover-bg-color); border-radius: var(--radius-menu); box-shadow: var(--shadow-popover); padding: 6px;">
+                          <sc-for list="{{ fWallOptions }}" as="o" hint-placeholder-count="8">
+                            <div style="padding: 8px 12px; border-radius: 7px; font-size: 14px; cursor: pointer;" onClick="{{ o.onClick }}">{{ o.label }}</div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </div>
+                  <div class="adw-row" style="cursor: default; position: relative;">
+                    <div class="row-text"><div class="row-title">Ort</div></div>
+                    <div class="row-suffix" style="opacity: 1;">
+                      <button class="adw-btn flat" style="gap: 10px;" onClick="{{ toggleOrtMenu }}">
+                        <span style="opacity: 0.75;">{{ fOrtLabel }}</span>
+                        <span class="bp-ico" style="--icon: url(assets/icons-white/pan-down-symbolic.svg); width: 14px; height: 14px; flex: 0 0 auto;"></span>
+                      </button>
+                      <sc-if value="{{ fOrtMenuOpen }}" hint-placeholder-val="{{ false }}">
+                        <div style="position: absolute; top: 46px; right: 12px; z-index: 30; min-width: 180px; background: var(--popover-bg-color); border-radius: var(--radius-menu); box-shadow: var(--shadow-popover); padding: 6px;">
+                          <sc-for list="{{ fOrtOptions }}" as="o" hint-placeholder-count="5">
+                            <div style="padding: 8px 12px; border-radius: 7px; font-size: 14px; cursor: pointer;" onClick="{{ o.onClick }}">{{ o.label }}</div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </div>
+                  <div class="adw-row" style="cursor: default;">
+                    <div class="row-text"><div class="row-title">erdberührt / unter Gelände</div></div>
+                    <div class="row-suffix" style="opacity: 1;"><span class="adw-switch {{ sw.belowGrade }}" onClick="{{ toggleBelowGrade }}"></span></div>
+                  </div>
+                  <div class="adw-row" style="cursor: default;">
+                    <div class="row-text"><div class="row-title">schlimmer bei Regen</div></div>
+                    <div class="row-suffix" style="opacity: 1;"><span class="adw-switch {{ sw.rain }}" onClick="{{ toggleRain }}"></span></div>
+                  </div>
+                  <div class="adw-row" style="cursor: default;">
+                    <div class="row-text"><div class="row-title">schlimmer in der Heizsaison</div></div>
+                    <div class="row-suffix" style="opacity: 1;"><span class="adw-switch {{ sw.heating }}" onClick="{{ toggleHeating }}"></span></div>
+                  </div>
+                  <div class="adw-row" style="cursor: default;">
+                    <div class="row-text"><div class="row-title">Salzausblühungen / Feuchterand</div></div>
+                    <div class="row-suffix" style="opacity: 1;"><span class="adw-switch {{ sw.salt }}" onClick="{{ toggleSalt }}"></span></div>
+                  </div>
+                  <div class="adw-row" style="cursor: default;">
+                    <div class="row-text"><div class="row-title">Schimmel in Ecken</div></div>
+                    <div class="row-suffix" style="opacity: 1;"><span class="adw-switch {{ sw.mould }}" onClick="{{ toggleMould }}"></span></div>
+                  </div>
+                  <div class="adw-row" style="cursor: default; justify-content: flex-end;">
+                    <button class="adw-btn suggested" onClick="{{ runDiagnose }}">Diagnose</button>
+                  </div>
+                </div>
+              </div>
+
+              <sc-if value="{{ hasResult }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-bottom: 26px;">
+                  <div style="font-size: 15px; font-weight: 700; margin: 0 2px 12px;">Wahrscheinliche Ursachen</div>
+                  <div class="adw-list">
+                    <div class="adw-row" style="cursor: default;">
+                      <div class="row-text"><div class="row-title">{{ resultLabel }}</div><div class="row-subtitle">{{ resultSub }}</div></div>
+                    </div>
+                    <sc-for list="{{ resultMeasures }}" as="m" hint-placeholder-count="2">
+                      <div class="adw-row" style="cursor: default; padding-left: 28px;">
+                        <div class="row-text"><div class="row-title">{{ m.text }}</div><div class="row-subtitle">Maßnahme</div></div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <div>
+                <div style="font-size: 15px; font-weight: 700; margin: 0 2px 12px;">Diagnostizierte Wände ({{ diagnosedCount }})</div>
+                <div class="adw-list">
+                  <sc-for list="{{ diagnosed }}" as="d" hint-placeholder-count="6">
+                    <div class="adw-row" style="cursor: default;">
+                      <div class="row-icon"><span class="bp-ico" style="--icon: url(assets/icons-white/weather-showers-symbolic.svg);"></span></div>
+                      <div class="row-text"><div class="row-title">{{ d.name }}</div><div class="row-subtitle">{{ d.cause }}</div></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ---- MATERIALIEN ---- -->
+          <div class="bp-scroll" style="position: absolute; inset: 0; overflow: auto; display: {{ dispMaterialien }};">
+            <div style="max-width: 600px; margin: 0 auto; padding: 28px 0 44px;">
+              <div>
+                <div style="font-size: 15px; font-weight: 700; margin: 0 2px 3px;">Materialstamm</div>
+                <div style="font-size: 13px; opacity: 0.55; margin: 0 2px 12px;">Richtwerte — Herstellerangaben bestätigen</div>
+                <div class="adw-list">
+                  <sc-for list="{{ materials }}" as="m" hint-placeholder-count="13">
+                    <div class="adw-row" style="cursor: default;">
+                      <div class="row-text"><div class="row-title">{{ m.name }}</div><div class="row-subtitle">{{ m.key }}</div></div>
+                      <div class="row-suffix"><span>{{ m.values }}</span></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ anyMenuOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position: fixed; inset: 0; z-index: 20;" onClick="{{ closeAllMenus }}"></div>
+    </sc-if>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1080, &quot;height&quot;: 760}, &quot;scheme&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;dark&quot;, &quot;light&quot;], &quot;default&quot;: &quot;dark&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Darstellung&quot;}, &quot;accent&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;blue&quot;, &quot;teal&quot;, &quot;green&quot;, &quot;yellow&quot;, &quot;orange&quot;, &quot;red&quot;, &quot;pink&quot;, &quot;purple&quot;, &quot;slate&quot;], &quot;default&quot;: &quot;blue&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Darstellung&quot;}, &quot;colorMode3d&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;neutral&quot;, &quot;uwert&quot;, &quot;feuchte&quot;], &quot;default&quot;: &quot;uwert&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;3D-Ansicht&quot;}}">
+class Component extends DCLogic {
+  state = {
+    view: 'uebersicht',
+    colorMode: 'uwert',
+    level: '',
+    levelMenuOpen: false,
+    menuOpen: false,
+    insp: null,
+    globalPreset: 1,
+    globalComboOpen: false,
+    expanders: {},
+    fWall: 0,
+    fWallMenuOpen: false,
+    fOrt: 0,
+    fOrtMenuOpen: false,
+    sw: { belowGrade: false, rain: false, heating: false, salt: false, mould: false },
+    result: null,
+    works: [{ id: 'lehmgraben-nordseite', title: 'Lehmgraben Nordseite', sub: 'lehmgraben' }],
+    worksSeq: 1,
+  };
+
+  NAV = [
+    { view: 'uebersicht', label: 'Übersicht', icon: 'view-list-symbolic' },
+    { view: 'ansicht3d', label: '3D', icon: 'view-paged-symbolic' },
+    { view: 'bauteile', label: 'Bauteile', icon: 'window-restore-symbolic' },
+    { view: 'vorhaben', label: 'Vorhaben', icon: 'applications-engineering-symbolic' },
+    { view: 'feuchte', label: 'Feuchte', icon: 'weather-showers-symbolic' },
+    { view: 'materialien', label: 'Materialien', icon: 'emblem-documents-symbolic' },
+  ];
+  TITLES = { uebersicht: 'Übersicht', ansicht3d: '3D', bauteile: 'Bauteile', vorhaben: 'Vorhaben', feuchte: 'Feuchte', materialien: 'Materialien' };
+
+  LEVELS = ['Hauptgebäude Erdgeschoss', 'Sockel', 'Alter Anbau Sanitär Ergeschoss', 'Garage', 'Alter Anbau 1', 'Hauptgebäude 1. Stockwerk', 'Dachgeschoss', 'Alter Anbau 2'];
+  LEVEL_STATS = [
+    { name: 'Hauptgebäude Erdgeschoss', count: 22, len: '71.1', area: '192.0' },
+    { name: 'Sockel', count: 15, len: '67.2', area: '23.1' },
+    { name: 'Alter Anbau Sanitär Ergeschoss', count: 4, len: '10.3', area: '31.3' },
+    { name: 'Garage', count: 11, len: '38.6', area: '107.8' },
+    { name: 'Alter Anbau 1', count: 6, len: '46.9', area: '126.7' },
+    { name: 'Hauptgebäude 1. Stockwerk', count: 8, len: '42.0', area: '128.4' },
+    { name: 'Dachgeschoss', count: 3, len: '14.5', area: '32.1' },
+    { name: 'Alter Anbau 2', count: 1, len: '6.4', area: '9.1' },
+  ];
+
+  PRESETS = [
+    { label: '(keiner)', u: null, tw: false, geg: false },
+    { label: 'Bestand: Vollziegel 36,5 cm', u: '1.337', tw: false, geg: false },
+    { label: 'Innendämmung: 6 cm Holzfaser', u: '0.446', tw: true, geg: false },
+    { label: 'Außendämmung: 12 cm Holzfaser', u: '0.268', tw: false, geg: false },
+    { label: 'Außendämmung: 16 cm Holzfaser', u: '0.211', tw: false, geg: true },
+  ];
+
+  MATERIALS = [
+    { name: 'DERNOTON (Fertigmischung, verdichtet)', key: 'dernoton', d: '1.9' },
+    { name: 'Grubenlehm (unverarbeitet, verdichtet)', key: 'grubenlehm', d: '1.9' },
+    { name: 'Kies 8/16 (Verfüllung/Dränage)', key: 'kies', d: '1.8' },
+    { name: 'Sand (Rohrbettung)', key: 'sand', d: '1.6' },
+    { name: 'Vollziegel-Mauerwerk (Bestand)', key: 'vollziegel', d: '1.8', l: '0.68', mu: '8' },
+    { name: 'Lehmputz', key: 'lehmputz', d: '1.8', l: '0.83', mu: '8' },
+    { name: 'Kalkputz', key: 'kalkputz', d: '1.6', l: '0.7', mu: '15' },
+    { name: 'Kalkzementputz (Außenputz)', key: 'kalkzementputz', d: '1.8', l: '1', mu: '20' },
+    { name: 'Holzweichfaserdämmung', key: 'holzfaser', d: '0.16', l: '0.04', mu: '5' },
+    { name: 'Zellulose-Einblasdämmung', key: 'zellulose', d: '0.055', l: '0.04', mu: '2' },
+    { name: 'Hanfdämmung', key: 'hanf', d: '0.04', l: '0.045', mu: '2' },
+    { name: 'Schaumglasschotter', key: 'schaumglasschotter', d: '0.15', l: '0.08', mu: '3' },
+    { name: 'Nadelholz (Konstruktionsvollholz)', key: 'holz', d: '0.5', l: '0.13', mu: '40' },
+  ];
+
+  DIAGNOSED = [
+    { name: 'Wand 3', cause: 'Aufsteigende Feuchte (fehlende/defekte Horizontalsperre)' },
+    { name: 'Wand 12', cause: 'Aufsteigende Feuchte (fehlende/defekte Horizontalsperre)' },
+    { name: 'Wand 18', cause: 'Seitlich eindringendes Wasser (erdberührt)' },
+    { name: 'Wand 26', cause: 'Kondensat / Wärmebrücke (Tauwasser innen)' },
+    { name: 'Wand 41', cause: 'Schlagregen / Fassadenschaden' },
+    { name: 'Wand 55', cause: 'Aufsteigende Feuchte (fehlende/defekte Horizontalsperre)' },
+  ];
+
+  ORTE = ['—', 'Keller', 'Sockel', 'Wohnraum', 'Dach'];
+
+  // [x1,z1,x2,z2, thicknessCm, level, U(num), gegPass, tauwasser, feuchteCause|null]
+  WALL_DEFS = [
+    [0, 3, 9, 3, 24, 0, 1.34, false, false, null],
+    [0, -3, 9, -3, 24, 0, 1.28, false, false, null],
+    [9, -3, 9, 3, 36, 0, 0.42, false, false, null],
+    [0, -3, 0, 3, 43, 0, 0.27, false, true, 'Aufsteigende Feuchte (fehlende/defekte Horizontalsperre) (82 %)'],
+    [4.5, -3, 4.5, 0, 12, 0, 0.83, false, false, null],
+    [4.5, 0, 9, 0, 12, 0, 0.90, false, false, null],
+    [0, 0, 4.5, 0, 12, 0, 0.88, false, false, null],
+    [-11, 1.2, 0, 1.2, 38, 4, 0.31, false, true, 'Aufsteigende Feuchte (fehlende/defekte Horizontalsperre) (76 %)'],
+    [-11, -1.2, 0, -1.2, 38, 4, 0.33, false, true, 'Aufsteigende Feuchte (fehlende/defekte Horizontalsperre) (71 %)'],
+    [-11, -1.2, -11, 1.2, 38, 4, 0.29, false, true, 'Seitlich eindringendes Wasser (erdberührt) (74 %)'],
+    [-7.5, -1.2, -7.5, 1.2, 12, 4, 0.85, false, false, null],
+    [-4, -1.2, -4, 1.2, 12, 4, 0.80, false, false, null],
+  ];
+
+  CLAY = 0xcdb79b;
+  FEUCHTE_COLOR = 0x26a69a;
+
+  // ---------- lifecycle ----------
+  componentDidMount() {
+    this._glTries = 0;
+    const m = this.props.colorMode3d;
+    if (m && m !== this.state.colorMode) this.setState({ colorMode: m });
+    this.tryInitGL();
+  }
+
+  componentDidUpdate() {
+    if (!this._scene) { this.tryInitGL(); return; }
+    this.syncScene();
+  }
+
+  syncScene() {
+    if (this._lastMode !== this.state.colorMode) { this._lastMode = this.state.colorMode; this.applyColors(); }
+    if (this._lastLevel !== this.state.level) { this._lastLevel = this.state.level; this.applyLevelFilter(); }
+    if (this._lastInsp !== this.state.insp) { this._lastInsp = this.state.insp; this.applySelection(); }
+    if (this.state.view === 'ansicht3d' && this._lastView !== 'ansicht3d') this.resizeGL();
+    this._lastView = this.state.view;
+  }
+
+  // ---------- three.js ----------
+  tryInitGL() {
+    if (this._scene || !this._glEl) return;
+    if (typeof window.THREE === 'undefined' || !window.THREE.OrbitControls) {
+      if (this._glTries++ > 120) return;
+      setTimeout(() => this.tryInitGL(), 80);
+      return;
+    }
+    this.initGL();
+  }
+
+  glRef = (el) => {
+    this._glEl = el;
+    if (el) this.tryInitGL();
+  };
+
+  initGL() {
+    const THREE = window.THREE;
+    const el = this._glEl;
+    const w = el.clientWidth || 740;
+    const h = el.clientHeight || 620;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 500);
+    camera.position.set(17, 15, 21);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(w, h);
+    el.appendChild(renderer.domElement);
+    renderer.domElement.style.display = 'block';
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(-1, 1, 0);
+    controls.maxPolarAngle = Math.PI / 2.05;
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x2a2a30, 0.95));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.7);
+    sun.position.set(6, 14, 12);
+    scene.add(sun);
+
+    // ground + grid
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(120, 120),
+      new THREE.MeshBasicMaterial({ color: 0x131417 }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.02;
+    scene.add(ground);
+    const grid = new THREE.GridHelper(120, 120, 0x3a3a42, 0x26262c);
+    scene.add(grid);
+
+    // north arrow (red, on ground)
+    const arrow = new THREE.ArrowHelper(
+      new THREE.Vector3(-0.9, 0, 0.45).normalize(),
+      new THREE.Vector3(-12, 0.05, 1.5),
+      5, 0xe01b24, 1.6, 1.1,
+    );
+    scene.add(arrow);
+
+    // walls
+    const H = 2.7;
+    this._walls = [];
+    this.WALL_DEFS.forEach((d, i) => {
+      const [x1, z1, x2, z2, tcm, lvl, U, geg, tw, cause] = d;
+      const len = Math.hypot(x2 - x1, z2 - z1);
+      const t = tcm / 100;
+      const geo = new THREE.BoxGeometry(len, H, Math.max(t, 0.1));
+      const mat = new THREE.MeshStandardMaterial({ color: this.CLAY, roughness: 0.92, metalness: 0.02 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set((x1 + x2) / 2, H / 2, (z1 + z2) / 2);
+      mesh.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
+      mesh.userData = {
+        index: i, level: lvl, lenM: len, tcm, U, geg, tw, cause,
+      };
+      scene.add(mesh);
+      this._walls.push(mesh);
+    });
+
+    this._THREE = THREE;
+    this._scene = scene;
+    this._camera = camera;
+    this._renderer = renderer;
+    this._controls = controls;
+    this._raycaster = new THREE.Raycaster();
+
+    // click vs drag
+    const dom = renderer.domElement;
+    let down = null;
+    dom.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
+    dom.addEventListener('pointerup', (e) => {
+      if (!down) return;
+      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+      down = null;
+      if (moved > 5) return;
+      this.pick(e);
+    });
+
+    const loop = () => {
+      this._raf = requestAnimationFrame(loop);
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    loop();
+
+    if (window.ResizeObserver) {
+      this._ro = new ResizeObserver(() => this.resizeGL());
+      this._ro.observe(el);
+    }
+
+    this._lastMode = this.state.colorMode;
+    this._lastLevel = this.state.level;
+    this._lastInsp = this.state.insp;
+    this._lastView = this.state.view;
+    this.applyColors();
+    this.applyLevelFilter();
+  }
+
+  resizeGL() {
+    if (!this._renderer || !this._glEl) return;
+    const w = this._glEl.clientWidth, h = this._glEl.clientHeight;
+    if (!w || !h) return;
+    this._camera.aspect = w / h;
+    this._camera.updateProjectionMatrix();
+    this._renderer.setSize(w, h);
+  }
+
+  uValueColor(U) {
+    const lerp = (a, b, x) => Math.round(a + (b - a) * x);
+    const t = Math.max(0, Math.min(1, (U - 0.15) / (0.8 - 0.15)));
+    let r, g, b;
+    if (t < 0.5) { const x = t / 0.5; r = lerp(0x4c, 0xff, x); g = lerp(0xaf, 0xc1, x); b = lerp(0x50, 0x07, x); }
+    else { const x = (t - 0.5) / 0.5; r = lerp(0xff, 0xf4, x); g = lerp(0xc1, 0x43, x); b = lerp(0x07, 0x36, x); }
+    return (r << 16) | (g << 8) | b;
+  }
+
+  applyColors() {
+    if (!this._walls) return;
+    const mode = this.state.colorMode;
+    for (const m of this._walls) {
+      const u = m.userData;
+      let c = this.CLAY;
+      if (mode === 'uwert') c = this.uValueColor(u.U);
+      else if (mode === 'feuchte') c = u.cause ? this.FEUCHTE_COLOR : this.CLAY;
+      m.material.color.setHex(c);
+    }
+    this.applySelection();
+  }
+
+  applyLevelFilter() {
+    if (!this._walls) return;
+    const lvl = this.state.level;
+    for (const m of this._walls) {
+      m.visible = lvl === '' || this.LEVELS[m.userData.level] === lvl;
+    }
+  }
+
+  applySelection() {
+    if (!this._walls) return;
+    const selIdx = this.state.insp ? this.state.insp.index : -1;
+    for (const m of this._walls) {
+      m.material.emissive.setHex(m.userData.index === selIdx ? 0x334155 : 0x000000);
+    }
+  }
+
+  pick(e) {
+    const rect = this._renderer.domElement.getBoundingClientRect();
+    const mouse = new this._THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    this._raycaster.setFromCamera(mouse, this._camera);
+    const hits = this._raycaster.intersectObjects(this._walls.filter((m) => m.visible));
+    if (hits.length === 0) return;
+    const u = hits[0].object.userData;
+    this.setState({
+      insp: {
+        index: u.index, level: this.LEVELS[u.level] || 'Ebene',
+        lenM: u.lenM, tcm: u.tcm, U: u.U, geg: u.geg, tw: u.tw, cause: u.cause,
+      },
+    });
+  }
+
+  componentWillUnmount() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    if (this._ro) this._ro.disconnect();
+  }
+
+  // ---------- handlers ----------
+  setView(v) { this.setState({ view: v, menuOpen: false }); }
+  toggleMenu = () => this.setState((s) => ({ menuOpen: !s.menuOpen }));
+  closeMenu = () => this.setState({ menuOpen: false });
+  closeAllMenus = () => this.setState({ menuOpen: false, levelMenuOpen: false, globalComboOpen: false, fWallMenuOpen: false, fOrtMenuOpen: false });
+
+  setNeutral = () => this.setState({ colorMode: 'neutral' });
+  setUwert = () => this.setState({ colorMode: 'uwert' });
+  setFeuchte = () => this.setState({ colorMode: 'feuchte' });
+
+  toggleLevelMenu = () => this.setState((s) => ({ levelMenuOpen: !s.levelMenuOpen }));
+  closeInsp = () => this.setState({ insp: null });
+  inspGoBauteile = () => this.setState({ view: 'bauteile' });
+  inspGoFeuchte = () => this.setState({ view: 'feuchte' });
+
+  toggleGlobalCombo = () => this.setState((s) => ({ globalComboOpen: !s.globalComboOpen }));
+
+  addLehmgraben = () => this.setState((s) => {
+    const n = s.worksSeq + 1;
+    return { worksSeq: n, works: [...s.works, { id: 'lehmgraben-' + n, title: 'Lehmgraben ' + n, sub: 'lehmgraben' }] };
+  });
+  removeWork(id) { this.setState((s) => ({ works: s.works.filter((w) => w.id !== id) })); }
+
+  toggleWallMenu = () => this.setState((s) => ({ fWallMenuOpen: !s.fWallMenuOpen }));
+  toggleOrtMenu = () => this.setState((s) => ({ fOrtMenuOpen: !s.fOrtMenuOpen }));
+  toggleBelowGrade = () => this.setState((s) => ({ sw: { ...s.sw, belowGrade: !s.sw.belowGrade } }));
+  toggleRain = () => this.setState((s) => ({ sw: { ...s.sw, rain: !s.sw.rain } }));
+  toggleHeating = () => this.setState((s) => ({ sw: { ...s.sw, heating: !s.sw.heating } }));
+  toggleSalt = () => this.setState((s) => ({ sw: { ...s.sw, salt: !s.sw.salt } }));
+  toggleMould = () => this.setState((s) => ({ sw: { ...s.sw, mould: !s.sw.mould } }));
+
+  runDiagnose = () => {
+    const s = this.state.sw;
+    let label, conf, measures;
+    if (s.belowGrade) {
+      label = 'Seitlich eindringendes Wasser (erdberührt)'; conf = 74;
+      measures = ['Außenabdichtung / Dränage prüfen', 'Perimeterdämmung ergänzen'];
+    } else if (s.salt) {
+      label = 'Aufsteigende Feuchte (fehlende/defekte Horizontalsperre)'; conf = 82;
+      measures = ['Horizontalsperre nachrüsten (Injektion)', 'Sockelputz durch Sanierputz ersetzen'];
+    } else if (s.heating || s.mould) {
+      label = 'Kondensat / Wärmebrücke (Tauwasser innen)'; conf = 65;
+      measures = ['Wärmebrücke entschärfen / dämmen', 'Lüftungsverhalten anpassen'];
+    } else if (s.rain) {
+      label = 'Schlagregen / Fassadenschaden'; conf = 60;
+      measures = ['Fassade / Fugen instand setzen', 'Wetterschutz prüfen'];
+    } else {
+      label = 'Unklar — weitere Beobachtung nötig'; conf = 30;
+      measures = ['Feuchtemessung über mehrere Wochen'];
+    }
+    this.setState({ result: { label, conf, measures } });
+  };
+
+  // ---------- render ----------
+  renderVals() {
+    const st = this.state;
+    const navItems = this.NAV.map((n) => ({
+      label: n.label,
+      cls: st.view === n.view ? 'selected' : '',
+      iconStyle: '--icon: url(assets/icons-white/' + n.icon + '.svg);',
+      onClick: () => this.setView(n.view),
+    }));
+
+    const disp = (v) => (st.view === v ? 'block' : 'none');
+
+    const levelStats = this.LEVEL_STATS.map((l) => ({
+      name: l.name, stat: l.count + ' Wände · ' + l.len + ' m · ' + l.area + ' m²',
+    }));
+
+    const levelOptions = [{ label: 'Alle Ebenen', onClick: () => this.setState({ level: '', levelMenuOpen: false }) }]
+      .concat(this.LEVELS.map((l) => ({ label: l, onClick: () => this.setState({ level: l, levelMenuOpen: false }) })));
+
+    // inspector
+    let inspRows = [], inspHasFeuchte = false;
+    if (st.insp) {
+      const i = st.insp;
+      inspRows = [
+        { label: 'Ebene', value: i.level },
+        { label: 'Länge', value: i.lenM.toFixed(2) + ' m' },
+        { label: 'Dicke', value: i.tcm + ' cm' },
+        { label: 'Aufbau', value: '3 Schichten' },
+        { label: 'U-Wert', value: i.U.toFixed(2) + ' W/m²K' },
+        { label: 'GEG', value: i.geg ? 'erfüllt (≤ 0.24)' : 'verfehlt (> 0.24)' },
+        { label: 'Tauwasser', value: i.tw ? 'ja ⚠' : 'nein' },
+      ];
+      if (i.cause) { inspRows.push({ label: 'Feuchte', value: i.cause }); inspHasFeuchte = true; }
+    }
+
+    // bauteile
+    const preset = this.PRESETS[st.globalPreset];
+    const presetOptions = this.PRESETS.map((p, idx) => ({
+      label: p.label, onClick: () => this.setState({ globalPreset: idx, globalComboOpen: false }),
+    }));
+    const globalHasAssembly = st.globalPreset > 0;
+    const globalU = preset.u ? preset.u + ' W/(m²·K)' : '—';
+    const globalTG = (preset.tw ? '⚠ ja' : '✓ nein') + ' · ' + (preset.geg ? 'GEG ✓' : 'GEG ✗');
+
+    const bauteileLevels = this.LEVEL_STATS.map((l) => {
+      const open = !!st.expanders[l.name];
+      const walls = [];
+      if (open) {
+        for (let k = 0; k < l.count; k++) {
+          const len = (2.4 + ((k * 37) % 60) / 10).toFixed(1);
+          walls.push({ name: 'Wand ' + (k + 1), sub: len + ' m' });
+        }
+      }
+      return {
+        name: l.name, sub: l.count + ' Wände', open, walls,
+        chevronStyle: '--icon: url(assets/icons/pan-down-symbolic.svg); transform: rotate(' + (open ? '180deg' : '0deg') + '); transition: transform 200ms;',
+        onToggle: () => this.setState((s) => ({ expanders: { ...s.expanders, [l.name]: !s.expanders[l.name] } })),
+      };
+    });
+
+    // vorhaben
+    const works = st.works.map((w) => ({ title: w.title, sub: w.sub, onRemove: () => this.removeWork(w.id) }));
+
+    // feuchte
+    const fWallOptions = this.WALL_DEFS.map((d, i) => ({
+      label: 'Wand ' + (i + 1) + ' (' + this.LEVELS[d[5]] + ')',
+      onClick: () => this.setState({ fWall: i, fWallMenuOpen: false }),
+    }));
+    const fw = this.WALL_DEFS[st.fWall];
+    const fWallLabel = 'Wand ' + (st.fWall + 1) + ' (' + this.LEVELS[fw[5]] + ')';
+    const fOrtOptions = this.ORTE.map((o, i) => ({ label: o, onClick: () => this.setState({ fOrt: i, fOrtMenuOpen: false }) }));
+    const sw = {
+      belowGrade: st.sw.belowGrade ? 'on' : '', rain: st.sw.rain ? 'on' : '',
+      heating: st.sw.heating ? 'on' : '', salt: st.sw.salt ? 'on' : '', mould: st.sw.mould ? 'on' : '',
+    };
+    const resultMeasures = st.result ? st.result.measures.map((m) => ({ text: m })) : [];
+    const diagnosed = this.DIAGNOSED.map((d) => ({ name: d.name, cause: d.cause }));
+
+    const materials = this.MATERIALS.map((m) => {
+      const parts = ['ρ ' + m.d + ' t/m³'];
+      if (m.l != null) parts.push('λ ' + m.l);
+      if (m.mu != null) parts.push('µ ' + m.mu);
+      return { name: m.name, key: m.key, values: parts.join('   ·   ') };
+    });
+
+    return {
+      schemeClass: (this.props.scheme || 'dark') === 'light' ? '' : 'adw-dark',
+      accentVar: 'var(--accent-' + (this.props.accent || 'blue') + ')',
+      navItems,
+      viewTitle: this.TITLES[st.view] || 'Bauplaner',
+      menuOpen: st.menuOpen, closeMenu: this.closeMenu, toggleMenu: this.toggleMenu,
+      anyMenuOpen: st.menuOpen || st.levelMenuOpen || st.globalComboOpen || st.fWallMenuOpen || st.fOrtMenuOpen,
+      closeAllMenus: this.closeAllMenus,
+
+      dispUebersicht: disp('uebersicht'), disp3d: disp('ansicht3d'), dispBauteile: disp('bauteile'),
+      dispVorhaben: disp('vorhaben'), dispFeuchte: disp('feuchte'), dispMaterialien: disp('materialien'),
+
+      levelStats,
+
+      glRef: this.glRef,
+      tgNeutral: st.colorMode === 'neutral' ? 'active' : '',
+      tgUwert: st.colorMode === 'uwert' ? 'active' : '',
+      tgFeuchte: st.colorMode === 'feuchte' ? 'active' : '',
+      setNeutral: this.setNeutral, setUwert: this.setUwert, setFeuchte: this.setFeuchte,
+      showUwertLegend: st.colorMode === 'uwert', showFeuchteLegend: st.colorMode === 'feuchte',
+      levelLabel: st.level === '' ? 'Alle Ebenen' : st.level,
+      levelMenuOpen: st.levelMenuOpen, toggleLevelMenu: this.toggleLevelMenu, levelOptions,
+
+      inspOpen: !!st.insp, inspRows, inspHasFeuchte,
+      closeInsp: this.closeInsp, inspGoBauteile: this.inspGoBauteile, inspGoFeuchte: this.inspGoFeuchte,
+
+      globalPresetLabel: preset.label, globalComboOpen: st.globalComboOpen, toggleGlobalCombo: this.toggleGlobalCombo,
+      presetOptions, globalHasAssembly, globalU, globalTG, bauteileLevels,
+
+      works, worksCount: works.length, addLehmgraben: this.addLehmgraben,
+
+      fWallLabel, fWallMenuOpen: st.fWallMenuOpen, toggleWallMenu: this.toggleWallMenu, fWallOptions,
+      fOrtLabel: this.ORTE[st.fOrt], fOrtMenuOpen: st.fOrtMenuOpen, toggleOrtMenu: this.toggleOrtMenu, fOrtOptions,
+      sw, toggleBelowGrade: this.toggleBelowGrade, toggleRain: this.toggleRain, toggleHeating: this.toggleHeating,
+      toggleSalt: this.toggleSalt, toggleMould: this.toggleMould, runDiagnose: this.runDiagnose,
+      hasResult: !!st.result, resultLabel: st.result ? st.result.label : '',
+      resultSub: st.result ? 'Konfidenz ' + st.result.conf + ' %' : '', resultMeasures,
+      diagnosed, diagnosedCount: this.DIAGNOSED.length,
+
+      materials,
+    };
+  }
+}
+</script>
+</body>
+</html>
