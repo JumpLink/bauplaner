@@ -11,6 +11,7 @@ import { hideBin } from 'yargs/helpers';
 
 import {
   inspectCommand,
+  kostenCommand,
   lehmgrabenCommand,
   materialsCommand,
   bauteilCommand,
@@ -29,6 +30,7 @@ async function main(): Promise<void> {
   await yargs(hideBin(process.argv))
     .scriptName('bauplaner')
     .command(inspectCommand)
+    .command(kostenCommand)
     .command(lehmgrabenCommand)
     .command(materialsCommand)
     .command(bauteilCommand)

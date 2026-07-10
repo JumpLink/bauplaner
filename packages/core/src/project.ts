@@ -1,12 +1,14 @@
 /**
- * Eco-retrofit project format (v1) — a small **sidecar** JSON file that
+ * Eco-retrofit project format (v2) — a small **sidecar** JSON file that
  * *references* a Sweet Home 3D `.sh3d` lying next to it and adds our own layer
- * on top (retrofit works, per-wall annotations, notes) WITHOUT touching the
- * `.sh3d`. Sweet Home 3D stays the geometry editor; git tracks the text sidecar.
+ * on top (retrofit works, per-wall annotations, cost items, notes) WITHOUT
+ * touching the `.sh3d`. Sweet Home 3D stays the geometry editor; git tracks the
+ * text sidecar.
  *
- * This is the first version of the "own open project format" — later versions
- * can internalise the geometry; the schema barely changes (only the geometry
- * source does), so starting sidecar is not a dead end.
+ * Versions are additive: v1 files (no `costs`) load unchanged; v2 adds the cost
+ * register for planning/financing. Later versions can internalise the geometry;
+ * the schema barely changes (only the geometry source does), so starting sidecar
+ * is not a dead end.
  *
  * Data anchors to the SH3D entity ids (wall/room/level) we parse; a stored
  * sha256 of the `.sh3d` detects when it changed under us. Dangling references
@@ -20,7 +22,7 @@ import { basename, dirname, resolve } from 'node:path';
 import { parseSh3dBytes } from './sh3d/parser.ts';
 import type { HomeData } from './sh3d/types.ts';
 
-export const PROJECT_SCHEMA_VERSION = 1;
+export const PROJECT_SCHEMA_VERSION = 2;
 export const PROJECT_FILE_SUFFIX = '.ecoretrofit.json';
 
 /** Our retrofit data for one SH3D wall (keyed by the wall id). Minimal for v1. */
@@ -69,6 +71,82 @@ export interface PipeWorkData {
   elevationM: number;
 }
 
+/** Lifecycle of a cost item, from a first estimate to a paid invoice. */
+export type CostStatus = 'geplant' | 'angeboten' | 'beauftragt' | 'bezahlt';
+
+/** Coarse cost bucket, for the financing overview. Free-form but these are known. */
+export type CostCategory =
+  | 'abdichtung'
+  | 'drainage'
+  | 'daemmung'
+  | 'erdarbeiten'
+  | 'material'
+  | 'lieferung'
+  | 'verarbeitung'
+  | 'fassade'
+  | 'sonstiges';
+
+/**
+ * One cost line in the project's financing register — a planned figure, a
+ * supplier quote (Angebot) or a booked invoice. Amounts are **net €**; `gross`
+ * is derived from `vatRate` (see {@link deriveGross}). Optional `workId` links
+ * it to a {@link RetrofitWork} (e.g. the Lehmgraben this DERNOTON order is for).
+ */
+export interface CostItem {
+  id: string;
+  label: string;
+  category: CostCategory;
+  status: CostStatus;
+  /** Net amount in €. */
+  net: number;
+  /** VAT rate as a fraction (e.g. 0.19). Default applied by consumers if absent. */
+  vatRate?: number;
+  /** ISO date (YYYY-MM-DD) of the quote/invoice, if known. */
+  date?: string;
+  /** Free-form note / quote reference (e.g. "Angebot S73540"). */
+  note?: string;
+  /** Optional link to a RetrofitWork id. */
+  workId?: string;
+}
+
+/** Gross € for a cost item (net × (1 + vatRate), rounded to cents). */
+export function deriveGross(net: number, vatRate = 0.19): number {
+  return Math.round(net * (1 + vatRate) * 100) / 100;
+}
+
+export interface CostSummary {
+  count: number;
+  net: number;
+  vat: number;
+  gross: number;
+  /** Net totals per category (only categories present). */
+  byCategory: Partial<Record<CostCategory, number>>;
+  /** Net totals per status. */
+  byStatus: Partial<Record<CostStatus, number>>;
+}
+
+/**
+ * Aggregate a cost register for the financing overview: net/VAT/gross totals and
+ * net sub-totals by category and status. VAT uses each item's `vatRate` (default
+ * 0.19 when absent). Empty register → all zeros.
+ */
+export function summarizeCosts(costs: CostItem[]): CostSummary {
+  const round2 = (n: number): number => Math.round(n * 100) / 100;
+  const byCategory: Partial<Record<CostCategory, number>> = {};
+  const byStatus: Partial<Record<CostStatus, number>> = {};
+  let net = 0;
+  let gross = 0;
+  for (const c of costs) {
+    net += c.net;
+    gross += deriveGross(c.net, c.vatRate ?? 0.19);
+    byCategory[c.category] = round2((byCategory[c.category] ?? 0) + c.net);
+    byStatus[c.status] = round2((byStatus[c.status] ?? 0) + c.net);
+  }
+  net = round2(net);
+  gross = round2(gross);
+  return { count: costs.length, net, vat: round2(gross - net), gross, byCategory, byStatus };
+}
+
 export interface EcoProject {
   schemaVersion: number;
   sh3d: {
@@ -88,6 +166,8 @@ export interface EcoProject {
   };
   /** Our own works (earthworks etc.). */
   works?: RetrofitWork[];
+  /** Cost register for planning/financing (v2+). */
+  costs?: CostItem[];
 }
 
 export interface LoadedDocument {
@@ -118,6 +198,7 @@ export function createProjectForSh3d(
     meta: { name, ...(opts.createdAt ? { createdAt: opts.createdAt } : {}) },
     annotations: { walls: {} },
     works: [],
+    costs: [],
   };
 }
 
@@ -151,6 +232,7 @@ export function parseProject(json: string): EcoProject {
     meta: (r.meta as EcoProject['meta']) ?? undefined,
     annotations: (r.annotations as EcoProject['annotations']) ?? undefined,
     works: Array.isArray(r.works) ? (r.works as RetrofitWork[]) : undefined,
+    costs: Array.isArray(r.costs) ? (r.costs as CostItem[]) : undefined,
   };
 }
 

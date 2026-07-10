@@ -21,6 +21,7 @@ import { openDocumentDialog } from './open-dialog.ts';
 import { Ansicht3dView } from './views/ansicht3d-view.ts';
 import { BauteileView } from './views/bauteile-view.ts';
 import { FeuchteView } from './views/feuchte-view.ts';
+import { KostenView } from './views/kosten-view.ts';
 import { MaterialienView } from './views/materialien-view.ts';
 import { UebersichtView } from './views/uebersicht-view.ts';
 import { VorhabenView } from './views/vorhaben-view.ts';
@@ -36,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { view: 'ansicht3d', icon: 'view-paged-symbolic', label: '3D' },
   { view: 'bauteile', icon: 'window-restore-symbolic', label: 'Bauteile' },
   { view: 'vorhaben', icon: 'applications-engineering-symbolic', label: 'Vorhaben' },
+  { view: 'kosten', icon: 'accessories-calculator-symbolic', label: 'Kosten' },
   { view: 'feuchte', icon: 'weather-showers-symbolic', label: 'Feuchte' },
   { view: 'materialien', icon: 'emblem-documents-symbolic', label: 'Materialien' },
 ];
@@ -61,6 +63,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     this.stack.add_named(new Ansicht3dView(this, this.store), 'ansicht3d');
     this.stack.add_named(this.bauteileView, 'bauteile');
     this.stack.add_named(new VorhabenView(this.store), 'vorhaben');
+    this.stack.add_named(new KostenView(this.store), 'kosten');
     this.stack.add_named(this.feuchteView, 'feuchte');
     this.stack.add_named(new MaterialienView(), 'materialien');
 
