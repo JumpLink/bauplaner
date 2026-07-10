@@ -90,6 +90,15 @@ function inFootprint(px: number, pz: number, poly: { x: number; z: number }[]): 
   return inside;
 }
 
+/** Shortest distance from point (px,py) to the segment (ax,ay)-(bx,by), px space. */
+function pointSegDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
 /** Round a length to a 1/2/5·10ⁿ "nice" value for the scale bar. */
 function niceLength(x: number): number {
   if (x <= 0) return 1;
@@ -126,12 +135,27 @@ export class GrundrissView extends Gtk.Box {
   private readonly activeTrades = new Set<TgaTrade>();
   private tgaInitDone = false;
 
+  // Gewerke edit mode: selection + the active node drag (preview until released).
+  private editMode = false;
+  private selectedNode: string | null = null;
+  private selectedEdge: string | null = null;
+  private dragNodeId: string | null = null;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private dragMoved = false;
+  private dragPreview: { x: number; z: number } | null = null;
+  private idCounter = 0;
+
   constructor(window: Gtk.Window, store: DocumentStore) {
     super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
     this.window = window;
     this.store = store;
-    const envMode = globalThis.process?.env?.BP_APP_COLORMODE as ColoringMode | undefined;
+    const env = globalThis.process?.env;
+    const envMode = env?.BP_APP_COLORMODE as ColoringMode | undefined;
     if (envMode === 'neutral' || envMode === 'uwert' || envMode === 'feuchte') this.mode = envMode;
+    // Dev hooks: start in Gewerke edit mode, optionally with a node pre-selected.
+    if (env?.BP_APP_EDIT) this.editMode = true;
+    if (env?.BP_APP_EDITSEL) this.selectedNode = env.BP_APP_EDITSEL;
     store.subscribe(() => this.render());
     this.render();
   }
@@ -207,9 +231,19 @@ export class GrundrissView extends Gtk.Box {
     );
     this.drawArea = area;
 
+    // Click inspects a wall in view mode; in edit mode the drag gesture handles
+    // taps (select/connect) and drags (move) of Gewerke nodes instead.
     const click = new Gtk.GestureClick();
-    click.connect('pressed', (_g, _n, x, y) => this.onClick(x, y));
+    click.connect('pressed', (_g, _n, x, y) => {
+      if (!this.editMode) this.onClick(x, y);
+    });
     area.add_controller(click);
+
+    const drag = new Gtk.GestureDrag();
+    drag.connect('drag-begin', (_g, sx, sy) => this.onDragBegin(sx, sy));
+    drag.connect('drag-update', (_g, ox, oy) => this.onDragUpdate(ox, oy));
+    drag.connect('drag-end', (_g, ox, oy) => this.onDragEnd(ox, oy));
+    area.add_controller(drag);
 
     // Float the shared mode switcher / level filter / legend over the plan, and
     // the shared wall inspector (populated on click) top-end.
@@ -242,6 +276,7 @@ export class GrundrissView extends Gtk.Box {
     }
     const chips = this.buildGewerkeChips();
     if (chips) topStart.append(chips);
+    if (this.tgaNet) topStart.append(this.buildEditControls());
 
     const legend = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL,
@@ -464,25 +499,48 @@ export class GrundrissView extends Gtk.Box {
     const net = this.tgaNet;
     if (!net) return;
     const onLevel = (lvl: string): boolean => !this.isolatedLevel || lvl === this.isolatedLevel;
+    // A node's position, substituting the live preview while it is being dragged.
+    const posOf = (id: string): { x: number; z: number } | undefined => {
+      if (id === this.dragNodeId && this.dragPreview) return this.dragPreview;
+      const n = this.tgaNodes.get(id);
+      return n ? { x: n.x, z: n.z } : undefined;
+    };
 
     for (const e of net.edges) {
       if (!this.activeTrades.has(e.trade) || !onLevel(e.levelId)) continue;
-      const pts = tgaEdgePath(e, this.tgaNodes);
+      let pts = tgaEdgePath(e, this.tgaNodes);
       if (pts.length < 2) continue;
+      // Live-reroute a straight run whose endpoint is being dragged.
+      if (this.dragPreview && !e.path && (e.from === this.dragNodeId || e.to === this.dragNodeId)) {
+        const a = posOf(e.from);
+        const b = posOf(e.to);
+        if (a && b) pts = [[a.x, a.z], [b.x, b.z]];
+      }
+      const stroke = (): void => {
+        cr.moveTo(sx(pts[0][0]), sy(pts[0][1]));
+        for (let i = 1; i < pts.length; i++) cr.lineTo(sx(pts[i][0]), sy(pts[i][1]));
+        cr.stroke();
+      };
+      if (this.editMode && e.id === this.selectedEdge) {
+        setNum(cr, SELECT_COLOR, 0.9);
+        cr.setDash([], 0);
+        cr.setLineWidth(5.5);
+        stroke();
+      }
       setNum(cr, TRADE_META[e.trade].color, 0.95);
       cr.setLineWidth(2.5);
       cr.setDash(e.status === 'geplant' ? [6, 4] : [], 0);
-      cr.moveTo(sx(pts[0][0]), sy(pts[0][1]));
-      for (let i = 1; i < pts.length; i++) cr.lineTo(sx(pts[i][0]), sy(pts[i][1]));
-      cr.stroke();
+      stroke();
     }
     cr.setDash([], 0);
 
     for (const n of net.nodes) {
       if (!this.activeTrades.has(n.trade) || !onLevel(n.levelId)) continue;
+      const pos = posOf(n.id);
+      if (!pos) continue;
       const color = TRADE_META[n.trade].color;
-      const px = sx(n.x);
-      const py = sy(n.z);
+      const px = sx(pos.x);
+      const py = sy(pos.z);
       if (n.kind === 'erzeuger' || n.kind === 'verteiler') {
         cr.setSourceRGBA(1, 1, 1, 0.9);
         cr.rectangle(px - 7, py - 7, 14, 14);
@@ -498,7 +556,164 @@ export class GrundrissView extends Gtk.Box {
         cr.arc(px, py, 4.3, 0, Math.PI * 2);
         cr.fill();
       }
+      if (this.editMode && n.id === this.selectedNode) {
+        setNum(cr, SELECT_COLOR, 1);
+        cr.setLineWidth(2);
+        cr.arc(px, py, 10.5, 0, Math.PI * 2);
+        cr.stroke();
+      }
     }
+  }
+
+  // --- Gewerke editing (edit mode) ---
+
+  /** The floating edit card: a "Bearbeiten" toggle, plus delete + a hint when on. */
+  private buildEditControls(): Gtk.Widget {
+    const card = new Gtk.Box({
+      orientation: Gtk.Orientation.HORIZONTAL,
+      spacing: 6,
+      cssClasses: ['osd', 'toolbar'],
+      halign: Gtk.Align.START,
+    });
+    const toggle = new Gtk.ToggleButton({ label: 'Bearbeiten', active: this.editMode });
+    toggle.connect('toggled', () => {
+      this.editMode = toggle.get_active();
+      this.selectedNode = null;
+      this.selectedEdge = null;
+      this.showPlan();
+    });
+    card.append(toggle);
+    if (this.editMode) {
+      const del = new Gtk.Button({ iconName: 'user-trash-symbolic', tooltipText: 'Auswahl löschen', cssClasses: ['flat'] });
+      del.connect('clicked', () => this.deleteSelection());
+      card.append(del);
+      const hint = new Gtk.Label({
+        label: 'ziehen · antippen → verbinden',
+        cssClasses: ['caption', 'dim-label'],
+        valign: Gtk.Align.CENTER,
+      });
+      card.append(hint);
+    }
+    return card;
+  }
+
+  /** Widget → world (metres) via the current fit, or null if not laid out yet. */
+  private toWorld(x: number, y: number): { x: number; z: number } | null {
+    const t = this.transform;
+    return t ? { x: (x - t.offX) / t.s, z: (y - t.offY) / t.s } : null;
+  }
+
+  /** The active-trade, on-level TGA node under a screen point (within 14 px). */
+  private nodeAt(screenX: number, screenY: number): string | null {
+    const net = this.tgaNet;
+    const t = this.transform;
+    if (!net || !t) return null;
+    let best: { id: string; d: number } | null = null;
+    for (const n of net.nodes) {
+      if (!this.activeTrades.has(n.trade) || (this.isolatedLevel && n.levelId !== this.isolatedLevel)) continue;
+      const d = Math.hypot(n.x * t.s + t.offX - screenX, n.z * t.s + t.offY - screenY);
+      if (d <= 14 && (!best || d < best.d)) best = { id: n.id, d };
+    }
+    return best?.id ?? null;
+  }
+
+  /** The active-trade, on-level TGA run under a screen point (within 8 px). */
+  private edgeAt(screenX: number, screenY: number): string | null {
+    const net = this.tgaNet;
+    const t = this.transform;
+    if (!net || !t) return null;
+    let best: { id: string; d: number } | null = null;
+    for (const e of net.edges) {
+      if (!this.activeTrades.has(e.trade) || (this.isolatedLevel && e.levelId !== this.isolatedLevel)) continue;
+      const pts = tgaEdgePath(e, this.tgaNodes);
+      for (let i = 1; i < pts.length; i++) {
+        const d = pointSegDist(
+          screenX,
+          screenY,
+          pts[i - 1][0] * t.s + t.offX,
+          pts[i - 1][1] * t.s + t.offY,
+          pts[i][0] * t.s + t.offX,
+          pts[i][1] * t.s + t.offY,
+        );
+        if (d <= 8 && (!best || d < best.d)) best = { id: e.id, d };
+      }
+    }
+    return best?.id ?? null;
+  }
+
+  private onDragBegin(sx: number, sy: number): void {
+    if (!this.editMode) return;
+    this.dragStartX = sx;
+    this.dragStartY = sy;
+    this.dragMoved = false;
+    this.dragNodeId = this.nodeAt(sx, sy);
+    this.dragPreview = null;
+  }
+
+  private onDragUpdate(offsetX: number, offsetY: number): void {
+    if (!this.editMode || !this.dragNodeId) return;
+    if (Math.hypot(offsetX, offsetY) > 4) this.dragMoved = true;
+    if (this.dragMoved) {
+      this.dragPreview = this.toWorld(this.dragStartX + offsetX, this.dragStartY + offsetY);
+      this.drawArea?.queue_draw();
+    }
+  }
+
+  private onDragEnd(offsetX: number, offsetY: number): void {
+    if (!this.editMode) return;
+    if (this.dragNodeId && this.dragMoved && this.dragPreview) {
+      const round3 = (n: number): number => Math.round(n * 1000) / 1000;
+      // Commit the move as an undoable command (this rebuilds the view).
+      this.store.moveTgaNode(this.dragNodeId, round3(this.dragPreview.x), round3(this.dragPreview.z));
+    } else {
+      this.onEditTap(this.dragStartX + offsetX, this.dragStartY + offsetY);
+    }
+    this.dragNodeId = null;
+    this.dragPreview = null;
+    this.dragMoved = false;
+  }
+
+  /** A tap in edit mode: pick a node (and connect two of the same trade) or a run. */
+  private onEditTap(x: number, y: number): void {
+    const nodeId = this.nodeAt(x, y);
+    if (nodeId) {
+      const prev = this.selectedNode;
+      if (prev && prev !== nodeId) {
+        const a = this.tgaNodes.get(prev);
+        const b = this.tgaNodes.get(nodeId);
+        if (a && b && a.trade === b.trade) {
+          // Rohr verlegen: connect the two nodes with a planned run (undoable).
+          this.store.addTgaEdge({
+            id: this.nextId('tga-e'),
+            levelId: b.levelId,
+            trade: b.trade,
+            from: prev,
+            to: nodeId,
+            status: 'geplant',
+          });
+        }
+      }
+      this.selectedNode = nodeId;
+      this.selectedEdge = null;
+    } else {
+      this.selectedEdge = this.edgeAt(x, y);
+      this.selectedNode = null;
+    }
+    this.drawArea?.queue_draw();
+  }
+
+  private deleteSelection(): void {
+    if (this.selectedNode) {
+      this.store.deleteTgaNode(this.selectedNode);
+      this.selectedNode = null;
+    } else if (this.selectedEdge) {
+      this.store.deleteTgaEdge(this.selectedEdge);
+      this.selectedEdge = null;
+    }
+  }
+
+  private nextId(prefix: string): string {
+    return `${prefix}-${Date.now().toString(36)}-${++this.idCounter}`;
   }
 
   /**

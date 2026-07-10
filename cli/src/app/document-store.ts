@@ -9,8 +9,14 @@
  */
 
 import {
+  CommandStore,
+  addTgaEdgeCommand,
+  addTgaNodeCommand,
+  deleteTgaEdgeCommand,
+  deleteTgaNodeCommand,
   extractSh3dModelsFromFile,
   loadDocumentFile,
+  moveTgaNodeCommand,
   saveProjectFile,
   summarizeCosts,
   type CostItem,
@@ -20,7 +26,9 @@ import {
   type LoadedDocument,
   type ModelCatalog,
   type RetrofitWork,
+  type TgaEdge,
   type TgaNetwork,
+  type TgaNode,
   type WallAnnotation,
 } from '@bauplaner/core';
 
@@ -35,6 +43,8 @@ export class DocumentStore {
   private _error: string | null = null;
   private _models: ModelCatalog | null = null; // lazily extracted from the .sh3d
   private readonly listeners = new Set<DocumentListener>();
+  /** Undo/redo history for editing commands (TGA today; geometry later). */
+  private readonly commands = new CommandStore(() => this.notify());
 
   /** The parsed model, or null if nothing loaded / the last load failed. */
   get home(): HomeData | null {
@@ -104,6 +114,7 @@ export class DocumentStore {
   /** Load a project file or a bare `.sh3d`; notify all listeners (success or error). */
   load(path: string): void {
     this._models = null; // invalidate the cached OBJ geometry for the old doc
+    this.commands.clear(); // a new document starts with a fresh undo history
     try {
       this._doc = loadDocumentFile(path);
       this._path = path;
@@ -200,6 +211,69 @@ export class DocumentStore {
   /** The building-services (TGA) network, or null if the project has none. */
   get tga(): TgaNetwork | null {
     return this._doc?.project.tga ?? null;
+  }
+
+  /** The TGA network, creating an empty one on the project if needed. */
+  private ensureTgaNet(): TgaNetwork | null {
+    const doc = this._doc;
+    if (!doc) return null;
+    if (!doc.project.tga) doc.project.tga = { nodes: [], edges: [] };
+    return doc.project.tga;
+  }
+
+  /** Add a TGA node (undoable). */
+  addTgaNode(node: TgaNode): void {
+    const net = this.ensureTgaNet();
+    if (net) this.commands.execute(addTgaNodeCommand(net, node));
+  }
+
+  /** Move a TGA node to `(x, z)` in metres (undoable). */
+  moveTgaNode(id: string, x: number, z: number): void {
+    const net = this.tga;
+    if (net) this.commands.execute(moveTgaNodeCommand(net, id, x, z));
+  }
+
+  /** Connect two nodes with a run (undoable). */
+  addTgaEdge(edge: TgaEdge): void {
+    const net = this.ensureTgaNet();
+    if (net) this.commands.execute(addTgaEdgeCommand(net, edge));
+  }
+
+  /** Delete a TGA node and its incident runs (undoable). */
+  deleteTgaNode(id: string): void {
+    const net = this.tga;
+    if (net) this.commands.execute(deleteTgaNodeCommand(net, id));
+  }
+
+  /** Delete a single TGA run (undoable). */
+  deleteTgaEdge(id: string): void {
+    const net = this.tga;
+    if (net) this.commands.execute(deleteTgaEdgeCommand(net, id));
+  }
+
+  undo(): void {
+    this.commands.undo();
+  }
+
+  redo(): void {
+    this.commands.redo();
+  }
+
+  get canUndo(): boolean {
+    return this.commands.canUndo;
+  }
+
+  get canRedo(): boolean {
+    return this.commands.canRedo;
+  }
+
+  /** Label of the next undoable/redoable edit (for tooltips), or null. */
+  get undoLabel(): string | null {
+    return this.commands.undoLabel;
+  }
+
+  get redoLabel(): string | null {
+    return this.commands.redoLabel;
   }
 
   /** Add a cost item (auto-assigns a unique id), returning its id, or null. */

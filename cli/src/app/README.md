@@ -22,8 +22,11 @@ Status: **read-only**. Three views:
     grid, a **north** compass and a scale bar. A floating **Gewerke** card toggles
     the TGA (building-services) overlay per trade — heating / water / electric …
     drawn as a typed-node graph (sources & manifolds as squares, fixtures as dots;
-    planned runs dashed) with each trade's total run length. Read-only for now
-    (drawing/editing geometry is a later Modell sub-stage). The concept's rule
+    planned runs dashed) with each trade's total run length. A **Bearbeiten**
+    toggle turns on Gewerke editing: **drag** a node to move it, **tap two** nodes
+    of the same trade to connect a run, **tap + delete** to remove — all undoable
+    (header Undo/Redo, Ctrl+Z/Y) via the core command store. Wall/room geometry
+    stays read-only until the editable-geometry model lands. The concept's rule
     "edit in 2D, inspect in 3D" — so the plan is the primary surface.
   - **3D** — render the building in 3D (three.js on the WebGL→`Gtk.GLArea` bridge):
     walls as extruded footprints mitered at connected ends **with door/window
@@ -68,6 +71,8 @@ system (GJS uses the real libraries via GObject-Introspection).
   one you already have open (used for devtools screenshots — see below).
 - `BP_APP_MODELTAB=<grundriss|ansicht3d|3d>` — the Modell view's initial
   projection (default `grundriss`).
+- `BP_APP_EDIT=1` — start the Grundriss in Gewerke edit mode.
+- `BP_APP_EDITSEL=<node-id>` — pre-select that TGA node (shows the selection ring).
 - `BP_APP_COLORMODE=<neutral|uwert|feuchte>` — the Modell view's initial wall
   colouring mode (default `uwert`).
 - `BP_APP_PICKWALL=<wall-id>` — open the Modell click-inspector for that wall on

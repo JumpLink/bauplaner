@@ -11,6 +11,8 @@
  * (and later 3D) views overlay the network directly.
  */
 
+import type { Command } from './commands.ts';
+
 /** A building-services trade (Gewerk). */
 export type TgaTrade = 'heizung' | 'fbh' | 'wasser' | 'strom' | 'lueftung';
 
@@ -134,4 +136,100 @@ export function deriveTgaStats(net: TgaNetwork): TgaTradeStat[] {
 /** Total run length across all trades, meters. */
 export function totalTgaLengthM(net: TgaNetwork): number {
   return round2(deriveTgaStats(net).reduce((s, t) => s + t.lengthM, 0));
+}
+
+// --- Edit commands (undoable) ---
+// Each mutates the network arrays in place (identity preserved) and captures its
+// exact inverse, so the CommandStore can undo/redo it. Do() is re-runnable so a
+// redo re-applies cleanly.
+
+/** Append a node. */
+export function addTgaNodeCommand(net: TgaNetwork, node: TgaNode): Command {
+  return {
+    label: 'Bauteil hinzufügen',
+    do() {
+      net.nodes.push(node);
+    },
+    undo() {
+      const i = net.nodes.indexOf(node);
+      if (i >= 0) net.nodes.splice(i, 1);
+    },
+  };
+}
+
+/** Move a node to `(x, z)` (meters). Captures its current position for undo. */
+export function moveTgaNodeCommand(net: TgaNetwork, id: string, x: number, z: number): Command {
+  const cur = net.nodes.find((n) => n.id === id);
+  const oldX = cur?.x ?? 0;
+  const oldZ = cur?.z ?? 0;
+  const set = (px: number, pz: number): void => {
+    const n = net.nodes.find((m) => m.id === id);
+    if (n) {
+      n.x = px;
+      n.z = pz;
+    }
+  };
+  return {
+    label: 'Bauteil verschieben',
+    do: () => set(x, z),
+    undo: () => set(oldX, oldZ),
+  };
+}
+
+/** Add an edge (a run between two nodes). */
+export function addTgaEdgeCommand(net: TgaNetwork, edge: TgaEdge): Command {
+  return {
+    label: 'Leitung verlegen',
+    do() {
+      net.edges.push(edge);
+    },
+    undo() {
+      const i = net.edges.indexOf(edge);
+      if (i >= 0) net.edges.splice(i, 1);
+    },
+  };
+}
+
+/** Delete a node and every edge incident to it, restoring all together on undo. */
+export function deleteTgaNodeCommand(net: TgaNetwork, id: string): Command {
+  let node: TgaNode | undefined;
+  let edges: { edge: TgaEdge; index: number }[] = [];
+  return {
+    label: 'Bauteil löschen',
+    do() {
+      const ni = net.nodes.findIndex((n) => n.id === id);
+      node = ni >= 0 ? net.nodes[ni] : undefined;
+      if (ni >= 0) net.nodes.splice(ni, 1);
+      edges = [];
+      for (let i = net.edges.length - 1; i >= 0; i--) {
+        if (net.edges[i].from === id || net.edges[i].to === id) {
+          edges.push({ edge: net.edges[i], index: i });
+          net.edges.splice(i, 1);
+        }
+      }
+    },
+    undo() {
+      if (node) net.nodes.push(node);
+      // Captured high→low; restore low→high so indices land correctly.
+      for (const { edge, index } of edges.slice().reverse()) {
+        net.edges.splice(Math.min(index, net.edges.length), 0, edge);
+      }
+    },
+  };
+}
+
+/** Delete a single edge, restoring it at its original index on undo. */
+export function deleteTgaEdgeCommand(net: TgaNetwork, id: string): Command {
+  let removed: { edge: TgaEdge; index: number } | undefined;
+  return {
+    label: 'Leitung löschen',
+    do() {
+      const i = net.edges.findIndex((e) => e.id === id);
+      removed = i >= 0 ? { edge: net.edges[i], index: i } : undefined;
+      if (i >= 0) net.edges.splice(i, 1);
+    },
+    undo() {
+      if (removed) net.edges.splice(Math.min(removed.index, net.edges.length), 0, removed.edge);
+    },
+  };
 }
