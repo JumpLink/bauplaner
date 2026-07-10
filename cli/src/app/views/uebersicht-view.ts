@@ -221,7 +221,9 @@ export class UebersichtView extends Gtk.Box {
       group.set_description('⚠ Die .sh3d wurde seit dem letzten Speichern geändert');
     }
     const link = (title: string, icon: string, view: string): void => {
-      const row = new Adw.ActionRow({ title, activatable: true });
+      // Adw.ActionRow titles are Pango markup — a bare "&" (as in "Kosten &
+      // Kostenplan") aborts parsing and renders an empty label; escape it.
+      const row = new Adw.ActionRow({ title: title.replace(/&/g, '&amp;'), activatable: true });
       row.add_prefix(Gtk.Image.new_from_icon_name(icon));
       row.add_suffix(Gtk.Image.new_from_icon_name('go-next-symbolic'));
       row.connect('activated', () => this.goView(view));
