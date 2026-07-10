@@ -42,6 +42,10 @@ Status: **read-only**. Three views:
 - **Feuchte** — rule-based damp-wall diagnosis per wall, stored as an annotation;
   damp walls are flagged (teal) in 3D.
 - **Materialien** — the material stock (density, λ, µ).
+- **Dokumentation** — photos, PDFs, measured readings and notes, each **anchored**
+  to a wall / room / level / building. Grouped by kind with the resolved anchor +
+  date; add (a modal form, undoable) and delete entries. A wall's entry count also
+  shows in the Modell click inspector ("Dokumente N").
 
 Open either an bauplaner **project** (`*.ecoretrofit.json`, a sidecar that
 references a `.sh3d` next to it) or a bare `.sh3d` (auto-wrapped in a project).

@@ -99,7 +99,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     this.stack.add_named(new KostenView(this.store), 'kosten');
     this.stack.add_named(new MaterialienView(this.store), 'material');
     this.stack.add_named(new RaumklimaView(this.store), 'raumklima');
-    this.stack.add_named(new DokumentationView(this.store), 'dokumentation');
+    this.stack.add_named(new DokumentationView(this, this.store), 'dokumentation');
     // Vorhaben (Lehmgraben/earthworks) has no top-nav entry in v3 — it stays
     // registered (renders in 3D, keeps the works path) and is absorbed into
     // Modell in a later stage.

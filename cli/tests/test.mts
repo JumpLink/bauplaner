@@ -22,6 +22,7 @@ import foerderung from './unit/foerderung.test.ts';
 import fahrplan from './unit/fahrplan.test.ts';
 import tga from './unit/tga.test.ts';
 import commands from './unit/commands.test.ts';
+import doc from './unit/doc.test.ts';
 import works from './unit/works.test.ts';
 
 run({
@@ -44,5 +45,6 @@ run({
   fahrplan,
   tga,
   commands,
+  doc,
   works,
 });

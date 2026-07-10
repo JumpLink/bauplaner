@@ -10,8 +10,10 @@
 
 import {
   CommandStore,
+  addDocCommand,
   addTgaEdgeCommand,
   addTgaNodeCommand,
+  deleteDocCommand,
   deleteTgaEdgeCommand,
   deleteTgaNodeCommand,
   extractSh3dModelsFromFile,
@@ -21,6 +23,7 @@ import {
   summarizeCosts,
   type CostItem,
   type CostSummary,
+  type DocEntry,
   type EcoProject,
   type HomeData,
   type LoadedDocument,
@@ -249,6 +252,25 @@ export class DocumentStore {
   deleteTgaEdge(id: string): void {
     const net = this.tga;
     if (net) this.commands.execute(deleteTgaEdgeCommand(net, id));
+  }
+
+  /** Documentation entries (photos/readings/notes), or []. */
+  get docs(): DocEntry[] {
+    return this._doc?.project.docs ?? [];
+  }
+
+  /** Add a documentation entry (undoable). */
+  addDoc(entry: DocEntry): void {
+    const doc = this._doc;
+    if (!doc) return;
+    if (!doc.project.docs) doc.project.docs = [];
+    this.commands.execute(addDocCommand(doc.project.docs, entry));
+  }
+
+  /** Delete a documentation entry (undoable). */
+  deleteDoc(id: string): void {
+    const arr = this._doc?.project.docs;
+    if (arr) this.commands.execute(deleteDocCommand(arr, id));
   }
 
   undo(): void {
