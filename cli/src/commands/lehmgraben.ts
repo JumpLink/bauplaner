@@ -1,10 +1,13 @@
 import type { CommandModule } from 'yargs';
 
 import {
+  computeOrderCost,
   computeTrenchSeal,
+  getMaterial,
   LASTFALL_LABEL,
   type Lastfall,
   type MassBreakdown,
+  type OrderCost,
   type TrenchSealResult,
 } from '@bauplaner/materials';
 
@@ -17,6 +20,51 @@ interface LehmgrabenArgs {
   waste: number;
   collars: number;
   'collar-volume': number;
+  'price-per-bag'?: number;
+  'price-per-t'?: number;
+  delivery?: number;
+  labour: number;
+  vat: number;
+}
+
+/** Format a euro amount with German separators (1.234,56 €). */
+function fmtEur(n: number): string {
+  const [int, frac] = Math.abs(n).toFixed(2).split('.');
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${n < 0 ? '-' : ''}${grouped},${frac} €`;
+}
+
+/** Print the order-cost block (material + delivery + VAT) for the typ tonnage. */
+function printOrderCost(oc: OrderCost, r: TrenchSealResult, labourFrac: number): void {
+  console.log('Kostenschätzung — Bestellung (Material + Lieferung)');
+  console.log('==================================================');
+  if (oc.packages != null) {
+    console.log(
+      `Bestellmenge: ~${r.typ.totalT.toFixed(1)} t → ${oc.packages} ${oc.packageLabel} ` +
+        `(${oc.orderedMassT.toFixed(1)} t)`,
+    );
+  } else {
+    console.log(`Bestellmenge: ~${oc.orderedMassT.toFixed(1)} t`);
+  }
+  console.log(`${'Material:'.padEnd(14)}${fmtEur(oc.materialNet)}`);
+  if (oc.labourNet > 0) {
+    console.log(
+      `${'Verarbeitung:'.padEnd(14)}${fmtEur(oc.labourNet)} (${(labourFrac * 100).toFixed(0)} % Lohnzuschlag)`,
+    );
+  }
+  for (const f of oc.fixed) {
+    console.log(`${`${f.label}:`.padEnd(14)}${fmtEur(f.amount)}`);
+  }
+  console.log('--------------------------------------------------');
+  console.log(`${'Netto:'.padEnd(14)}${fmtEur(oc.net)}`);
+  console.log(`${`USt ${(oc.vatRate * 100).toFixed(0)} %:`.padEnd(14)}${fmtEur(oc.vat)}`);
+  console.log(`${'Brutto:'.padEnd(14)}${fmtEur(oc.gross)}`);
+  console.log(
+    '   Verarbeitung läuft lagenweise mit dem Füllboden (Herst.: ~10–20 % Lohnzuschlag);',
+  );
+  console.log(
+    '   Oberflächenschutz (~0,30 m Kies/Mutterboden) + Transport/Lagerung separat kalkulieren.\n',
+  );
 }
 
 function fmtRow(label: string, b: MassBreakdown): string {
@@ -116,6 +164,28 @@ export const lehmgrabenCommand: CommandModule<object, LehmgrabenArgs> = {
         describe: 'Zusätzliches Tonvolumen je Manschette (m³)',
         type: 'number',
         default: 0.05,
+      })
+      .option('price-per-bag', {
+        describe: 'Nettopreis je Big Bag (€) — z. B. aus dem Angebot; schätzt die Kosten',
+        type: 'number',
+      })
+      .option('price-per-t', {
+        describe: 'Nettopreis je Tonne (€) — Alternative zu --price-per-bag',
+        type: 'number',
+      })
+      .option('delivery', {
+        describe: 'Lieferkosten netto pauschal (€)',
+        type: 'number',
+      })
+      .option('labour', {
+        describe: 'Lohnzuschlag als Anteil des Materials (z. B. 0.15 = 15 %)',
+        type: 'number',
+        default: 0,
+      })
+      .option('vat', {
+        describe: 'USt-Satz als Anteil',
+        type: 'number',
+        default: 0.19,
       }),
   handler: (args) => {
     const result = computeTrenchSeal({
@@ -129,5 +199,28 @@ export const lehmgrabenCommand: CommandModule<object, LehmgrabenArgs> = {
       collarVolumeEachM3: args['collar-volume'],
     });
     printResult(result);
+
+    // Cost estimation only when a price is supplied — the tool never invents prices.
+    const perBag = args['price-per-bag'];
+    const perT = args['price-per-t'];
+    if (perBag != null || perT != null) {
+      const material = getMaterial(args.material);
+      if (perBag != null && !material.packaging) {
+        console.log(
+          `Hinweis: "${material.name}" hat keine Gebindegröße hinterlegt — nutze --price-per-t.\n`,
+        );
+      } else {
+        const oc = computeOrderCost({
+          massT: result.typ.totalT,
+          packaging: material.packaging,
+          pricePerPackage: perBag,
+          pricePerT: perT,
+          fixed: args.delivery != null ? [{ label: 'Lieferung', amount: args.delivery }] : [],
+          labourSurcharge: args.labour,
+          vatRate: args.vat,
+        });
+        printOrderCost(oc, result, args.labour);
+      }
+    }
   },
 };

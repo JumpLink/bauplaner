@@ -2,22 +2,37 @@
  * Quantity take-off for a clay wall-seal in a trench (Lehmgraben-Abdichtung),
  * e.g. how much DERNOTON to order to seal a house wall against a filled trench.
  *
- * The seal thickness follows the **water exposure class (Lastfall)** after the
- * DIN 18533 logic used in practice for a clay seal without a working drainage:
+ * The DERNOTON seal thickness is primarily **compaction-driven**, not
+ * water-class-driven: the manufacturer's Kalkulationshilfe puts the practical
+ * minimum layer at **~0.20 m on smooth walls** and **~0.25 m on fissured walls
+ * or at ledges (Auskragungen)** — thinner layers cannot be reliably compacted
+ * to the required 97 % Proctordichte. We keep the **water exposure class
+ * (Lastfall)** only to nudge within that 0.20–0.25 m band (DIN 18533 spirit):
  *
- * - `bodenfeuchte` — soil moisture / non-accumulating seepage (well-draining
- *   soil, groundwater well below): thin seal.
- * - `aufstauendes_sickerwasser` — in cohesive soil (clay/marsh) rainwater cannot
- *   percolate and **backs up** against the wall; treated close to moderate
- *   pressing water. Thicker seal. *(This is the marsh-clay case.)*
- * - `drueckendes_wasser` — permanent hydrostatic pressure from groundwater:
- *   thickest seal.
+ * - `bodenfeuchte` — soil moisture / non-accumulating seepage: smooth-wall end.
+ * - `aufstauendes_sickerwasser` — in cohesive soil (clay/marsh) rainwater backs
+ *   up against the wall; mid band. *(This is the marsh-clay case.)*
+ * - `drueckendes_wasser` — permanent hydrostatic pressure: fissured/thick end.
  *
- * Thickness bands are planning **Richtwerte** — confirm the actual figure with
- * Lehm-Laden / DERNOTON for the specific product and situation.
+ * Coverage cross-check: 1 t of installed DERNOTON seals ~2.5 m² at 0.20 m
+ * (smooth) or ~2.0 m² at 0.25 m (fissured) — see {@link DERNOTON_COVERAGE}.
+ * All figures are planning **Richtwerte** — confirm with DERNOTON for the
+ * specific wall and situation.
  */
 
 import { getMaterial } from './materials.ts';
+
+/**
+ * Manufacturer coverage Richtwerte (DERNOTON Kalkulationshilfe): wall area one
+ * tonne of installed DERNOTON seals, with the matching layer thickness. Driven
+ * by the wall surface (compaction), independent of the water class.
+ */
+export const DERNOTON_COVERAGE = {
+  /** Smooth foundation wall: ~2.5 m²/t at ≥0.20 m (≈0.4 t/m²). */
+  glatt: { areaPerTonM2: 2.5, thicknessM: 0.2 },
+  /** Fissured/rubble wall or ledge: ~2.0 m²/t at ≥0.25 m (≈0.5 t/m²). */
+  klueftig: { areaPerTonM2: 2.0, thicknessM: 0.25 },
+} as const;
 
 export type Lastfall =
   | 'bodenfeuchte'
@@ -30,11 +45,15 @@ interface ThicknessBand {
   maxM: number;
 }
 
-/** Recommended seal-thickness bands per Lastfall, in meters. */
+/**
+ * Recommended seal-thickness bands per Lastfall, in meters. Floored at the
+ * manufacturer's practical compaction minimum (~0.20 m) and capped at the
+ * fissured-wall/Auskragung figure (~0.25 m); see the module note.
+ */
 export const THICKNESS_BANDS: Record<Lastfall, ThicknessBand> = {
-  bodenfeuchte: { minM: 0.08, typM: 0.1, maxM: 0.12 },
-  aufstauendes_sickerwasser: { minM: 0.15, typM: 0.175, maxM: 0.2 },
-  drueckendes_wasser: { minM: 0.2, typM: 0.225, maxM: 0.25 },
+  bodenfeuchte: { minM: 0.2, typM: 0.2, maxM: 0.22 },
+  aufstauendes_sickerwasser: { minM: 0.2, typM: 0.225, maxM: 0.25 },
+  drueckendes_wasser: { minM: 0.225, typM: 0.25, maxM: 0.25 },
 };
 
 export const LASTFALL_LABEL: Record<Lastfall, string> = {
@@ -61,7 +80,11 @@ export interface TrenchSealInput {
   wasteFactor?: number;
   /** Number of pipe penetrations that get a clay collar (Manschette). */
   collarCount?: number;
-  /** Extra clay volume per collar, in m³. Default 0.05. */
+  /**
+   * Extra clay volume per collar, in m³. Default 0.05 (~0.1 t). The manufacturer
+   * hand-packs each pipe penetration and adds ~one 25 kg sack of DERNOTON-Pulver
+   * (mixed 1:1–1:2 with the BA mix) — this allowance covers that plus the collar.
+   */
   collarVolumeEachM3?: number;
 }
 

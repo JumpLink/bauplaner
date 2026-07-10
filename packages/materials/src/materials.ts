@@ -31,6 +31,21 @@ export interface Price {
   source?: string;
 }
 
+/**
+ * How a bulk material is delivered in whole units (e.g. DERNOTON Big Bags).
+ * Ordering rounds up to whole packages; billing itself may still be per tonne
+ * (DERNOTON is settled "nach Wiegekarte, EUR/t"). Factual product data, not a
+ * price.
+ */
+export interface Packaging {
+  /** Human label for one unit, e.g. "Big Bag". */
+  label: string;
+  /** Mass of one unit in kg. */
+  massKg: number;
+  /** Nominal (loose) volume of one unit in m³, if the supplier states it. */
+  volumeM3?: number;
+}
+
 export interface Material {
   key: string;
   name: string;
@@ -45,6 +60,8 @@ export interface Material {
   diffusionsoffen?: boolean;
   /** Optional reference price (usually empty — bring a real quote). */
   price?: Price;
+  /** How the material ships in whole units (Big Bags etc.), if applicable. */
+  packaging?: Packaging;
   /** Where the figures come from / caveats. */
   source: string;
 }
@@ -60,12 +77,21 @@ export const MATERIALS: Record<string, Material> = {
   // — Sealing & soil (Lehmgraben) —
   dernoton: {
     key: 'dernoton',
-    name: 'DERNOTON (Fertigmischung, verdichtet)',
+    name: 'DERNOTON (Fertigmischung BA, verdichtet)',
     category: 'dichtung',
-    density: 1.9,
+    // Installed/compacted ≈ 2,0 t/m³ (Herstellerangabe; billed "nach Wiegekarte").
+    // ρPr 1,705 t/m³ dry @97 % (DIN 18127), Korndichte 2,68 t/m³ (DIN 18124).
+    density: 2.0,
+    // Measured 2,8 ± 0,3 W/(m·K): a dense mineral seal — NOT insulation. No µ
+    // given (a water barrier, not a diffusion-open wall layer), so it is not a
+    // Glaser/U-value layer.
+    lambda: 2.8,
     diffusionsoffen: false, // a sealing clay — a water barrier by design
+    packaging: { label: 'Big Bag', massKg: 1200, volumeM3: 0.6 },
     source:
-      'Richtwert verdichtet ~1,9 t/m³ — Herstellerangabe bei Lehm-Laden/DERNOTON bestätigen',
+      'Technisches Datenblatt DERNOTON-Fertigmischung BA: verdichtet ≈2,0 t/m³, ' +
+      'ρPr 1,705 t/m³ @97 %, Korndichte 2,68; LAGA Z0, F1 frostsicher, Verdichtbarkeit V1, ' +
+      'kf ≈1·10⁻¹⁰ m/s, Einbauwassergehalt 10–18 %, wurzelfest; Big Bag 1200 kg oder lose — bestätigen',
   },
   grubenlehm: {
     key: 'grubenlehm',
