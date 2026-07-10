@@ -9,11 +9,23 @@ import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
 import { wallLengthM, type Wall } from '@bauplaner/core';
-import { PRESET_ASSEMBLIES, assessAssembly } from '@bauplaner/materials';
+import { PRESET_ASSEMBLIES, assessAssembly, getMaterial, type MaterialCategory } from '@bauplaner/materials';
 
 import type { AssemblyLayers, DocumentStore } from '../document-store.ts';
 
 const PRESET_NAMES = ['(keiner)', ...PRESET_ASSEMBLIES.map((p) => p.name)];
+
+/** Layer-bar segment colours per material category (0xRRGGBB). */
+const CATEGORY_COLOR: Record<MaterialCategory, number> = {
+  putz: 0xc0bfbc,
+  mauerwerk: 0xb5835a,
+  daemmung: 0x8ff0a4,
+  dichtung: 0x986a44,
+  boden: 0xcdab8f,
+  platte: 0xcdab8f,
+  holz: 0xf5c211,
+  sonstiges: 0x9a9996,
+};
 
 export class BauteileView extends Gtk.Box {
   static {
@@ -69,6 +81,10 @@ export class BauteileView extends Gtk.Box {
   private buildPage(): Gtk.Widget {
     const home = this.store.home!;
     const page = new Adw.PreferencesPage();
+
+    // Assembly catalogue (v2): each preset build-up as an expandable card with a
+    // layer bar (innen → außen), the layer list and the live U/Tauwasser/GEG.
+    page.add(this.buildKatalog());
 
     // Global bulk assignment.
     const globalGroup = new Adw.PreferencesGroup({
@@ -138,6 +154,126 @@ export class BauteileView extends Gtk.Box {
     if (!entry) return;
     entry.expander.set_expanded(true);
     entry.row.grab_focus();
+  }
+
+  /** The v2 assembly catalogue: preset build-ups as expandable cards. */
+  private buildKatalog(): Adw.PreferencesGroup {
+    const group = new Adw.PreferencesGroup({
+      title: 'Bauteil-Katalog',
+      description:
+        'Schichtaufbauten innen → außen. U-Wert, Tauwasser-Screening (Glaser, ' +
+        'DIN 4108-3) und GEG-Abgleich live berechnet.',
+    });
+    for (const preset of PRESET_ASSEMBLIES) {
+      const a = assessAssembly(preset.layers);
+      const row = new Adw.ExpanderRow({
+        title: preset.name,
+        subtitle: `${preset.layers.length} Schichten`,
+      });
+      const badge = new Gtk.Label({ label: `U ${a.U.toFixed(2)}`, valign: Gtk.Align.CENTER });
+      badge.add_css_class('numeric');
+      badge.add_css_class('caption-heading');
+      badge.add_css_class(a.gegPass ? 'success' : 'error');
+      row.add_suffix(badge);
+
+      // Layer bar + innen/außen legend.
+      const barBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 4,
+        marginTop: 10,
+        marginBottom: 8,
+        marginStart: 12,
+        marginEnd: 12,
+      });
+      barBox.append(this.layerBar(preset.layers));
+      const legend = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL });
+      const li = new Gtk.Label({ label: 'innen', xalign: 0, hexpand: true });
+      li.add_css_class('caption');
+      li.add_css_class('dim-label');
+      const lo = new Gtk.Label({ label: 'außen', xalign: 1 });
+      lo.add_css_class('caption');
+      lo.add_css_class('dim-label');
+      legend.append(li);
+      legend.append(lo);
+      barBox.append(legend);
+      row.add_row(this.plainRow(barBox));
+
+      // Per-layer detail.
+      for (const l of preset.layers) {
+        const m = getMaterial(l.materialKey);
+        const lr = new Adw.ActionRow({
+          title: m.name,
+          subtitle: `${(l.thicknessM * 100).toFixed(1)} cm${m.lambda != null ? ` · λ ${m.lambda}` : ''}`,
+        });
+        const swatch = this.colorSwatch(CATEGORY_COLOR[m.category]);
+        lr.add_prefix(swatch);
+        row.add_row(lr);
+      }
+
+      // Facts.
+      row.add_row(this.factRow('U-Wert', `${a.U.toFixed(3)} W/(m²·K)`, a.gegPass ? 'success' : 'error'));
+      row.add_row(
+        this.factRow(
+          'Tauwasser (Glaser)',
+          a.tauwasser ? '⚠ Tauwasser möglich' : '✓ kein Tauwasser',
+          a.tauwasser ? 'warning' : 'success',
+        ),
+      );
+      row.add_row(
+        this.factRow('GEG-Abgleich', a.gegPass ? `✓ ≤ ${a.gegMaxU}` : `✗ > ${a.gegMaxU}`, a.gegPass ? 'success' : 'error'),
+      );
+      if (preset === PRESET_ASSEMBLIES[0]) row.set_expanded(true); // show the first build-up open
+      group.add(row);
+    }
+    return group;
+  }
+
+  /** A proportional, category-coloured layer bar drawn with Cairo (innen→außen). */
+  private layerBar(layers: AssemblyLayers): Gtk.Widget {
+    const area = new Gtk.DrawingArea({ heightRequest: 38, hexpand: true });
+    const total = layers.reduce((s, l) => s + l.thicknessM, 0) || 1;
+    area.set_draw_func((_a, cr, width, height) => {
+      const gap = 2;
+      const usable = width - gap * Math.max(0, layers.length - 1);
+      let x = 0;
+      for (const l of layers) {
+        const w = (l.thicknessM / total) * usable;
+        const hex = CATEGORY_COLOR[getMaterial(l.materialKey).category];
+        cr.setSourceRGB(((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255);
+        cr.rectangle(x, 0, w, height);
+        cr.fill();
+        x += w + gap;
+      }
+    });
+    return area;
+  }
+
+  /** A 12×12 category-colour swatch. */
+  private colorSwatch(hex: number): Gtk.Widget {
+    const s = new Gtk.DrawingArea({ widthRequest: 12, heightRequest: 12, valign: Gtk.Align.CENTER });
+    s.set_draw_func((_a, cr, width, height) => {
+      cr.setSourceRGB(((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255);
+      cr.rectangle(0, 0, width, height);
+      cr.fill();
+    });
+    return s;
+  }
+
+  /** Wrap an arbitrary widget so it sits cleanly as an ExpanderRow child row. */
+  private plainRow(child: Gtk.Widget): Gtk.Widget {
+    const row = new Gtk.ListBoxRow({ child, activatable: false, selectable: false });
+    return row;
+  }
+
+  /** An ExpanderRow fact row: title + a coloured value. */
+  private factRow(title: string, value: string, cls?: string): Adw.ActionRow {
+    const row = new Adw.ActionRow({ title });
+    const label = new Gtk.Label({ label: value, valign: Gtk.Align.CENTER });
+    label.add_css_class('numeric');
+    if (cls) label.add_css_class(cls);
+    else label.add_css_class('dim-label');
+    row.add_suffix(label);
+    return row;
   }
 
   /** A preset ComboRow whose selection is set BEFORE connecting (no init-fire loop). */
