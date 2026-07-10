@@ -20,6 +20,7 @@ import {
   type LoadedDocument,
   type ModelCatalog,
   type RetrofitWork,
+  type TgaNetwork,
   type WallAnnotation,
 } from '@bauplaner/core';
 
@@ -194,6 +195,11 @@ export class DocumentStore {
 
   get works(): RetrofitWork[] {
     return this._doc?.project.works ?? [];
+  }
+
+  /** The building-services (TGA) network, or null if the project has none. */
+  get tga(): TgaNetwork | null {
+    return this._doc?.project.tga ?? null;
   }
 
   /** Add a cost item (auto-assigns a unique id), returning its id, or null. */

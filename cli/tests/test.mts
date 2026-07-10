@@ -20,6 +20,7 @@ import assemblies from './unit/assemblies.test.ts';
 import energie from './unit/energie.test.ts';
 import foerderung from './unit/foerderung.test.ts';
 import fahrplan from './unit/fahrplan.test.ts';
+import tga from './unit/tga.test.ts';
 import works from './unit/works.test.ts';
 
 run({
@@ -40,5 +41,6 @@ run({
   energie,
   foerderung,
   fahrplan,
+  tga,
   works,
 });

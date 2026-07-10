@@ -19,9 +19,12 @@ Status: **read-only**. Three views:
   buttons jumping to **Bauteile** / **Feuchte** for that wall).
   - **Grundriss** (default) — a 2D floor plan drawn top-down with Cairo: rooms
     filled with name + area, mitered wall footprints, door/window openings, a
-    grid, a **north** compass and a scale bar. Read-only for now (drawing/editing
-    geometry is a later Modell sub-stage). The concept's rule "edit in 2D, inspect
-    in 3D" — so the plan is the primary surface.
+    grid, a **north** compass and a scale bar. A floating **Gewerke** card toggles
+    the TGA (building-services) overlay per trade — heating / water / electric …
+    drawn as a typed-node graph (sources & manifolds as squares, fixtures as dots;
+    planned runs dashed) with each trade's total run length. Read-only for now
+    (drawing/editing geometry is a later Modell sub-stage). The concept's rule
+    "edit in 2D, inspect in 3D" — so the plan is the primary surface.
   - **3D** — render the building in 3D (three.js on the WebGL→`Gtk.GLArea` bridge):
     walls as extruded footprints mitered at connected ends **with door/window
     openings cut out**, room floors, doors/windows/furniture as their **embedded
