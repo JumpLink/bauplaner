@@ -20,7 +20,7 @@ import {
 
 import type { DocumentStore } from '../document-store.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
-import { fmtEur } from '../../format.ts';
+import { escapeMarkup, fmtEur } from '../../format.ts';
 
 export class UebersichtView extends Gtk.Box {
   static {
@@ -221,9 +221,8 @@ export class UebersichtView extends Gtk.Box {
       group.set_description('⚠ Die .sh3d wurde seit dem letzten Speichern geändert');
     }
     const link = (title: string, icon: string, view: string): void => {
-      // Adw.ActionRow titles are Pango markup — a bare "&" (as in "Kosten &
-      // Kostenplan") aborts parsing and renders an empty label; escape it.
-      const row = new Adw.ActionRow({ title: title.replace(/&/g, '&amp;'), activatable: true });
+      // Adw.ActionRow titles are Pango markup — escape "&"/"<" (see escapeMarkup).
+      const row = new Adw.ActionRow({ title: escapeMarkup(title), activatable: true });
       row.add_prefix(Gtk.Image.new_from_icon_name(icon));
       row.add_suffix(Gtk.Image.new_from_icon_name('go-next-symbolic'));
       row.connect('activated', () => this.goView(view));

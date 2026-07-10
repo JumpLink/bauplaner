@@ -55,6 +55,14 @@ export default async () => {
       expect(store.costSummary.net).toBe(0);
     });
 
+    await it('updates a cost item in place (status advance)', async () => {
+      const store = loadedStore();
+      const id = store.addCost({ label: 'x', category: 'material', status: 'geplant', net: 100 });
+      store.updateCost(id as string, { status: 'bezahlt' });
+      expect(store.costs[0].status).toBe('bezahlt');
+      expect(store.costs[0].net).toBe(100);
+    });
+
     await it('addCost on an empty store returns null', async () => {
       const store = new DocumentStore();
       expect(store.addCost({ label: 'x', category: 'sonstiges', status: 'geplant', net: 1 })).toBe(null);

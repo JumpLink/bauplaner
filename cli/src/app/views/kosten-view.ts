@@ -12,7 +12,7 @@ import Gtk from '@girs/gtk-4.0';
 import type { CostCategory, CostStatus } from '@bauplaner/core';
 
 import type { DocumentStore } from '../document-store.ts';
-import { fmtEur } from '../../format.ts';
+import { escapeMarkup, fmtEur } from '../../format.ts';
 
 const CATEGORIES: { key: CostCategory; label: string }[] = [
   { key: 'abdichtung', label: 'Abdichtung' },
@@ -111,7 +111,10 @@ export class KostenView extends Gtk.Box {
         const subtitleParts = [catLabel(c.category), statusLabel(c.status)];
         if (c.note) subtitleParts.push(c.note);
         if (c.date) subtitleParts.push(c.date);
-        const row = new Adw.ActionRow({ title: c.label, subtitle: subtitleParts.join(' · ') });
+        const row = new Adw.ActionRow({
+          title: escapeMarkup(c.label),
+          subtitle: escapeMarkup(subtitleParts.join(' · ')),
+        });
         const amount = new Gtk.Label({ label: fmtEur(c.net) });
         amount.add_css_class('numeric');
         row.add_suffix(amount);

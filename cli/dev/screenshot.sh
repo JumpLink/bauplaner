@@ -18,7 +18,11 @@ VIEW="${1:?usage: screenshot.sh <view> <out.png> [sh3d]}"
 OUT="${2:?usage: screenshot.sh <view> <out.png> [sh3d]}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 CLI="$(cd "$HERE/.." && pwd)"
-SH3D="${3:-$CLI/demo/beispielhaus.sh3d}"
+# Default to the demo project sidecar (has costs/assemblies/diagnoses so the
+# data-driven views render content); fall back to the bare .sh3d.
+DEMO="$CLI/demo/beispielhaus.ecoretrofit.json"
+[ -f "$DEMO" ] || DEMO="$CLI/demo/beispielhaus.sh3d"
+SH3D="${3:-$DEMO}"
 
 APP_ID="eu.jumplink.BauplanerShot"
 OBJ="/eu/jumplink/BauplanerShot/devtools"

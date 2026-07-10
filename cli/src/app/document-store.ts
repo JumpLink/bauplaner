@@ -213,6 +213,15 @@ export class DocumentStore {
     this.notify();
   }
 
+  /** Patch a cost item in place (e.g. advance its status). */
+  updateCost(id: string, patch: Partial<Omit<CostItem, 'id'>>): void {
+    if (!this._doc) return;
+    this._doc.project.costs = (this._doc.project.costs ?? []).map((c) =>
+      c.id === id ? { ...c, ...patch } : c,
+    );
+    this.notify();
+  }
+
   get costs(): CostItem[] {
     return this._doc?.project.costs ?? [];
   }
