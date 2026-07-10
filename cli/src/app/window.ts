@@ -19,13 +19,13 @@ import Pango from '@girs/pango-1.0';
 import { APP_NAME } from './constants.ts';
 import { DocumentStore } from './document-store.ts';
 import { openDocumentDialog } from './open-dialog.ts';
-import { Ansicht3dView } from './views/ansicht3d-view.ts';
 import { BauteileView } from './views/bauteile-view.ts';
 import { DokumentationView } from './views/dokumentation-view.ts';
 import { FahrplanView } from './views/fahrplan-view.ts';
 import { FeuchteView } from './views/feuchte-view.ts';
 import { KostenView } from './views/kosten-view.ts';
 import { MaterialienView } from './views/materialien-view.ts';
+import { ModellView } from './views/modell-view.ts';
 import { RaumklimaView } from './views/raumklima-view.ts';
 import { UebersichtView } from './views/uebersicht-view.ts';
 import { VorhabenView } from './views/vorhaben-view.ts';
@@ -90,7 +90,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     super({ application: app, title: APP_NAME, defaultWidth: 1000, defaultHeight: 680 });
 
     this.stack.add_named(new UebersichtView(this, this.store), 'uebersicht');
-    this.stack.add_named(new Ansicht3dView(this, this.store), 'modell');
+    this.stack.add_named(new ModellView(this, this.store), 'modell');
     this.stack.add_named(new FahrplanView(this.store), 'fahrplan');
     this.stack.add_named(this.bauteileView, 'bauteile');
     this.stack.add_named(this.feuchteView, 'feuchte');

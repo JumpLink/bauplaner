@@ -65,6 +65,38 @@ export function totalGrossWallAreaM2(home: HomeData): number {
   return round(home.walls.reduce((s, w) => s + wallAreaM2(w), 0));
 }
 
+/**
+ * Area-weighted centroid of a simple polygon given as `[x, y]` tuples (any unit,
+ * any winding). Used to place a room's name/area label at its visual centre in
+ * the 2D plan. Falls back to the plain vertex average for a degenerate
+ * (near-zero-area) or sub-triangle polygon, so a label never lands at NaN.
+ */
+export function polygonCentroid(points: readonly (readonly [number, number])[]): [number, number] {
+  const n = points.length;
+  if (n === 0) return [0, 0];
+  let twiceArea = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < n; i++) {
+    const [x0, y0] = points[i];
+    const [x1, y1] = points[(i + 1) % n];
+    const cross = x0 * y1 - x1 * y0;
+    twiceArea += cross;
+    cx += (x0 + x1) * cross;
+    cy += (y0 + y1) * cross;
+  }
+  if (Math.abs(twiceArea) < 1e-9) {
+    let sx = 0;
+    let sy = 0;
+    for (const [x, y] of points) {
+      sx += x;
+      sy += y;
+    }
+    return [sx / n, sy / n];
+  }
+  return [cx / (3 * twiceArea), cy / (3 * twiceArea)];
+}
+
 export interface Footprint {
   widthM: number;
   depthM: number;
