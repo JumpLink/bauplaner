@@ -18,6 +18,7 @@ import documentStore from './unit/document-store.test.ts';
 import project from './unit/project.test.ts';
 import assemblies from './unit/assemblies.test.ts';
 import energie from './unit/energie.test.ts';
+import foerderung from './unit/foerderung.test.ts';
 import works from './unit/works.test.ts';
 
 run({
@@ -36,5 +37,6 @@ run({
   project,
   assemblies,
   energie,
+  foerderung,
   works,
 });
