@@ -12,6 +12,9 @@ import {
   extractSh3dModelsFromFile,
   loadDocumentFile,
   saveProjectFile,
+  summarizeCosts,
+  type CostItem,
+  type CostSummary,
   type EcoProject,
   type HomeData,
   type LoadedDocument,
@@ -191,6 +194,31 @@ export class DocumentStore {
 
   get works(): RetrofitWork[] {
     return this._doc?.project.works ?? [];
+  }
+
+  /** Add a cost item (auto-assigns a unique id), returning its id, or null. */
+  addCost(item: Omit<CostItem, 'id'>): string | null {
+    if (!this._doc) return null;
+    const costs = [...(this._doc.project.costs ?? [])];
+    const id = `cost-${costs.length + 1}-${item.category}`;
+    costs.push({ ...item, id });
+    this._doc.project.costs = costs;
+    this.notify();
+    return id;
+  }
+
+  removeCost(id: string): void {
+    if (!this._doc) return;
+    this._doc.project.costs = (this._doc.project.costs ?? []).filter((c) => c.id !== id);
+    this.notify();
+  }
+
+  get costs(): CostItem[] {
+    return this._doc?.project.costs ?? [];
+  }
+
+  get costSummary(): CostSummary {
+    return summarizeCosts(this.costs);
   }
 
   private notify(): void {

@@ -8,10 +8,13 @@ import {
   PROJECT_SCHEMA_VERSION,
   computeSh3dHash,
   createProjectForSh3d,
+  deriveGross,
   loadDocumentFile,
   parseProject,
   saveProjectFile,
   serializeProject,
+  summarizeCosts,
+  type CostItem,
 } from '@bauplaner/core';
 
 function sh3dBytes(homeXml: string): Uint8Array {
@@ -63,6 +66,57 @@ export default async () => {
       const back = parseProject(serializeProject(p));
       expect(back.annotations?.walls?.w1?.feuchte?.topCause).toBe('aufstauend_seitlich');
       expect(back.annotations?.walls?.w1?.assemblyLayers?.[0].materialKey).toBe('holzfaser');
+    });
+
+    await it('createProjectForSh3d starts with an empty cost register (v2)', async () => {
+      const p = createProjectForSh3d('/d/plan.sh3d');
+      expect(p.schemaVersion).toBe(2);
+      expect(Array.isArray(p.costs)).toBe(true);
+      expect(p.costs?.length).toBe(0);
+    });
+
+    await it('loads a v1 file (no costs) unchanged', async () => {
+      const back = parseProject('{"schemaVersion":1,"sh3d":{"path":"x.sh3d"}}');
+      expect(back.schemaVersion).toBe(1);
+      expect(back.costs).toBe(undefined);
+    });
+
+    await it('cost items round-trip through serialize → parse', async () => {
+      const p = createProjectForSh3d('/d/plan.sh3d');
+      p.costs = [
+        { id: 'c1', label: 'DERNOTON Lieferung', category: 'material', status: 'angeboten', net: 4157.3, vatRate: 0.19, note: 'Angebot S73540' },
+      ];
+      const back = parseProject(serializeProject(p));
+      expect(back.costs?.[0].label).toBe('DERNOTON Lieferung');
+      expect(back.costs?.[0].net).toBe(4157.3);
+      expect(back.costs?.[0].note).toBe('Angebot S73540');
+    });
+
+    await it('summarizeCosts totals net/VAT/gross and groups by category/status', async () => {
+      const costs: CostItem[] = [
+        { id: 'a', label: 'Material', category: 'material', status: 'angeboten', net: 1000, vatRate: 0.19 },
+        { id: 'b', label: 'Lieferung', category: 'lieferung', status: 'angeboten', net: 500, vatRate: 0.19 },
+        { id: 'c', label: 'Drainage', category: 'drainage', status: 'geplant', net: 300 }, // default 19 %
+      ];
+      const s = summarizeCosts(costs);
+      expect(s.count).toBe(3);
+      expect(s.net).toBe(1800);
+      expect(s.gross).toBe(2142); // 1800 × 1.19
+      expect(s.vat).toBe(342);
+      expect(s.byStatus.angeboten).toBe(1500);
+      expect(s.byCategory.material).toBe(1000);
+    });
+
+    await it('deriveGross applies the VAT rate', async () => {
+      expect(deriveGross(100)).toBe(119);
+      expect(deriveGross(100, 0)).toBe(100);
+    });
+
+    await it('summarizeCosts of an empty register is all zeros', async () => {
+      const s = summarizeCosts([]);
+      expect(s.count).toBe(0);
+      expect(s.net).toBe(0);
+      expect(s.gross).toBe(0);
     });
 
     await it('parseProject rejects malformed / unsupported files', async () => {

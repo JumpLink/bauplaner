@@ -11,6 +11,8 @@ import {
   type TrenchSealResult,
 } from '@bauplaner/materials';
 
+import { fmtEur } from '../format.ts';
+
 interface LehmgrabenArgs {
   length: number;
   'seal-height': number;
@@ -25,13 +27,6 @@ interface LehmgrabenArgs {
   delivery?: number;
   labour: number;
   vat: number;
-}
-
-/** Format a euro amount with German separators (1.234,56 €). */
-function fmtEur(n: number): string {
-  const [int, frac] = Math.abs(n).toFixed(2).split('.');
-  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${n < 0 ? '-' : ''}${grouped},${frac} €`;
 }
 
 /** Print the order-cost block (material + delivery + VAT) for the typ tonnage. */
