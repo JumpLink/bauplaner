@@ -42,6 +42,12 @@ Status: **read-only**. Three views:
 - **Feuchte** — rule-based damp-wall diagnosis per wall, stored as an annotation;
   damp walls are flagged (teal) in 3D.
 - **Materialien** — the material stock (density, λ, µ).
+- **Raumklima** — indoor climate per room (temperature / humidity / CO₂) with a
+  comfort assessment (gut / Warnung / Alarm), derived from the room-anchored
+  reading DocEntries. A refresh button pulls current values from **Home Assistant**
+  (the app-layer adapter — `HA_URL`/`HA_TOKEN` env + a room→sensor map in the
+  sidecar), recording them as readings. Rooms out of comfort raise the nav badge
+  and the Übersicht teaser.
 - **Dokumentation** — photos, PDFs, measured readings and notes, each **anchored**
   to a wall / room / level / building. Grouped by kind with the resolved anchor +
   date; add (a modal form, undoable) and delete entries. A wall's entry count also
