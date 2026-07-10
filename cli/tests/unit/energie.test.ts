@@ -26,6 +26,20 @@ function home() {
   return parseSh3dBytes(zipSync({ 'Home.xml': strToU8(HOME_XML) }));
 }
 
+// Same house, but with a window centred on the exterior wall w1 (100×130 cm,
+// sill 90 cm) and one on the interior partition w5 — only the former is a hole
+// in the envelope; the latter loses no heat to the outside.
+const HOME_WITH_WINDOWS_XML = HOME_XML.replace(
+  '</home>',
+  `<doorOrWindow id="win-out" level="level-1" name="Fenster" x="300" y="0"   elevation="90" angle="0" width="100" depth="24" height="130"/>
+   <doorOrWindow id="win-in"  level="level-1" name="Fenster" x="200" y="200" elevation="90" angle="0" width="100" depth="24" height="130"/>
+   </home>`,
+);
+
+function homeWithWindows() {
+  return parseSh3dBytes(zipSync({ 'Home.xml': strToU8(HOME_WITH_WINDOWS_XML) }));
+}
+
 export default async () => {
   await describe('envelope', async () => {
     await it('classifies the four outer walls as envelope, the partition as interior', async () => {
@@ -34,6 +48,16 @@ export default async () => {
       // 15 + 10 + 15 + 10 = 50 m² gross, no openings.
       expect(env.wallAreaM2).toBe(50);
       expect(env.windowAreaM2).toBe(0);
+    });
+
+    await it('counts a window in an exterior wall, ignores one in a partition', async () => {
+      const env = deriveEnvelope(homeWithWindows());
+      // Only the exterior window is a hole in the envelope: 1.0 m wide × 1.3 m
+      // high = 1.3 m². The partition window (interior wall) loses nothing outside.
+      expect(env.windowAreaM2).toBe(1.3);
+      // That opening is netted out of its host wall: 50 gross − 1.3 = 48.7 m².
+      expect(env.wallAreaM2).toBe(48.7);
+      expect(env.exteriorWalls.length).toBe(4);
     });
 
     await it('takes roof/floor/heated area from the single level', async () => {
