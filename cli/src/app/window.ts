@@ -34,6 +34,8 @@ interface NavItem {
   view: string;
   icon: string;
   label: string;
+  /** Header-bar subtitle shown when the view is active. */
+  subtitle?: string;
   /** Optional count shown as a pill on the nav row (0 → hidden). */
   badge?: (store: DocumentStore) => number;
 }
@@ -54,15 +56,15 @@ function openCostCount(store: DocumentStore): number {
 // (ansicht3d → modell, materialien → material); Vorhaben has no top-nav entry
 // anymore (folded into Modell later) but stays registered in the stack.
 const NAV_ITEMS: NavItem[] = [
-  { view: 'uebersicht', icon: 'view-grid-symbolic', label: 'Übersicht' },
-  { view: 'modell', icon: 'view-paged-symbolic', label: 'Modell' },
-  { view: 'fahrplan', icon: 'applications-engineering-symbolic', label: 'Fahrplan' },
-  { view: 'bauteile', icon: 'window-restore-symbolic', label: 'Bauteile' },
-  { view: 'feuchte', icon: 'weather-showers-symbolic', label: 'Feuchte-Diagnose', badge: feuchteCount },
-  { view: 'kosten', icon: 'accessories-calculator-symbolic', label: 'Kosten & Förderung', badge: openCostCount },
-  { view: 'material', icon: 'emblem-documents-symbolic', label: 'Material' },
-  { view: 'raumklima', icon: 'weather-few-clouds-symbolic', label: 'Raumklima' },
-  { view: 'dokumentation', icon: 'folder-documents-symbolic', label: 'Dokumentation' },
+  { view: 'uebersicht', icon: 'view-grid-symbolic', label: 'Übersicht', subtitle: 'Kennzahlen & nächste Schritte' },
+  { view: 'modell', icon: 'view-paged-symbolic', label: 'Modell', subtitle: 'Modell & Analyse-Ebenen' },
+  { view: 'fahrplan', icon: 'applications-engineering-symbolic', label: 'Fahrplan', subtitle: 'Maßnahmenpakete nach iSFP' },
+  { view: 'bauteile', icon: 'window-restore-symbolic', label: 'Bauteile', subtitle: 'Aufbauten & U-Werte' },
+  { view: 'feuchte', icon: 'weather-showers-symbolic', label: 'Feuchte-Diagnose', subtitle: 'Diagnose feuchter Wände', badge: feuchteCount },
+  { view: 'kosten', icon: 'accessories-calculator-symbolic', label: 'Kosten & Förderung', subtitle: 'Kosten, Förderung & Amortisation', badge: openCostCount },
+  { view: 'material', icon: 'emblem-documents-symbolic', label: 'Material', subtitle: 'Materialstamm' },
+  { view: 'raumklima', icon: 'weather-few-clouds-symbolic', label: 'Raumklima', subtitle: 'Sensorwerte je Raum' },
+  { view: 'dokumentation', icon: 'folder-documents-symbolic', label: 'Dokumentation', subtitle: 'Fotos, PDFs & Messwerte' },
 ];
 
 let navCssInstalled = false;
@@ -393,7 +395,9 @@ export class MainWindow extends Adw.ApplicationWindow {
     const view = row.get_name();
     if (!view) return;
     this.stack.set_visible_child_name(view);
-    this.contentTitle.set_title(NAV_ITEMS.find((i) => i.view === view)?.label ?? APP_NAME);
+    const item = NAV_ITEMS.find((i) => i.view === view);
+    this.contentTitle.set_title(item?.label ?? APP_NAME);
+    this.contentTitle.set_subtitle(item?.subtitle ?? '');
     if (this.splitView.get_collapsed()) this.splitView.set_show_content(true);
   }
 }

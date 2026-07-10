@@ -238,7 +238,7 @@ function wallFootprint(w: Wall, sides: WallSides, sidesById: Map<string, WallSid
  * are dropped (the renderer then leaves that wall solid and just shows the
  * furniture mesh). Returns wall id → openings sorted along the wall.
  */
-function computeOpenings(home: HomeData): Map<string, WallOpening[]> {
+export function computeOpenings(home: HomeData): Map<string, WallOpening[]> {
   const byWall = new Map<string, WallOpening[]>();
   for (const dw of home.furniture) {
     if (dw.kind !== 'doorOrWindow') continue;
