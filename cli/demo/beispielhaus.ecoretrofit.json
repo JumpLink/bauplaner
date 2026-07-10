@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 2,
+  "sh3d": {
+    "path": "beispielhaus.sh3d"
+  },
+  "meta": {
+    "name": "Beispielhaus",
+    "notes": "Generic demo project — sample data only, no real object."
+  },
+  "annotations": {
+    "walls": {
+      "L0-o1": {
+        "assemblyLayers": [
+          { "materialKey": "kalkputz", "thicknessM": 0.015 },
+          { "materialKey": "vollziegel", "thicknessM": 0.365 },
+          { "materialKey": "kalkzementputz", "thicknessM": 0.02 }
+        ]
+      },
+      "L1-o1": {
+        "assemblyLayers": [
+          { "materialKey": "lehmputz", "thicknessM": 0.015 },
+          { "materialKey": "holzfaser", "thicknessM": 0.06 },
+          { "materialKey": "vollziegel", "thicknessM": 0.365 },
+          { "materialKey": "kalkzementputz", "thicknessM": 0.02 }
+        ]
+      },
+      "L0-o3": {
+        "feuchte": {
+          "observations": { "belowGrade": true, "weatherCorrelated": true },
+          "topCause": "aufstauend_seitlich",
+          "confidence": 0.82
+        }
+      }
+    }
+  },
+  "works": [],
+  "costs": [
+    { "id": "cost-1-material", "label": "DERNOTON-Fertigmischung BA", "category": "material", "status": "angeboten", "net": 3360, "vatRate": 0.19, "note": "Angebot (Demo)" },
+    { "id": "cost-2-lieferung", "label": "Lieferung (Sattelzug)", "category": "lieferung", "status": "angeboten", "net": 790, "vatRate": 0.19, "note": "Angebot (Demo)" },
+    { "id": "cost-3-daemmung", "label": "Holzfaser-Innendämmung", "category": "daemmung", "status": "geplant", "net": 2400, "vatRate": 0.19 },
+    { "id": "cost-4-material", "label": "Kalk-Unterputz", "category": "material", "status": "beauftragt", "net": 850, "vatRate": 0.19 },
+    { "id": "cost-5-erdarbeiten", "label": "Drainage & Erdarbeiten", "category": "erdarbeiten", "status": "bezahlt", "net": 1800, "vatRate": 0.19 }
+  ]
+}

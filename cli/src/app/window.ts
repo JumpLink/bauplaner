@@ -65,7 +65,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     this.stack.add_named(new VorhabenView(this.store), 'vorhaben');
     this.stack.add_named(new KostenView(this.store), 'kosten');
     this.stack.add_named(this.feuchteView, 'feuchte');
-    this.stack.add_named(new MaterialienView(), 'materialien');
+    this.stack.add_named(new MaterialienView(this.store), 'materialien');
 
     // Save action — enabled only with a document.
     const saveAction = new Gio.SimpleAction({ name: 'save-project' });

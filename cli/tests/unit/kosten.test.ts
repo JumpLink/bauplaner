@@ -132,5 +132,14 @@ export default async () => {
       const dichtung = Object.values(MATERIALS).filter((m) => m.category === 'dichtung');
       expect(dichtung.length >= 6).toBe(true);
     });
+
+    await it('flags capillary-active natural materials', async () => {
+      expect(getMaterial('lehmputz').kapillaraktiv).toBe(true);
+      expect(getMaterial('holzfaser').kapillaraktiv).toBe(true);
+      expect(getMaterial('zellulose').kapillaraktiv).toBe(true);
+      // Barriers / aggregates are not capillary-active.
+      expect(getMaterial('dernoton').kapillaraktiv).toBe(undefined);
+      expect(getMaterial('bitumendickbeschichtung').kapillaraktiv).toBe(undefined);
+    });
   });
 };

@@ -64,6 +64,12 @@ export interface Material {
   mu?: number;
   /** Whether the material is vapour-open (diffusionsoffen). */
   diffusionsoffen?: boolean;
+  /**
+   * Whether the material is capillary-active — wicks and buffers moisture
+   * (clay, lime, wood fibre, cellulose). A key property for diffusion-open
+   * interior insulation that stays mould-free.
+   */
+  kapillaraktiv?: boolean;
   /** Optional reference price (usually empty — bring a real quote). */
   price?: Price;
   /** How the material ships in whole units (Big Bags etc.), if applicable. */
@@ -212,6 +218,7 @@ export const MATERIALS: Record<string, Material> = {
     category: 'mauerwerk',
     density: 1.8,
     diffusionsoffen: true,
+    kapillaraktiv: true,
     price: {
       amount: 125,
       per: 't',
@@ -230,6 +237,7 @@ export const MATERIALS: Record<string, Material> = {
     lambda: 0.83,
     mu: 8,
     diffusionsoffen: true,
+    kapillaraktiv: true,
     price: {
       amount: 246.22,
       per: 't',
@@ -246,6 +254,7 @@ export const MATERIALS: Record<string, Material> = {
     lambda: 0.7,
     mu: 15,
     diffusionsoffen: true,
+    kapillaraktiv: true,
     price: {
       amount: 430,
       per: 't',
@@ -274,6 +283,7 @@ export const MATERIALS: Record<string, Material> = {
     lambda: 0.35,
     mu: 6,
     diffusionsoffen: true,
+    kapillaraktiv: true,
     price: {
       amount: 30.28,
       per: 'm2',
@@ -292,6 +302,7 @@ export const MATERIALS: Record<string, Material> = {
     lambda: 0.04,
     mu: 5,
     diffusionsoffen: true,
+    kapillaraktiv: true,
     source: DIN,
   },
   holzfaserflex: {
@@ -302,6 +313,7 @@ export const MATERIALS: Record<string, Material> = {
     lambda: 0.038,
     mu: 2,
     diffusionsoffen: true,
+    kapillaraktiv: true,
     price: {
       amount: 103.5,
       per: 'm3',
@@ -318,6 +330,7 @@ export const MATERIALS: Record<string, Material> = {
     lambda: 0.04,
     mu: 2,
     diffusionsoffen: true,
+    kapillaraktiv: true,
     price: {
       amount: 1.13,
       per: 'kg',
