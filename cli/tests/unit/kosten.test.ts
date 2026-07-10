@@ -122,5 +122,15 @@ export default async () => {
       expect(getMaterial('holzfaserflex').price?.amount).toBe(103.5);
       expect(getMaterial('lehmmauermoertel').category).toBe('mauerwerk');
     });
+
+    await it('includes conventional Abdichtung options with prices', async () => {
+      expect(getMaterial('bitumendickbeschichtung').price?.amount).toBe(5.34);
+      expect(getMaterial('bitumendickbeschichtung').diffusionsoffen).toBe(false);
+      expect(getMaterial('dichtschlaemme').price?.per).toBe('kg');
+      expect(getMaterial('dichtungsbahn').price?.per).toBe('m2');
+      // DERNOTON (ecological) + the conventional coatings/sheets.
+      const dichtung = Object.values(MATERIALS).filter((m) => m.category === 'dichtung');
+      expect(dichtung.length >= 6).toBe(true);
+    });
   });
 };
