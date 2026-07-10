@@ -2,8 +2,8 @@
  * App-layer energy glue: build the Bauplaner energy screenings for a model from
  * the shared document's wall assemblies. Pure over `@bauplaner/core`
  * (deriveEnvelope) + `@bauplaner/materials` (computeAssembly /
- * computeEnergyScreening), shared by the Übersicht dashboard and the Kosten &
- * Förderung view so the numbers never diverge (like `wall-inspector.ts`).
+ * computeEnergyScreening), shared by the Übersicht dashboard, Kosten & Förderung
+ * and the Fahrplan so the numbers never diverge (like `wall-inspector.ts`).
  *
  * Three screenings for the same envelope:
  *   start — every exterior wall at the Bestand default U (pre-retrofit baseline)
@@ -11,7 +11,7 @@
  *   ziel  — retrofit target U-values (fully insulated envelope)
  */
 
-import { deriveEnvelope, type HomeData } from '@bauplaner/core';
+import { deriveEnvelope, type Envelope, type HomeData } from '@bauplaner/core';
 import {
   BESTAND_U,
   computeAssembly,
@@ -40,8 +40,7 @@ function uForWall(layers: AssemblyLayers | undefined): number {
   return BESTAND_U.wall;
 }
 
-function screen(home: HomeData, layersFor: LayersFor, variant: Variant): EnergyScreening {
-  const env = deriveEnvelope(home);
+function screen(env: Envelope, layersFor: LayersFor, variant: Variant): EnergyScreening {
   const retrofit = variant === 'ziel';
   const wallU = (id: string): number =>
     variant === 'start' ? BESTAND_U.wall : variant === 'ziel' ? ZIEL_U.wall : uForWall(layersFor(id));
@@ -71,15 +70,17 @@ export interface BuildingEnergy {
   heute: EnergyScreening;
   /** Retrofit target U-values (fully insulated envelope). */
   ziel: EnergyScreening;
-  heatedFloorAreaM2: number;
+  /** The derived thermal envelope (areas), for cost/roadmap estimates. */
+  envelope: Envelope;
 }
 
 /** Build the start/heute/ziel screenings for a model from its wall assemblies. */
 export function buildEnergyScreenings(home: HomeData, layersFor: LayersFor): BuildingEnergy {
+  const envelope = deriveEnvelope(home);
   return {
-    start: screen(home, layersFor, 'start'),
-    heute: screen(home, layersFor, 'heute'),
-    ziel: screen(home, layersFor, 'ziel'),
-    heatedFloorAreaM2: deriveEnvelope(home).heatedFloorAreaM2,
+    start: screen(envelope, layersFor, 'start'),
+    heute: screen(envelope, layersFor, 'heute'),
+    ziel: screen(envelope, layersFor, 'ziel'),
+    envelope,
   };
 }

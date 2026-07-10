@@ -16,4 +16,5 @@ export * from './geg.ts';
 export * from './assemblies.ts';
 export * from './energie.ts';
 export * from './foerderung.ts';
+export * from './fahrplan.ts';
 export * from './kosten.ts';

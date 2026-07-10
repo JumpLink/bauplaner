@@ -10,7 +10,13 @@ import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
 import type { CostCategory, CostStatus, HomeData } from '@bauplaner/core';
-import { BEG_FOERDERFAEHIG, computeAmortisation, computeFoerderung, type FoerderResult } from '@bauplaner/materials';
+import {
+  BEG_FOERDERFAEHIG,
+  computeAmortisation,
+  computeFoerderung,
+  computeRoadmap,
+  type FoerderResult,
+} from '@bauplaner/materials';
 
 import type { DocumentStore } from '../document-store.ts';
 import { buildEnergyScreenings } from '../energy.ts';
@@ -106,7 +112,7 @@ export class KostenView extends Gtk.Box {
 
     // — Amortisation from the energy screening (Heute vs Ziel) —
     const home = this.store.home;
-    if (home) page.add(this.buildAmortisation(home, eigenanteil));
+    if (home) page.add(this.buildAmortisation(home));
 
     // — Register with add button + item rows —
     const group = new Adw.PreferencesGroup({ title: `Kostenposten (${costs.length})` });
@@ -184,25 +190,31 @@ export class KostenView extends Gtk.Box {
     return group;
   }
 
-  /** Payback of the own share from the energy screening (Heute vs. Ziel demand). */
-  private buildAmortisation(home: HomeData, eigenanteil: number): Adw.PreferencesGroup {
+  /**
+   * Amortisation of the full retrofit: energy cost today vs. the fully insulated
+   * target from the shared screening, and the payback of the roadmap's own share
+   * (Gesamtplan Eigenanteil — the Fahrplan's total, not just the logged costs).
+   */
+  private buildAmortisation(home: HomeData): Adw.PreferencesGroup {
     const energy = buildEnergyScreenings(home, (id) => this.store.wallAssemblyLayers(id));
+    const roadmap = computeRoadmap(energy.envelope, { foerderung: true, isfpBonus: this.isfp });
     const a = computeAmortisation({
       endenergieHeuteKwhM2a: energy.heute.endenergieKwhM2a,
       endenergieZielKwhM2a: energy.ziel.endenergieKwhM2a,
-      heatedFloorAreaM2: energy.heatedFloorAreaM2,
-      eigenanteilEur: eigenanteil,
+      heatedFloorAreaM2: energy.envelope.heatedFloorAreaM2,
+      eigenanteilEur: roadmap.totalEigenanteilEur,
     });
     const group = new Adw.PreferencesGroup({
       title: 'Amortisation',
-      description: 'Energiekosten heute vs. saniertem Zielzustand; Payback auf Basis des erfassten Eigenanteils (Screening).',
+      description: 'Energiekosten heute vs. saniertem Zielzustand; Payback des Vollsanierungs-Eigenanteils (Screening).',
     });
     group.add(this.valueRow('Heizkosten heute', `${fmtEur(a.kostenHeuteEur)} / Jahr`));
     group.add(this.valueRow('Zielzustand (saniert)', `${fmtEur(a.kostenZielEur)} / Jahr`));
     group.add(this.valueRow('Jährliche Ersparnis', `${fmtEur(a.ersparnisProJahrEur)} / Jahr`));
+    group.add(this.valueRow('Eigenanteil Vollsanierung', fmtEur(roadmap.totalEigenanteilEur)));
     group.add(
       this.valueRow(
-        'Amortisation Eigenanteil',
+        'Amortisation',
         a.jahre != null ? `≈ ${a.jahre.toFixed(1).replace('.', ',')} Jahre` : '—',
         true,
       ),
