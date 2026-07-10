@@ -47,5 +47,11 @@ for _ in $(seq 1 40); do
        --method org.gjsify.Devtools.GetStatus >/dev/null 2>&1; then break; fi
   sleep 0.5
 done
+# Optional: resize before capturing (BP_SHOT_SIZE="<width> <height>") so a tall
+# view (e.g. the dashboard) fits into one shot instead of being scroll-clipped.
+if [ -n "${BP_SHOT_SIZE:-}" ]; then
+  gdbus call --session --dest "$APP_ID" --object-path "$OBJ" \
+    --method org.gjsify.Devtools.ResizeWindow ${BP_SHOT_SIZE} >/dev/null 2>&1 || true
+fi
 sleep 2.5   # let the GSK renderer lay out a few frames
 gjs -m "$HERE/dbus-shot.js" "$APP_ID" "$OBJ" "$OUT"

@@ -14,4 +14,5 @@ export * from './lehmgraben.ts';
 export * from './bauphysik.ts';
 export * from './geg.ts';
 export * from './assemblies.ts';
+export * from './energie.ts';
 export * from './kosten.ts';
