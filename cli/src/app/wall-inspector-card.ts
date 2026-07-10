@@ -9,6 +9,8 @@
 import GLib from '@girs/glib-2.0';
 import Gtk from '@girs/gtk-4.0';
 
+import { docCountForTarget } from '@bauplaner/core';
+
 import type { DocumentStore } from './document-store.ts';
 import { inspectWall, type WallInspection } from './wall-inspector.ts';
 
@@ -63,6 +65,9 @@ function buildInspectorCard(holder: Gtk.Box, store: DocumentStore, ins: WallInsp
   if (ins.feuchte) {
     card.append(kvRow('Feuchte', `${ins.feuchte.causeLabel} (${Math.round(ins.feuchte.confidence * 100)} %)`));
   }
+
+  const docCount = docCountForTarget(store.docs, 'wall', ins.id);
+  if (docCount > 0) card.append(kvRow('Dokumente', String(docCount)));
 
   // Edit-jump: open this wall in Bauteile (assembly) and, if damp, Feuchte.
   const actions = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6, marginTop: 4 });

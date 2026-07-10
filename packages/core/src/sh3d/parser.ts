@@ -136,6 +136,7 @@ export function parseSh3dBytes(bytes: Uint8Array): HomeData {
       num(p.y),
     ]);
     return {
+      id: str(r.id),
       name: str(r.name) || str(r.id).replace(/^room-/, ''),
       area: Number(polygonAreaM2(vertices).toFixed(2)),
       level: str(r.level),

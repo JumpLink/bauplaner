@@ -21,6 +21,8 @@ export interface Level {
 
 /** A room polygon on a given level. */
 export interface Room {
+  /** Room id (empty string if the model has none). */
+  id: string;
   name: string;
   /** Floor area in m² (from the shoelace formula over the vertices). */
   area: number;
