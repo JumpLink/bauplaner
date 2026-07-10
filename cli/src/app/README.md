@@ -58,8 +58,11 @@ system (GJS uses the real libraries via GObject-Introspection).
 
 - `BP_APP_FILE=/path/to/plan.sh3d` — auto-load that file on startup (into the
   shared document, so every view shows it; skips the file dialog).
-- `BP_APP_VIEW=<uebersicht|ansicht3d|bauteile|vorhaben|feuchte|materialien>` —
+- `BP_APP_VIEW=<uebersicht|ansicht3d|bauteile|vorhaben|kosten|feuchte|materialien>` —
   select the initial sidebar view.
+- `BP_APP_ID=<app-id>` — override the application id. GNOME apps are
+  single-instance per id, so a distinct id lets a *second* instance run beside
+  one you already have open (used for devtools screenshots — see below).
 - `BP_APP_COLORMODE=<neutral|uwert|feuchte>` — the 3D view's initial wall
   colouring mode (default `uwert`).
 - `BP_APP_PICKWALL=<wall-id>` — open the 3D click-inspector for that wall on
@@ -69,15 +72,25 @@ system (GJS uses the real libraries via GObject-Introspection).
 - `BP_APP_EDITWALL=<bauteile|feuchte>:<wall-id>` — fire the inspector's edit-jump
   on startup (switch to that view with the wall focused).
 - `GJSIFY_DEVTOOLS=1` — expose the `org.gjsify.Devtools` D-Bus control plane
-  (inspect / screenshot / drive the app). Screenshot the running app:
+  (inspect / screenshot / drive the app). Its `Screenshot` renders the window
+  in-process via the GSK renderer (`@gjsify/devtools`, the same `captureWidgetPng`
+  the PixelRPG map-editor uses) — no compositor portal, works headless.
 
-  ```bash
-  gdbus call --session --dest eu.jumplink.Bauplaner \
-    --object-path /eu/jumplink/Bauplaner/devtools \
-    --method org.gjsify.Devtools.Screenshot "" > /dev/null  # returns PNG bytes (ay)
-  ```
-  (Use a GJS caller to write the `ay` bytes to a `.png`, or `gjsify debug` for an
-  MCP bridge.)
+## Screenshots (self-verify)
+
+Capture any view without a human in the loop:
+
+```bash
+cli/dev/screenshot.sh uebersicht /tmp/uebersicht.png
+# view ∈ uebersicht|ansicht3d|bauteile|vorhaben|kosten|feuchte|materialien
+```
+
+It launches a **second** instance under `BP_APP_ID=eu.jumplink.BauplanerShot`
+(so it never hijacks a Bauplaner you have open), `GJSIFY_DEVTOOLS=1`, with the
+bundled demo model `cli/demo/beispielhaus.sh3d` loaded — a sample house is
+shipped precisely so the views have something to render — then pulls the PNG
+over D-Bus via `cli/dev/dbus-shot.js` (gdbus alone can't save the `ay` bytes).
+`gjsify debug` gives the same control plane an MCP bridge.
 
 ## Structure
 
