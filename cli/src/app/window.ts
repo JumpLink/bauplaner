@@ -21,9 +21,12 @@ import { DocumentStore } from './document-store.ts';
 import { openDocumentDialog } from './open-dialog.ts';
 import { Ansicht3dView } from './views/ansicht3d-view.ts';
 import { BauteileView } from './views/bauteile-view.ts';
+import { DokumentationView } from './views/dokumentation-view.ts';
+import { FahrplanView } from './views/fahrplan-view.ts';
 import { FeuchteView } from './views/feuchte-view.ts';
 import { KostenView } from './views/kosten-view.ts';
 import { MaterialienView } from './views/materialien-view.ts';
+import { RaumklimaView } from './views/raumklima-view.ts';
 import { UebersichtView } from './views/uebersicht-view.ts';
 import { VorhabenView } from './views/vorhaben-view.ts';
 
@@ -31,17 +34,38 @@ interface NavItem {
   view: string;
   icon: string;
   label: string;
+  /** Optional count shown as a pill on the nav row (0 → hidden). */
+  badge?: (store: DocumentStore) => number;
 }
 
+/** Walls carrying a damp diagnosis (Feuchte-Diagnose badge). */
+function feuchteCount(store: DocumentStore): number {
+  const home = store.home;
+  if (!home) return 0;
+  return home.walls.filter((w) => store.wallAnnotation(w.id)?.feuchte).length;
+}
+
+/** Cost positions not yet settled (Kosten & Förderung badge). */
+function openCostCount(store: DocumentStore): number {
+  return store.costs.filter((c) => c.status !== 'bezahlt').length;
+}
+
+// The v3 navigation: 9 sections with badges. View ids match the v3 design
+// (ansicht3d → modell, materialien → material); Vorhaben has no top-nav entry
+// anymore (folded into Modell later) but stays registered in the stack.
 const NAV_ITEMS: NavItem[] = [
-  { view: 'uebersicht', icon: 'view-list-symbolic', label: 'Übersicht' },
-  { view: 'ansicht3d', icon: 'view-paged-symbolic', label: '3D' },
+  { view: 'uebersicht', icon: 'view-grid-symbolic', label: 'Übersicht' },
+  { view: 'modell', icon: 'view-paged-symbolic', label: 'Modell' },
+  { view: 'fahrplan', icon: 'applications-engineering-symbolic', label: 'Fahrplan' },
   { view: 'bauteile', icon: 'window-restore-symbolic', label: 'Bauteile' },
-  { view: 'vorhaben', icon: 'applications-engineering-symbolic', label: 'Vorhaben' },
-  { view: 'kosten', icon: 'accessories-calculator-symbolic', label: 'Kosten' },
-  { view: 'feuchte', icon: 'weather-showers-symbolic', label: 'Feuchte' },
-  { view: 'materialien', icon: 'emblem-documents-symbolic', label: 'Materialien' },
+  { view: 'feuchte', icon: 'weather-showers-symbolic', label: 'Feuchte-Diagnose', badge: feuchteCount },
+  { view: 'kosten', icon: 'accessories-calculator-symbolic', label: 'Kosten & Förderung', badge: openCostCount },
+  { view: 'material', icon: 'emblem-documents-symbolic', label: 'Material' },
+  { view: 'raumklima', icon: 'weather-few-clouds-symbolic', label: 'Raumklima' },
+  { view: 'dokumentation', icon: 'folder-documents-symbolic', label: 'Dokumentation' },
 ];
+
+let navCssInstalled = false;
 
 export class MainWindow extends Adw.ApplicationWindow {
   static {
@@ -54,6 +78,8 @@ export class MainWindow extends Adw.ApplicationWindow {
   private readonly splitView = new Adw.NavigationSplitView();
   private readonly navList = new Gtk.ListBox({ cssClasses: ['navigation-sidebar'] });
   private readonly projectHeader = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
+  private readonly sidebarFooter = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
+  private readonly navBadges = new Map<string, Gtk.Label>();
   private readonly stack = new Adw.ViewStack();
   private readonly contentTitle = new Adw.WindowTitle({ title: APP_NAME, subtitle: '' });
   private readonly toastOverlay = new Adw.ToastOverlay();
@@ -62,18 +88,27 @@ export class MainWindow extends Adw.ApplicationWindow {
     super({ application: app, title: APP_NAME, defaultWidth: 1000, defaultHeight: 680 });
 
     this.stack.add_named(new UebersichtView(this, this.store), 'uebersicht');
-    this.stack.add_named(new Ansicht3dView(this, this.store), 'ansicht3d');
+    this.stack.add_named(new Ansicht3dView(this, this.store), 'modell');
+    this.stack.add_named(new FahrplanView(this.store), 'fahrplan');
     this.stack.add_named(this.bauteileView, 'bauteile');
-    this.stack.add_named(new VorhabenView(this.store), 'vorhaben');
-    this.stack.add_named(new KostenView(this.store), 'kosten');
     this.stack.add_named(this.feuchteView, 'feuchte');
-    this.stack.add_named(new MaterialienView(this.store), 'materialien');
+    this.stack.add_named(new KostenView(this.store), 'kosten');
+    this.stack.add_named(new MaterialienView(this.store), 'material');
+    this.stack.add_named(new RaumklimaView(this.store), 'raumklima');
+    this.stack.add_named(new DokumentationView(this.store), 'dokumentation');
+    // Vorhaben (Lehmgraben/earthworks) has no top-nav entry in v3 — it stays
+    // registered (renders in 3D, keeps the works path) and is absorbed into
+    // Modell in a later stage.
+    this.stack.add_named(new VorhabenView(this.store), 'vorhaben');
 
     // Save action — enabled only with a document.
     const saveAction = new Gio.SimpleAction({ name: 'save-project' });
     saveAction.set_enabled(false);
     this.store.subscribe(() => saveAction.set_enabled(this.store.hasDocument));
     this.store.subscribe(() => this.refreshProjectHeader());
+    this.store.subscribe(() => this.refreshBadges());
+    // Nav-badge pill styling needs a display; install it once the window realizes.
+    this.connect('realize', () => this.installNavCss());
     saveAction.connect('activate', () => {
       const written = this.store.save();
       this.toastOverlay.add_toast(
@@ -175,11 +210,19 @@ export class MainWindow extends Adw.ApplicationWindow {
         marginEnd: 6,
       });
       box.append(Gtk.Image.new_from_icon_name(item.icon));
-      box.append(new Gtk.Label({ label: item.label, xalign: 0 }));
+      box.append(new Gtk.Label({ label: item.label, xalign: 0, hexpand: true }));
+      if (item.badge) {
+        const badge = new Gtk.Label({ label: '', valign: Gtk.Align.CENTER });
+        badge.add_css_class('nav-badge');
+        badge.set_visible(false);
+        box.append(badge);
+        this.navBadges.set(item.view, badge);
+      }
       const row = new Gtk.ListBoxRow({ child: box });
       row.set_name(item.view);
       this.navList.append(row);
     }
+    this.refreshBadges();
     this.navList.connect('row-selected', (_list, row) => {
       if (row) this.onNavRowSelected(row);
     });
@@ -190,6 +233,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
     content.append(this.projectHeader);
     content.append(scroller);
+    content.append(this.sidebarFooter);
     this.refreshProjectHeader();
 
     const toolbar = new Adw.ToolbarView();
@@ -203,12 +247,8 @@ export class MainWindow extends Adw.ApplicationWindow {
 
   /** The v2 sidebar project card (name + area/levels) + a budget-spent bar. */
   private refreshProjectHeader(): void {
-    let c = this.projectHeader.get_first_child();
-    while (c) {
-      const next = c.get_next_sibling();
-      this.projectHeader.remove(c);
-      c = next;
-    }
+    this.clearBox(this.projectHeader);
+    this.clearBox(this.sidebarFooter);
     if (!this.store.hasDocument) return;
 
     const home = this.store.home;
@@ -253,7 +293,8 @@ export class MainWindow extends Adw.ApplicationWindow {
     card.append(inner);
     this.projectHeader.append(card);
 
-    // Budget-spent bar (only with a cost register): paid / total by amount.
+    // Sanierungsfortschritt bar. Proxy for now: paid / planned budget from the
+    // cost register; refined to done / all measures once the Fahrplan lands.
     const costs = this.store.costs;
     const total = costs.reduce((s, k) => s + k.net, 0);
     if (total > 0) {
@@ -268,7 +309,7 @@ export class MainWindow extends Adw.ApplicationWindow {
         marginEnd: 12,
       });
       const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL });
-      const l1 = new Gtk.Label({ label: 'Budget verausgabt', xalign: 0, hexpand: true });
+      const l1 = new Gtk.Label({ label: 'Sanierungsfortschritt', xalign: 0, hexpand: true });
       l1.add_css_class('caption');
       l1.add_css_class('dim-label');
       const l2 = new Gtk.Label({ label: `${Math.round(frac * 100)} %`, xalign: 1 });
@@ -281,6 +322,55 @@ export class MainWindow extends Adw.ApplicationWindow {
       box.append(bar);
       this.projectHeader.append(box);
     }
+
+    // Neutral format hint at the foot of the sidebar (no ".bauplan" claim yet).
+    const footer = new Gtk.Label({
+      label: 'Sweet Home 3D-kompatibel',
+      xalign: 0,
+      marginTop: 6,
+      marginBottom: 10,
+      marginStart: 14,
+      marginEnd: 14,
+    });
+    footer.add_css_class('caption');
+    footer.add_css_class('dim-label');
+    this.sidebarFooter.append(footer);
+  }
+
+  /** Remove every child of a box (used to re-render sidebar sections). */
+  private clearBox(box: Gtk.Box): void {
+    let c = box.get_first_child();
+    while (c) {
+      const next = c.get_next_sibling();
+      box.remove(c);
+      c = next;
+    }
+  }
+
+  /** Update the count pills on nav rows from the current document. */
+  private refreshBadges(): void {
+    for (const item of NAV_ITEMS) {
+      const badge = this.navBadges.get(item.view);
+      if (!badge || !item.badge) continue;
+      const n = item.badge(this.store);
+      badge.set_label(String(n));
+      badge.set_visible(n > 0);
+    }
+  }
+
+  /** Accent pill styling for the nav-row count badges (installed once). */
+  private installNavCss(): void {
+    if (navCssInstalled) return;
+    const display = this.get_display();
+    if (!display) return;
+    const provider = new Gtk.CssProvider();
+    provider.load_from_string(
+      '.nav-badge { min-width: 1.1em; padding: 0 6px; border-radius: 9px;' +
+        ' background-color: alpha(@accent_bg_color, 0.85); color: @accent_fg_color;' +
+        ' font-size: 0.8em; font-weight: bold; }',
+    );
+    Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+    navCssInstalled = true;
   }
 
   private buildContent(): Adw.NavigationPage {

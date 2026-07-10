@@ -43,7 +43,7 @@ blank labels, bad layout, or wrong data. Every UI change ships a screenshot.
 
 ```bash
 cli/dev/screenshot.sh <view> /tmp/out.png
-#   view ∈ uebersicht|ansicht3d|bauteile|vorhaben|kosten|feuchte|materialien
+#   view ∈ uebersicht|modell|fahrplan|bauteile|feuchte|kosten|material|raumklima|dokumentation
 #   optional 3rd arg: a model/project to load (default: the bundled demo)
 ```
 

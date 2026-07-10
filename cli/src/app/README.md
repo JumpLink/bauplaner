@@ -58,7 +58,7 @@ system (GJS uses the real libraries via GObject-Introspection).
 
 - `BP_APP_FILE=/path/to/plan.sh3d` — auto-load that file on startup (into the
   shared document, so every view shows it; skips the file dialog).
-- `BP_APP_VIEW=<uebersicht|ansicht3d|bauteile|vorhaben|kosten|feuchte|materialien>` —
+- `BP_APP_VIEW=<uebersicht|modell|fahrplan|bauteile|feuchte|kosten|material|raumklima|dokumentation>` —
   select the initial sidebar view.
 - `BP_APP_ID=<app-id>` — override the application id. GNOME apps are
   single-instance per id, so a distinct id lets a *second* instance run beside
@@ -82,7 +82,7 @@ Capture any view without a human in the loop:
 
 ```bash
 cli/dev/screenshot.sh uebersicht /tmp/uebersicht.png
-# view ∈ uebersicht|ansicht3d|bauteile|vorhaben|kosten|feuchte|materialien
+# view ∈ uebersicht|modell|fahrplan|bauteile|feuchte|kosten|material|raumklima|dokumentation
 ```
 
 It launches a **second** instance under `BP_APP_ID=eu.jumplink.BauplanerShot`
