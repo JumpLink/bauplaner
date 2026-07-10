@@ -79,15 +79,19 @@ Dev hooks that make a view screenshot-ready: `BP_APP_FILE` (load a model),
   `.numeric`) before writing custom CSS; the base theme already matches the
   Bauplaner v2 design.
 
-## Design — Bauplaner v2
+## Design — implement the entwurf
 
-UI work aligns the app with the **Bauplaner v2** design (a claude.ai/design
-Adwaita mockup: KPI-dashboard Übersicht, Modell, Fahrplan, Bauteile, Feuchte,
-Kosten & Förderung, Material tabs, Raumklima, Dokumentation). The visual language
-is stock libadwaita (the app gets it for free); the work is the per-view layout,
-nav, and the data behind it. It is **iterative** — one coherent, screenshot-
-verified view per PR. Features needing a new core (Fahrplan/Maßnahmenpakete,
-Förderung, Raumklima sensors) are staged separately.
+The tracked design + concept live in [`docs/entwurf_v3/`](docs/entwurf_v3/)
+(`Bauplaner v3.dc.html` + `docs/technisches-konzept-v3.md` + `docs/app-ui/*.png`).
+**Before building a feature, check whether the entwurf covers it** and align to
+it; the overarching goal is to **implement the entwurf fully** (2D/3D model,
+Gewerke/TGA, Sanierungsdaten, `.bauplan`). Not yet done → keep the draft tracked.
+
+Visual language is stock libadwaita (free); the work is per-view layout, nav and
+the data behind it. **Iterative** — one coherent, screenshot-verified view per PR;
+features needing a new core (Fahrplan, Förderung, Raumklima sensors) are staged
+separately. (Note: `_ds/` of the export is gitignored — it leaks account data +
+bloats the repo; the `.dc.html` + concept + screenshots are the tracked source.)
 
 ## Working rules
 

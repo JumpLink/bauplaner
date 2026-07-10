@@ -10,3 +10,9 @@ dist/
 # Editor / OS
 .DS_Store
 *.log
+
+# claude.ai/design export runtime bundle — NOT tracked: its _ds_bundle.js
+# embeds the exporter's account/session metadata (emails, calendar), and it
+# ships ~4.5 MB of redistributable Adwaita fonts. The design deliverables we DO
+# track are the .dc.html sources + docs/ concept + app-ui screenshots.
+docs/entwurf_v3/_ds/
