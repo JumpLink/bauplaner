@@ -17,11 +17,23 @@ import Adw from '@girs/adw-1';
 import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
-import { buildScene, polygonCentroid, type FloorSlab, type WallSolid } from '@bauplaner/core';
+import {
+  buildScene,
+  deriveTgaStats,
+  polygonCentroid,
+  tgaEdgePath,
+  tgaNodesById,
+  type FloorSlab,
+  type TgaNetwork,
+  type TgaNode,
+  type TgaTrade,
+  type WallSolid,
+} from '@bauplaner/core';
 
 import type { DocumentStore } from '../document-store.ts';
 import { buildLegend, buildLevelControl, buildModeControls, ensureLegendCss } from '../model-overlays.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
+import { TRADE_META } from '../tga.ts';
 import { renderInspector } from '../wall-inspector-card.ts';
 import { computeWallColors, type ColoringMode } from '../wall-coloring.ts';
 
@@ -46,11 +58,13 @@ interface Cr {
   setSourceRGB(r: number, g: number, b: number): void;
   setSourceRGBA(r: number, g: number, b: number, a: number): void;
   setLineWidth(w: number): void;
+  setDash(dashes: number[], offset: number): void;
   moveTo(x: number, y: number): void;
   lineTo(x: number, y: number): void;
   closePath(): void;
   fill(): void;
   stroke(): void;
+  rectangle(x: number, y: number, w: number, h: number): void;
   arc(xc: number, yc: number, r: number, a1: number, a2: number): void;
   selectFontFace(family: string, slant: number, weight: number): void;
   setFontSize(size: number): void;
@@ -105,6 +119,12 @@ export class GrundrissView extends Gtk.Box {
   private inspectorHolder?: Gtk.Box;
   private transform: PlanTransform | null = null;
   private visibleWalls: WallSolid[] = [];
+
+  // TGA (Gewerke) overlay: the network, its node index, and the trades shown.
+  private tgaNet: TgaNetwork | null = null;
+  private tgaNodes: Map<string, TgaNode> = new Map();
+  private readonly activeTrades = new Set<TgaTrade>();
+  private tgaInitDone = false;
 
   constructor(window: Gtk.Window, store: DocumentStore) {
     super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
@@ -173,6 +193,14 @@ export class GrundrissView extends Gtk.Box {
     this.visibleWalls = scene.walls.filter((w) => visible(w.level));
     const floors = scene.floors.filter((f) => visible(f.level));
 
+    // TGA (Gewerke) overlay network; on first load, show every present trade.
+    this.tgaNet = this.store.tga;
+    this.tgaNodes = this.tgaNet ? tgaNodesById(this.tgaNet) : new Map();
+    if (this.tgaNet && !this.tgaInitDone) {
+      this.tgaInitDone = true;
+      for (const st of deriveTgaStats(this.tgaNet)) this.activeTrades.add(st.trade);
+    }
+
     const area = new Gtk.DrawingArea({ hexpand: true, vexpand: true });
     area.set_draw_func((a, cr, width, height) =>
       this.draw(a as Gtk.DrawingArea, cr as unknown as Cr, width, height, floors, scene.northAngle),
@@ -212,6 +240,8 @@ export class GrundrissView extends Gtk.Box {
         }),
       );
     }
+    const chips = this.buildGewerkeChips();
+    if (chips) topStart.append(chips);
 
     const legend = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL,
@@ -420,8 +450,93 @@ export class GrundrissView extends Gtk.Box {
       cr.showText(areaText);
     }
 
+    this.drawTga(cr, sx, sy);
     this.drawCompass(cr, width - 34, 38, 15, northAngle, fg);
     this.drawScaleBar(cr, width, height, s, fgA);
+  }
+
+  /**
+   * Draw the active TGA (Gewerke) runs and nodes over the plan: each trade in its
+   * colour, planned runs dashed; sources/manifolds as squares, fixtures as dots.
+   * Level-filtered like the walls. A white halo keeps markers legible on any fill.
+   */
+  private drawTga(cr: Cr, sx: (x: number) => number, sy: (z: number) => number): void {
+    const net = this.tgaNet;
+    if (!net) return;
+    const onLevel = (lvl: string): boolean => !this.isolatedLevel || lvl === this.isolatedLevel;
+
+    for (const e of net.edges) {
+      if (!this.activeTrades.has(e.trade) || !onLevel(e.levelId)) continue;
+      const pts = tgaEdgePath(e, this.tgaNodes);
+      if (pts.length < 2) continue;
+      setNum(cr, TRADE_META[e.trade].color, 0.95);
+      cr.setLineWidth(2.5);
+      cr.setDash(e.status === 'geplant' ? [6, 4] : [], 0);
+      cr.moveTo(sx(pts[0][0]), sy(pts[0][1]));
+      for (let i = 1; i < pts.length; i++) cr.lineTo(sx(pts[i][0]), sy(pts[i][1]));
+      cr.stroke();
+    }
+    cr.setDash([], 0);
+
+    for (const n of net.nodes) {
+      if (!this.activeTrades.has(n.trade) || !onLevel(n.levelId)) continue;
+      const color = TRADE_META[n.trade].color;
+      const px = sx(n.x);
+      const py = sy(n.z);
+      if (n.kind === 'erzeuger' || n.kind === 'verteiler') {
+        cr.setSourceRGBA(1, 1, 1, 0.9);
+        cr.rectangle(px - 7, py - 7, 14, 14);
+        cr.fill();
+        setNum(cr, color, 1);
+        cr.rectangle(px - 5.5, py - 5.5, 11, 11);
+        cr.fill();
+      } else {
+        cr.setSourceRGBA(1, 1, 1, 0.9);
+        cr.arc(px, py, 6, 0, Math.PI * 2);
+        cr.fill();
+        setNum(cr, color, 1);
+        cr.arc(px, py, 4.3, 0, Math.PI * 2);
+        cr.fill();
+      }
+    }
+  }
+
+  /**
+   * The floating "Gewerke" card: one toggle chip per present trade (colour swatch
+   * + label + total run length), switching that trade's overlay on/off. Null when
+   * the project carries no TGA network.
+   */
+  private buildGewerkeChips(): Gtk.Widget | null {
+    const net = this.tgaNet;
+    if (!net) return null;
+    const stats = deriveTgaStats(net);
+    if (stats.length === 0) return null;
+
+    const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, cssClasses: ['osd', 'toolbar'] });
+    card.append(new Gtk.Label({ label: 'Gewerke', xalign: 0, cssClasses: ['caption-heading'] }));
+    for (const st of stats) {
+      const meta = TRADE_META[st.trade];
+      const swatch = new Gtk.DrawingArea({ widthRequest: 12, heightRequest: 12, valign: Gtk.Align.CENTER });
+      swatch.set_draw_func((_a, c, w, h) => {
+        const cc = c as unknown as Cr;
+        setNum(cc, meta.color, 1);
+        cc.rectangle(0, 0, w, h);
+        cc.fill();
+      });
+      const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 });
+      row.append(swatch);
+      const len = st.lengthM.toFixed(1).replace('.', ',');
+      row.append(new Gtk.Label({ label: `${meta.label} · ${len} m`, xalign: 0 }));
+      const btn = new Gtk.ToggleButton({ active: this.activeTrades.has(st.trade), cssClasses: ['flat'] });
+      btn.set_child(row);
+      btn.connect('toggled', () => {
+        if (btn.get_active()) this.activeTrades.add(st.trade);
+        else this.activeTrades.delete(st.trade);
+        this.drawArea?.queue_draw();
+      });
+      card.append(btn);
+    }
+    return card;
   }
 
   /** A small north compass (circle + needle + "N"), rotated by the model's north. */

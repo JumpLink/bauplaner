@@ -34,6 +34,35 @@
     }
   },
   "works": [],
+  "tga": {
+    "nodes": [
+      { "id": "h-erz", "levelId": "L0", "trade": "heizung", "kind": "erzeuger", "x": 11, "z": 9, "label": "Gastherme" },
+      { "id": "h-vert", "levelId": "L0", "trade": "heizung", "kind": "verteiler", "x": 6, "z": 6.3, "label": "Heizkreisverteiler" },
+      { "id": "h-wohnen", "levelId": "L0", "trade": "heizung", "kind": "heizkoerper", "x": 3.5, "z": 0.6, "label": "HK Wohnen" },
+      { "id": "h-wohnen-w", "levelId": "L0", "trade": "heizung", "kind": "heizkoerper", "x": 0.6, "z": 3, "label": "HK Wohnen West" },
+      { "id": "h-kueche", "levelId": "L0", "trade": "heizung", "kind": "heizkoerper", "x": 9.5, "z": 0.6, "label": "HK Küche" },
+      { "id": "h-bad", "levelId": "L0", "trade": "heizung", "kind": "heizkoerper", "x": 0.6, "z": 8, "label": "HK Bad" },
+      { "id": "w-anschluss", "levelId": "L0", "trade": "wasser", "kind": "erzeuger", "x": 11.4, "z": 9.4, "label": "Hausanschluss" },
+      { "id": "w-kueche", "levelId": "L0", "trade": "wasser", "kind": "zapfstelle", "x": 11.4, "z": 0.6, "label": "Spüle Küche" },
+      { "id": "w-bad", "levelId": "L0", "trade": "wasser", "kind": "zapfstelle", "x": 0.6, "z": 9.4, "label": "Waschtisch Bad" },
+      { "id": "e-zs", "levelId": "L0", "trade": "strom", "kind": "verteiler", "x": 0.5, "z": 9.5, "label": "Zählerschrank" },
+      { "id": "e-1", "levelId": "L0", "trade": "strom", "kind": "steckdose", "x": 3, "z": 0.4 },
+      { "id": "e-2", "levelId": "L0", "trade": "strom", "kind": "steckdose", "x": 9, "z": 0.4 },
+      { "id": "e-3", "levelId": "L0", "trade": "strom", "kind": "steckdose", "x": 0.4, "z": 4 }
+    ],
+    "edges": [
+      { "id": "he-1", "levelId": "L0", "trade": "heizung", "from": "h-erz", "to": "h-vert", "status": "bestand", "dimension": "DN25" },
+      { "id": "he-2", "levelId": "L0", "trade": "heizung", "from": "h-vert", "to": "h-wohnen", "status": "bestand", "dimension": "DN15" },
+      { "id": "he-3", "levelId": "L0", "trade": "heizung", "from": "h-vert", "to": "h-wohnen-w", "status": "bestand", "dimension": "DN15" },
+      { "id": "he-4", "levelId": "L0", "trade": "heizung", "from": "h-vert", "to": "h-kueche", "status": "bestand", "dimension": "DN15" },
+      { "id": "he-5", "levelId": "L0", "trade": "heizung", "from": "h-vert", "to": "h-bad", "status": "bestand", "dimension": "DN15" },
+      { "id": "wa-1", "levelId": "L0", "trade": "wasser", "from": "w-anschluss", "to": "w-kueche", "status": "bestand", "dimension": "DN20" },
+      { "id": "wa-2", "levelId": "L0", "trade": "wasser", "from": "w-anschluss", "to": "w-bad", "status": "geplant", "dimension": "DN20" },
+      { "id": "st-1", "levelId": "L0", "trade": "strom", "from": "e-zs", "to": "e-1", "status": "bestand" },
+      { "id": "st-2", "levelId": "L0", "trade": "strom", "from": "e-zs", "to": "e-2", "status": "bestand" },
+      { "id": "st-3", "levelId": "L0", "trade": "strom", "from": "e-zs", "to": "e-3", "status": "bestand" }
+    ]
+  },
   "costs": [
     { "id": "cost-1-material", "label": "DERNOTON-Fertigmischung BA", "category": "material", "status": "angeboten", "net": 3360, "vatRate": 0.19, "note": "Angebot (Demo)" },
     { "id": "cost-2-lieferung", "label": "Lieferung (Sattelzug)", "category": "lieferung", "status": "angeboten", "net": 790, "vatRate": 0.19, "note": "Angebot (Demo)" },

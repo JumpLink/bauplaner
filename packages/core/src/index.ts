@@ -14,4 +14,5 @@ export type { ModelAsset, ModelCatalog } from './sh3d/models.ts';
 export * from './geometry.ts';
 export * from './scene.ts';
 export * from './envelope.ts';
+export * from './tga.ts';
 export * from './project.ts';

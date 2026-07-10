@@ -20,6 +20,7 @@ import { createHash } from 'node:crypto';
 import { basename, dirname, resolve } from 'node:path';
 
 import { parseSh3dBytes } from './sh3d/parser.ts';
+import type { TgaNetwork } from './tga.ts';
 import type { HomeData } from './sh3d/types.ts';
 
 export const PROJECT_SCHEMA_VERSION = 2;
@@ -168,6 +169,8 @@ export interface EcoProject {
   works?: RetrofitWork[];
   /** Cost register for planning/financing (v2+). */
   costs?: CostItem[];
+  /** Building-services networks (heating/water/electric …) — our own layer. */
+  tga?: TgaNetwork;
 }
 
 export interface LoadedDocument {
@@ -233,7 +236,18 @@ export function parseProject(json: string): EcoProject {
     annotations: (r.annotations as EcoProject['annotations']) ?? undefined,
     works: Array.isArray(r.works) ? (r.works as RetrofitWork[]) : undefined,
     costs: Array.isArray(r.costs) ? (r.costs as CostItem[]) : undefined,
+    tga: isTgaNetwork(r.tga) ? (r.tga as TgaNetwork) : undefined,
   };
+}
+
+/** Shallow guard: a TGA network is an object with node and edge arrays. */
+function isTgaNetwork(v: unknown): v is TgaNetwork {
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    Array.isArray((v as TgaNetwork).nodes) &&
+    Array.isArray((v as TgaNetwork).edges)
+  );
 }
 
 /** Serialize a project to pretty JSON (trailing newline). */
