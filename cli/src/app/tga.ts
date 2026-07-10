@@ -5,7 +5,7 @@
  * by the Grundriss overlay and its trade chips so both always agree.
  */
 
-import type { TgaTrade } from '@bauplaner/core';
+import type { TgaNodeKind, TgaTrade } from '@bauplaner/core';
 
 export interface TradeMeta {
   label: string;
@@ -20,4 +20,25 @@ export const TRADE_META: Record<TgaTrade, TradeMeta> = {
   wasser: { label: 'Wasser', color: 0x3584e4 },
   strom: { label: 'Strom', color: 0xf5c211 },
   lueftung: { label: 'Lüftung', color: 0x33d17a },
+};
+
+/** German label for each node kind, for the placement palette. */
+export const KIND_LABELS: Record<TgaNodeKind, string> = {
+  erzeuger: 'Erzeuger / Quelle',
+  verteiler: 'Verteiler',
+  heizkoerper: 'Heizkörper',
+  ventil: 'Ventil',
+  zapfstelle: 'Zapfstelle',
+  steckdose: 'Steckdose',
+  leuchte: 'Leuchte',
+  auslass: 'Auslass',
+};
+
+/** The node kinds a given trade offers in the palette (first = default). */
+export const KINDS_BY_TRADE: Record<TgaTrade, TgaNodeKind[]> = {
+  heizung: ['heizkoerper', 'verteiler', 'ventil', 'erzeuger'],
+  fbh: ['verteiler', 'ventil', 'auslass'],
+  wasser: ['zapfstelle', 'ventil', 'erzeuger'],
+  strom: ['steckdose', 'leuchte', 'verteiler'],
+  lueftung: ['auslass', 'ventil', 'erzeuger'],
 };

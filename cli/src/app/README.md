@@ -23,9 +23,10 @@ Status: **read-only**. Three views:
     the TGA (building-services) overlay per trade — heating / water / electric …
     drawn as a typed-node graph (sources & manifolds as squares, fixtures as dots;
     planned runs dashed) with each trade's total run length. A **Bearbeiten**
-    toggle turns on Gewerke editing: **drag** a node to move it, **tap two** nodes
-    of the same trade to connect a run, **tap + delete** to remove — all undoable
-    (header Undo/Redo, Ctrl+Z/Y) via the core command store. Wall/room geometry
+    toggle turns on Gewerke editing: **place** a new fixture from a trade/kind
+    palette, **drag** a node to move it, **tap two** nodes of the same trade to
+    connect a run, **tap + delete** to remove — all undoable (header Undo/Redo,
+    Ctrl+Z/Y) via the core command store. Wall/room geometry
     stays read-only until the editable-geometry model lands. The concept's rule
     "edit in 2D, inspect in 3D" — so the plan is the primary surface.
   - **3D** — render the building in 3D (three.js on the WebGL→`Gtk.GLArea` bridge):
