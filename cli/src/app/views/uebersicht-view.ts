@@ -228,11 +228,11 @@ export class UebersichtView extends Gtk.Box {
       row.connect('activated', () => this.goView(view));
       group.add(row);
     };
-    link('3D-Modell', 'view-paged-symbolic', 'ansicht3d');
+    link('3D-Modell', 'view-paged-symbolic', 'modell');
     link('Bauteile & U-Werte', 'window-restore-symbolic', 'bauteile');
     link('Kosten & Kostenplan', 'accessories-calculator-symbolic', 'kosten');
     link('Feuchte-Diagnose', 'weather-showers-symbolic', 'feuchte');
-    link('Materialien', 'emblem-documents-symbolic', 'materialien');
+    link('Materialien', 'emblem-documents-symbolic', 'material');
 
     const open = new Adw.ActionRow({ title: 'Andere Datei öffnen …', subtitle: path, activatable: true });
     open.add_prefix(Gtk.Image.new_from_icon_name('document-open-symbolic'));
