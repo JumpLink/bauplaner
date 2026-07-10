@@ -12,7 +12,7 @@ import GLib from '@girs/glib-2.0';
 import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
-import type { HomeData } from '@bauplaner/core';
+import { assessRoomClimate, deriveRoomClimate, type HomeData } from '@bauplaner/core';
 import { BEG_FOERDERFAEHIG, computeFoerderung, type EnergyScreening } from '@bauplaner/materials';
 
 import type { DocumentStore } from '../document-store.ts';
@@ -166,7 +166,7 @@ export class UebersichtView extends Gtk.Box {
     column.append(this.buildEnergyScale(start, heute, ziel));
     column.append(this.buildNextSteps(home));
     column.append(this.buildHeatLoss(heute));
-    column.append(this.buildRaumklimaTeaser());
+    column.append(this.buildRaumklimaTeaser(home));
 
     const clamp = new Adw.Clamp({ maximumSize: 1000, child: column });
     return new Gtk.ScrolledWindow({
@@ -475,16 +475,28 @@ export class UebersichtView extends Gtk.Box {
 
   // --- Raumklima jetzt (teaser; sensors staged) ---
 
-  private buildRaumklimaTeaser(): Gtk.Widget {
+  private buildRaumklimaTeaser(home: HomeData): Gtk.Widget {
     const group = new Adw.PreferencesGroup({
       title: 'Raumklima jetzt',
       description: 'Live-Werte der Sensoren je Raum',
     });
-    const row = new Adw.ActionRow({
-      title: 'Keine Sensoren verbunden',
-      subtitle: 'Home-Assistant-Anbindung in Arbeit',
-      activatable: true,
-    });
+
+    const climate = deriveRoomClimate(home.rooms, this.store.docs);
+    const withReadings = climate.filter((rc) => rc.temperature || rc.humidity || rc.co2);
+    const warnings = withReadings.filter((rc) => assessRoomClimate(rc).status !== 'good').length;
+
+    const row = new Adw.ActionRow({ activatable: true });
+    if (withReadings.length === 0) {
+      row.set_title('Keine Sensoren verbunden');
+      row.set_subtitle('Home Assistant verbinden für Live-Werte');
+    } else {
+      row.set_title(`${withReadings.length} ${plural(withReadings.length, 'Raum', 'Räume')} mit Sensorwerten`);
+      row.set_subtitle(
+        warnings > 0
+          ? `${warnings} ${plural(warnings, 'Raum', 'Räume')} außerhalb des Komfortbereichs`
+          : 'Alle im Komfortbereich',
+      );
+    }
     row.add_prefix(Gtk.Image.new_from_icon_name('weather-few-clouds-symbolic'));
     row.add_suffix(Gtk.Image.new_from_icon_name('go-next-symbolic'));
     row.connect('activated', () => this.goView('raumklima'));

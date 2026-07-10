@@ -259,6 +259,11 @@ export class DocumentStore {
     return this._doc?.project.docs ?? [];
   }
 
+  /** Room→Home-Assistant-sensor mapping for Raumklima, or null. */
+  get raumklimaEntities(): Record<string, { temperature?: string; humidity?: string; co2?: string }> | null {
+    return this._doc?.project.raumklima?.entities ?? null;
+  }
+
   /** Add a documentation entry (undoable). */
   addDoc(entry: DocEntry): void {
     const doc = this._doc;

@@ -174,6 +174,10 @@ export interface EcoProject {
   tga?: TgaNetwork;
   /** Documentation entries (photos/readings/notes anchored to entities). */
   docs?: DocEntry[];
+  /** Raumklima config — room id → Home Assistant sensor entity per metric. */
+  raumklima?: {
+    entities?: Record<string, { temperature?: string; humidity?: string; co2?: string }>;
+  };
 }
 
 export interface LoadedDocument {
@@ -241,6 +245,7 @@ export function parseProject(json: string): EcoProject {
     costs: Array.isArray(r.costs) ? (r.costs as CostItem[]) : undefined,
     tga: isTgaNetwork(r.tga) ? (r.tga as TgaNetwork) : undefined,
     docs: Array.isArray(r.docs) ? (r.docs as DocEntry[]) : undefined,
+    raumklima: typeof r.raumklima === 'object' && r.raumklima !== null ? (r.raumklima as EcoProject['raumklima']) : undefined,
   };
 }
 

@@ -68,7 +68,14 @@
     { "id": "doc-2", "kind": "reading", "title": "Wandfeuchte", "value": 82, "unit": "% rF", "date": "2026-03-14", "anchor": { "targetType": "wall", "targetId": "L0-o3" } },
     { "id": "doc-3", "kind": "reading", "title": "Raumtemperatur", "value": 19, "unit": "°C", "date": "2026-03-14", "anchor": { "targetType": "room", "targetId": "r-flur" } },
     { "id": "doc-4", "kind": "note", "title": "Fenster Wohnen", "text": "Fensterflügel klemmt — vor der Dämmung prüfen.", "date": "2026-03-15", "anchor": { "targetType": "room", "targetId": "r-wohnen" } },
-    { "id": "doc-5", "kind": "photo", "title": "Südfassade", "file": "fotos/suedfassade.jpg", "date": "2026-03-14", "anchor": { "targetType": "building", "targetId": "" } }
+    { "id": "doc-5", "kind": "photo", "title": "Südfassade", "file": "fotos/suedfassade.jpg", "date": "2026-03-14", "anchor": { "targetType": "building", "targetId": "" } },
+    { "id": "doc-6", "kind": "reading", "title": "Raumtemperatur", "value": 21, "unit": "°C", "date": "2026-03-16", "anchor": { "targetType": "room", "targetId": "r-wohnen" } },
+    { "id": "doc-7", "kind": "reading", "title": "Luftfeuchte", "value": 45, "unit": "% rF", "date": "2026-03-16", "anchor": { "targetType": "room", "targetId": "r-wohnen" } },
+    { "id": "doc-8", "kind": "reading", "title": "Raumtemperatur", "value": 20, "unit": "°C", "date": "2026-03-16", "anchor": { "targetType": "room", "targetId": "r-kueche" } },
+    { "id": "doc-9", "kind": "reading", "title": "Luftfeuchte", "value": 58, "unit": "% rF", "date": "2026-03-16", "anchor": { "targetType": "room", "targetId": "r-kueche" } },
+    { "id": "doc-10", "kind": "reading", "title": "Luftfeuchte", "value": 68, "unit": "% rF", "date": "2026-03-16", "anchor": { "targetType": "room", "targetId": "r-flur" } },
+    { "id": "doc-11", "kind": "reading", "title": "Raumtemperatur", "value": 18, "unit": "°C", "date": "2026-03-16", "anchor": { "targetType": "room", "targetId": "r-schlafen" } },
+    { "id": "doc-12", "kind": "reading", "title": "Luftfeuchte", "value": 52, "unit": "% rF", "date": "2026-03-16", "anchor": { "targetType": "room", "targetId": "r-schlafen" } }
   ],
   "costs": [
     { "id": "cost-1-material", "label": "DERNOTON-Fertigmischung BA", "category": "material", "status": "angeboten", "net": 3360, "vatRate": 0.19, "note": "Angebot (Demo)" },

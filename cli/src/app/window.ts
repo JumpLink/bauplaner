@@ -16,6 +16,8 @@ import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 import Pango from '@girs/pango-1.0';
 
+import { climateWarningCount } from '@bauplaner/core';
+
 import { APP_NAME } from './constants.ts';
 import { DocumentStore } from './document-store.ts';
 import { openDocumentDialog } from './open-dialog.ts';
@@ -52,6 +54,12 @@ function openCostCount(store: DocumentStore): number {
   return store.costs.filter((c) => c.status !== 'bezahlt').length;
 }
 
+/** Rooms with an out-of-comfort climate (Raumklima badge). */
+function raumklimaCount(store: DocumentStore): number {
+  const home = store.home;
+  return home ? climateWarningCount(home.rooms, store.docs) : 0;
+}
+
 // The v3 navigation: 9 sections with badges. View ids match the v3 design
 // (ansicht3d → modell, materialien → material); Vorhaben has no top-nav entry
 // anymore (folded into Modell later) but stays registered in the stack.
@@ -63,7 +71,7 @@ const NAV_ITEMS: NavItem[] = [
   { view: 'feuchte', icon: 'weather-showers-symbolic', label: 'Feuchte-Diagnose', subtitle: 'Diagnose feuchter Wände', badge: feuchteCount },
   { view: 'kosten', icon: 'accessories-calculator-symbolic', label: 'Kosten & Förderung', subtitle: 'Kosten, Förderung & Amortisation', badge: openCostCount },
   { view: 'material', icon: 'emblem-documents-symbolic', label: 'Material', subtitle: 'Materialstamm' },
-  { view: 'raumklima', icon: 'weather-few-clouds-symbolic', label: 'Raumklima', subtitle: 'Sensorwerte je Raum' },
+  { view: 'raumklima', icon: 'weather-few-clouds-symbolic', label: 'Raumklima', subtitle: 'Sensorwerte je Raum', badge: raumklimaCount },
   { view: 'dokumentation', icon: 'folder-documents-symbolic', label: 'Dokumentation', subtitle: 'Fotos, PDFs & Messwerte' },
 ];
 

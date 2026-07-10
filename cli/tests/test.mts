@@ -23,6 +23,7 @@ import fahrplan from './unit/fahrplan.test.ts';
 import tga from './unit/tga.test.ts';
 import commands from './unit/commands.test.ts';
 import doc from './unit/doc.test.ts';
+import raumklima from './unit/raumklima.test.ts';
 import works from './unit/works.test.ts';
 
 run({
@@ -46,5 +47,6 @@ run({
   tga,
   commands,
   doc,
+  raumklima,
   works,
 });
