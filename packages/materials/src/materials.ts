@@ -9,15 +9,18 @@
  *
  * - `lambda` (λ, W/(m·K)) and `mu` (µ, dimensionless vapour-diffusion resistance)
  *   drive the U-value and Glaser/Tauwasser analysis in `bauphysik.ts`.
- * - `price` is optional and usually left empty (no reliable data); supply real
- *   quotes at the CLI instead. See `kosten.ts`.
+ * - `price` is an optional **sourced reference price** (Richtwert). Where set it
+ *   carries `source` (shop + product) and `retrievedAt` (the date the price was
+ *   looked up) — prices drift, so always re-check before ordering and prefer a
+ *   real quote via the CLI `--price` override. See `kosten.ts`.
  */
 
 export type MaterialCategory =
   | 'dichtung' // sealing (Ton/Bentonit)
   | 'boden' // soil / fill / aggregate
-  | 'mauerwerk' // masonry
+  | 'mauerwerk' // masonry (bricks, mortar)
   | 'putz' // plaster / render
+  | 'platte' // dry-lining / building boards (Trockenbau)
   | 'daemmung' // insulation
   | 'holz' // timber
   | 'sonstiges';
@@ -28,7 +31,10 @@ export type PriceUnit = 'm3' | 't' | 'kg' | 'm2';
 export interface Price {
   amount: number;
   per: PriceUnit;
+  /** Where the price comes from (shop + product), for traceability. */
   source?: string;
+  /** ISO date (YYYY-MM-DD) the price was retrieved — prices drift over time. */
+  retrievedAt?: string;
 }
 
 /**
@@ -126,26 +132,52 @@ export const MATERIALS: Record<string, Material> = {
     diffusionsoffen: true,
     source: DIN,
   },
+  lehmmauermoertel: {
+    key: 'lehmmauermoertel',
+    name: 'Lehm-Mauermörtel schwer (erdfeucht)',
+    category: 'mauerwerk',
+    density: 1.8,
+    diffusionsoffen: true,
+    price: {
+      amount: 125,
+      per: 't',
+      source: 'baunativ-shop.de, conluto Lehm-Mauermörtel schwer erdfeucht, 700-kg-Big-Bag, 87,50 €',
+      retrievedAt: '2026-07-10',
+    },
+    source: 'Richtwert schwer/erdfeucht ~1,8 t/m³ — Herstellerangabe bestätigen',
+  },
 
   // — Plasters / renders —
   lehmputz: {
     key: 'lehmputz',
-    name: 'Lehmputz',
+    name: 'Lehm-Unterputz',
     category: 'putz',
     density: 1.8,
     lambda: 0.83,
     mu: 8,
     diffusionsoffen: true,
+    price: {
+      amount: 246.22,
+      per: 't',
+      source: 'ÖkoPlus (oekoplus.com), Claytec Lehm-Unterputz mit Stroh, 500-kg-Big-Bag, 123,11 €',
+      retrievedAt: '2026-07-10',
+    },
     source: DIN,
   },
   kalkputz: {
     key: 'kalkputz',
-    name: 'Kalkputz',
+    name: 'Kalkputz (NHL-Unterputz)',
     category: 'putz',
     density: 1.6,
     lambda: 0.7,
     mu: 15,
     diffusionsoffen: true,
+    price: {
+      amount: 430,
+      per: 't',
+      source: 'mein-naturbaumarkt.de, Hessler HP9 Naturkalk-Grundputz, 25-kg-Sack, ab 10,75 €',
+      retrievedAt: '2026-07-10',
+    },
     source: DIN,
   },
   kalkzementputz: {
@@ -159,15 +191,49 @@ export const MATERIALS: Record<string, Material> = {
     source: DIN,
   },
 
+  // — Boards (Trockenbau) —
+  lehmbauplatte: {
+    key: 'lehmbauplatte',
+    name: 'Lehmbauplatte schwer 22 mm',
+    category: 'platte',
+    density: 1.45,
+    lambda: 0.35,
+    mu: 6,
+    diffusionsoffen: true,
+    price: {
+      amount: 30.28,
+      per: 'm2',
+      source: 'baunativ-shop.de, conluto Lehmbauplatte schwer 22 mm (0,781 m²/Platte, 23,65 €)',
+      retrievedAt: '2026-07-10',
+    },
+    source: 'Richtwerte: ~31 kg/m² bei 22 mm → ρ ~1,45 t/m³, λ ~0,35 — Herstellerangabe bestätigen',
+  },
+
   // — Insulation (natural, diffusion-open) —
   holzfaser: {
     key: 'holzfaser',
-    name: 'Holzweichfaserdämmung',
+    name: 'Holzweichfaserdämmung (Platte)',
     category: 'daemmung',
     density: 0.16,
     lambda: 0.04,
     mu: 5,
     diffusionsoffen: true,
+    source: DIN,
+  },
+  holzfaserflex: {
+    key: 'holzfaserflex',
+    name: 'Holzfaser-Flexdämmung (Klemmfilz)',
+    category: 'daemmung',
+    density: 0.05,
+    lambda: 0.038,
+    mu: 2,
+    diffusionsoffen: true,
+    price: {
+      amount: 103.5,
+      per: 'm3',
+      source: 'baunativ-shop.de, GUTEX Thermoflex 60 mm (6,21 m²/38,57 € → 6,21 €/m² ÷ 0,06 m)',
+      retrievedAt: '2026-07-10',
+    },
     source: DIN,
   },
   zellulose: {
@@ -178,16 +244,28 @@ export const MATERIALS: Record<string, Material> = {
     lambda: 0.04,
     mu: 2,
     diffusionsoffen: true,
+    price: {
+      amount: 1.13,
+      per: 'kg',
+      source: 'baunativ-shop.de, STEICO zell Einblasdämmung, 15-kg-Sack, 16,98 €',
+      retrievedAt: '2026-07-10',
+    },
     source: DIN,
   },
   hanf: {
     key: 'hanf',
-    name: 'Hanfdämmung',
+    name: 'Hanfdämmung (Matte)',
     category: 'daemmung',
     density: 0.04,
     lambda: 0.045,
     mu: 2,
     diffusionsoffen: true,
+    price: {
+      amount: 225,
+      per: 'm3',
+      source: 'Richtwert ~15–30 €/m² bei 100 mm (energie-experten.org, BENZ24) → Mitte ~225 €/m³',
+      retrievedAt: '2026-07-10',
+    },
     source: DIN,
   },
   schaumglasschotter: {
@@ -198,6 +276,12 @@ export const MATERIALS: Record<string, Material> = {
     lambda: 0.08,
     mu: 3,
     diffusionsoffen: true,
+    price: {
+      amount: 132.83,
+      per: 'm3',
+      source: 'baunativ-shop.de, GLAPOR Schaumglasschotter, 1,5-m³-Big-Bag, 199,25 €; lose ab ~46–62 €/m³ (energie-experten.org)',
+      retrievedAt: '2026-07-10',
+    },
     source: DIN,
   },
 

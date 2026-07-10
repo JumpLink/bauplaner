@@ -3,7 +3,9 @@ import { describe, it, expect } from '@gjsify/unit';
 import {
   computeOrderCost,
   estimateAssemblyCost,
+  getMaterial,
   materialCost,
+  MATERIALS,
   parsePriceOverride,
 } from '@bauplaner/materials';
 
@@ -85,13 +87,40 @@ export default async () => {
       const c = estimateAssemblyCost(
         [
           { materialKey: 'holzfaser', thicknessM: 0.1 },
-          { materialKey: 'lehmputz', thicknessM: 0.02 },
+          { materialKey: 'vollziegel', thicknessM: 0.02 }, // no stock price
         ],
         10,
         { holzfaser: { amount: 200, per: 'm3' } },
       );
       expect(c.total).toBe(200);
       expect(c.missingPrice.length).toBe(1);
+    });
+
+    await it('uses a stock reference price when no override is given', async () => {
+      // lehmputz now carries a sourced price (246,22 €/t, ρ 1,8): 10 m² × 0,02 m
+      // = 0,2 m³ × 1,8 t = 0,36 t × 246,22 ≈ 88,64 €
+      const c = estimateAssemblyCost([{ materialKey: 'lehmputz', thicknessM: 0.02 }], 10);
+      expect(c.missingPrice.length).toBe(0);
+      expect(c.total).toBe(88.64);
+    });
+  });
+
+  await describe('material reference prices', async () => {
+    await it('every stock price carries a source and a retrieval date', async () => {
+      for (const m of Object.values(MATERIALS)) {
+        if (m.price) {
+          expect(typeof m.price.source).toBe('string');
+          expect(typeof m.price.retrievedAt).toBe('string');
+        }
+      }
+    });
+
+    await it('has the new materials with sourced prices', async () => {
+      expect(getMaterial('zellulose').price?.amount).toBe(1.13);
+      expect(getMaterial('zellulose').price?.per).toBe('kg');
+      expect(getMaterial('lehmbauplatte').price?.per).toBe('m2');
+      expect(getMaterial('holzfaserflex').price?.amount).toBe(103.5);
+      expect(getMaterial('lehmmauermoertel').category).toBe('mauerwerk');
     });
   });
 };
