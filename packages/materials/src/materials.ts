@@ -16,7 +16,7 @@
  */
 
 export type MaterialCategory =
-  | 'dichtung' // sealing (Ton/Bentonit)
+  | 'dichtung' // sealing (Ton/Bentonit, Bitumen, mineralisch)
   | 'boden' // soil / fill / aggregate
   | 'mauerwerk' // masonry (bricks, mortar)
   | 'putz' // plaster / render
@@ -119,6 +119,80 @@ export const MATERIALS: Record<string, Material> = {
     category: 'boden',
     density: 1.6,
     source: 'Richtwert Schüttdichte ~1,5–1,7 t/m³',
+  },
+
+  // — Sealing coatings (Bitumen/mineralisch, konventionell) —
+  // We prefer ecological sealing (DERNOTON), but keep the conventional options
+  // priced so they can be compared directly.
+  bitumendickbeschichtung: {
+    key: 'bitumendickbeschichtung',
+    name: 'Bitumendickbeschichtung 2K (KMB/PMBC)',
+    category: 'dichtung',
+    density: 1.15,
+    diffusionsoffen: false,
+    price: {
+      amount: 5.34,
+      per: 'kg',
+      source: 'baunativ-shop.de, Remmers MB 2K+, 25-kg-Gebinde, 133,48 €',
+      retrievedAt: '2026-07-10',
+    },
+    source: 'Konventionelle KMB-Wandabdichtung (erdberührt); ρ ~1,1–1,3, Verbrauch ~4–5 kg/m² je mm — Herstellerangabe',
+  },
+  dichtschlaemme: {
+    key: 'dichtschlaemme',
+    name: 'Mineralische Dichtungsschlämme (starr)',
+    category: 'dichtung',
+    density: 1.7,
+    diffusionsoffen: false,
+    price: {
+      amount: 1.53,
+      per: 'kg',
+      source: 'baunativ-shop.de, Knauf Sockel-SM Pro, 25-kg-Sack, 38,19 €',
+      retrievedAt: '2026-07-10',
+    },
+    source: 'Zementäre Sperrschlämme; starr, braucht tragfähigen Untergrund — Herstellerangabe',
+  },
+  fundamentflex: {
+    key: 'fundamentflex',
+    name: 'Bitumen-Fundamentabdichtung 2K (flexibel)',
+    category: 'dichtung',
+    density: 1.15,
+    diffusionsoffen: false,
+    price: {
+      amount: 2320.67,
+      per: 'm3',
+      source: 'baunativ-shop.de, BORNIT Fundamentflex 2K, 30-l-Gebinde, 69,62 € (2,32 €/l)',
+      retrievedAt: '2026-07-10',
+    },
+    source: 'Flexible bituminöse Fundamentabdichtung; Preis je Liter → m³ umgerechnet — Herstellerangabe',
+  },
+  noppenbahn: {
+    key: 'noppenbahn',
+    name: 'Noppenbahn (Schutz-/Dränbahn)',
+    category: 'dichtung',
+    density: 0.95,
+    diffusionsoffen: false,
+    price: {
+      amount: 6.27,
+      per: 'm2',
+      source: 'baunativ-shop.de, Terra-Tec Noppenbahn 500 kN/m² 1×15 m (15 m²/93,98 €)',
+      retrievedAt: '2026-07-10',
+    },
+    source: 'HDPE-Schutz-/Dränbahn vor der Abdichtung; kein Dichtstoff, Preis je m²',
+  },
+  dichtungsbahn: {
+    key: 'dichtungsbahn',
+    name: 'Bitumen-Dichtungsbahn (kaltselbstklebend)',
+    category: 'dichtung',
+    density: 1.1,
+    diffusionsoffen: false,
+    price: {
+      amount: 12.48,
+      per: 'm2',
+      source: 'baunativ-shop.de, Dörken Delta-THENE, 5-m²-Rolle, 62,42 €',
+      retrievedAt: '2026-07-10',
+    },
+    source: 'Kaltselbstklebende Bitumen-Dichtungsbahn; Preis je m²',
   },
 
   // — Masonry (Bestand) —
