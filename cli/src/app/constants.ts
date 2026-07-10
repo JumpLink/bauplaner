@@ -8,7 +8,13 @@
  * rename later (working name "Bauplaner").
  */
 
-export const APP_ID = 'eu.jumplink.Bauplaner';
+/**
+ * App id. `BP_APP_ID` overrides it so a second, distinct instance can run beside
+ * a live app for devtools screenshots (GNOME apps are single-instance per id;
+ * without a distinct id a launch just re-presents the running window). The
+ * D-Bus devtools dest/path derive from this, so the override flows through.
+ */
+export const APP_ID = globalThis.process?.env?.BP_APP_ID || 'eu.jumplink.Bauplaner';
 export const APP_NAME = 'Bauplaner';
 export const APP_VERSION = '0.1.0';
 

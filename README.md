@@ -52,15 +52,19 @@ Requires the [gjsify](https://github.com/gjsify/gjsify) toolchain (Node 24 to
 bootstrap) and a working **GTK 4 / libadwaita** on the system (GJS uses the real
 libraries via GObject-Introspection).
 
+The toolchain is `gjsify` end-to-end — no `npm` is needed. From the repo root:
+
 ```bash
-gjsify install                       # install deps (do NOT use npm install)
-npm run dev:app --workspace cli      # build + launch the native app
-npm run build --workspace cli        # build the CLI bundle
-npm run test  --workspace cli        # run the test suite under gjs
+gjsify install          # install deps (never `npm install` — it prunes gjsify deps)
+gjsify run dev:app      # build + launch the native app
+gjsify run build        # build the CLI bundle
+gjsify run check        # type-check (gjsify tsc)
+gjsify run test         # run the test suite under gjs
 ```
 
-More detail — and the `BP_APP_*` dev hooks — in
-[`cli/src/app/README.md`](cli/src/app/README.md).
+The root scripts delegate into the `cli` workspace; you can also run them there
+directly with `cd cli && gjsify run <script>`. More detail — and the `BP_APP_*`
+dev hooks — in [`cli/src/app/README.md`](cli/src/app/README.md).
 
 ## Privacy
 

@@ -10,8 +10,12 @@
     "packages/*"
   ],
   "scripts": {
-    "check": "npm run check --workspace cli",
-    "build": "npm run build --workspace cli",
-    "start": "npm run start --workspace cli"
+    "check": "cd cli && gjsify run check",
+    "build": "cd cli && gjsify run build",
+    "build:app": "cd cli && gjsify run build:app",
+    "start": "cd cli && gjsify run start",
+    "start:app": "cd cli && gjsify run start:app",
+    "dev:app": "cd cli && gjsify run dev:app",
+    "test": "cd cli && gjsify run test"
   }
 }

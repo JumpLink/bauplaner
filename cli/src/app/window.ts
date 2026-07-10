@@ -95,6 +95,19 @@ export class MainWindow extends Adw.ApplicationWindow {
     });
     this.add_action(editWall);
 
+    // Navigate to a view by name (used by the Übersicht dashboard shortcuts).
+    const showView = new Gio.SimpleAction({
+      name: 'show-view',
+      parameterType: GLib.VariantType.new('s'),
+    });
+    showView.connect('activate', (_action, param) => {
+      const view = param ? (param.deepUnpack() as string) : '';
+      const idx = NAV_ITEMS.findIndex((i) => i.view === view);
+      if (idx >= 0) this.navList.select_row(this.navList.get_row_at_index(idx));
+      if (this.splitView.get_collapsed()) this.splitView.set_show_content(true);
+    });
+    this.add_action(showView);
+
     this.splitView.set_max_sidebar_width(280);
     this.splitView.set_sidebar(this.buildSidebar());
     this.splitView.set_content(this.buildContent());
