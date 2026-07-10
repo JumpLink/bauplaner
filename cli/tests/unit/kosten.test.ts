@@ -1,12 +1,64 @@
 import { describe, it, expect } from '@gjsify/unit';
 
 import {
+  computeOrderCost,
   estimateAssemblyCost,
   materialCost,
   parsePriceOverride,
 } from '@bauplaner/materials';
 
+const BIG_BAG = { label: 'Big Bag', massKg: 1200 };
+
 export default async () => {
+  await describe('computeOrderCost', async () => {
+    await it('rounds up to whole packages and prices per package + delivery + VAT', async () => {
+      // 6.2 t → ceil(6.2 / 1.2) = 6 Big Bags = 7.2 t; 6 × 300 € = 1800 €
+      const oc = computeOrderCost({
+        massT: 6.2,
+        packaging: BIG_BAG,
+        pricePerPackage: 300,
+        fixed: [{ label: 'Lieferung', amount: 800 }],
+      });
+      expect(oc.packages).toBe(6);
+      expect(oc.orderedMassT).toBe(7.2);
+      expect(oc.packageLabel).toBe('Big Bag');
+      expect(oc.materialNet).toBe(1800);
+      expect(oc.net).toBe(2600); // 1800 + 800
+      expect(oc.vat).toBe(494); // 2600 × 0.19
+      expect(oc.gross).toBe(3094);
+    });
+
+    await it('prices per tonne (no packaging → no rounding)', async () => {
+      const oc = computeOrderCost({ massT: 5, pricePerT: 280 });
+      expect(oc.packages).toBe(undefined);
+      expect(oc.orderedMassT).toBe(5);
+      expect(oc.materialNet).toBe(1400);
+      expect(oc.gross).toBe(1666); // 1400 × 1.19
+    });
+
+    await it('per-tonne price still bills the whole-bag mass when packaging is given', async () => {
+      const oc = computeOrderCost({ massT: 6.2, packaging: BIG_BAG, pricePerT: 280 });
+      expect(oc.orderedMassT).toBe(7.2); // 6 bags
+      expect(oc.materialNet).toBe(2016); // 7.2 t × 280 €
+    });
+
+    await it('applies a labour surcharge on the material net', async () => {
+      const oc = computeOrderCost({ massT: 5, pricePerT: 200, labourSurcharge: 0.15 });
+      expect(oc.labourNet).toBe(150); // 1000 × 0.15
+      expect(oc.net).toBe(1150);
+    });
+
+    await it('throws when no price is given', async () => {
+      let threw = false;
+      try {
+        computeOrderCost({ massT: 5 });
+      } catch {
+        threw = true;
+      }
+      expect(threw).toBe(true);
+    });
+  });
+
   await describe('materialCost', async () => {
     await it('per m³', async () => {
       // 10 m² × 0.1 m = 1 m³ × 200 €/m³ = 200 €
