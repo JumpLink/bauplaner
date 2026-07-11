@@ -11,6 +11,16 @@ export * from './sh3d/types.ts';
 export { parseSh3dBytes, parseSh3dFile } from './sh3d/parser.ts';
 export { extractSh3dModels, extractSh3dModelsFromFile } from './sh3d/models.ts';
 export type { ModelAsset, ModelCatalog } from './sh3d/models.ts';
+export type { GeometryEdit, WallEnd } from './sh3d/edit.ts';
+export { applyEditToHome, applyEditsToHome } from './sh3d/edit.ts';
+export {
+  parseHomeXml,
+  buildHomeXml,
+  applyGeometryEdits,
+  applyGeometryEditToTree,
+  writeSh3dBytes,
+  writeSh3dFile,
+} from './sh3d/serializer.ts';
 export * from './geometry.ts';
 export * from './scene.ts';
 export * from './envelope.ts';
