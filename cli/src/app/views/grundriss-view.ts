@@ -4,13 +4,17 @@
  * ({@link buildScene}): the plan is the model seen from above (X–Z plane), never
  * a separate geometry (the concept's "ein Geometrie-Kern, viele Sichten").
  *
- * Read-only for now — the plan renders rooms (filled + name/area), walls
- * (mitered footprints, tinted by the shared colouring mode), and door/window
- * openings, plus a compass and scale bar. Clicking a wall opens the same shared
- * inspector as the 3D view. Editing geometry is a later Modell sub-stage.
+ * The plan renders rooms (filled + name/area), walls (mitered footprints, tinted
+ * by the shared colouring mode) and door/window openings, plus a compass and
+ * scale bar. Following Sweet Home 3D's PlanComponent paint order: grid → rooms →
+ * walls → openings → room labels → compass → scale.
  *
- * Following Sweet Home 3D's PlanComponent paint order: grid → rooms → walls →
- * openings → room labels → compass → scale.
+ * Three interaction modes (the floating selector): **Ansicht** — click a wall to
+ * inspect it; **Geometrie** — drag a corner/vertex handle to reshape the plan
+ * (all coincident wall endpoints and room vertices move together, snapped to a
+ * 5 cm grid, undoable, persisted to the `.sh3d` on save); **Gewerke** — place and
+ * connect building-services nodes. All three edit the SAME model geometry the 3D
+ * view consumes.
  */
 
 import Adw from '@girs/adw-1';
@@ -19,12 +23,14 @@ import Gtk from '@girs/gtk-4.0';
 
 import {
   TGA_TRADE_ORDER,
+  applyEditsToHome,
   buildScene,
   deriveTgaStats,
   polygonCentroid,
   tgaEdgePath,
   tgaNodesById,
   type FloorSlab,
+  type GeometryEdit,
   type TgaNetwork,
   type TgaNode,
   type TgaNodeKind,
@@ -53,6 +59,18 @@ interface PlanTransform {
   s: number;
   offX: number;
   offY: number;
+}
+
+/**
+ * A geometry handle: one plan position (metres, X–Z) shared by any wall endpoints
+ * and room vertices that coincide there. Dragging it moves them all together, so
+ * a corner of the plan stays a corner.
+ */
+interface GeomCluster {
+  x: number;
+  z: number;
+  walls: { wallId: string; end: 'start' | 'end' }[];
+  vertices: { roomId: string; index: number }[];
 }
 
 /** The minimal Cairo surface we draw on (structural — avoids a cairo import). */
@@ -137,8 +155,10 @@ export class GrundrissView extends Gtk.Box {
   private readonly activeTrades = new Set<TgaTrade>();
   private tgaInitDone = false;
 
-  // Gewerke edit mode: selection + the active node drag (preview until released).
-  private editMode = false;
+  // Interaction mode: inspect (view), reshape geometry, or edit Gewerke.
+  private editTarget: 'view' | 'geometrie' | 'gewerke' = 'view';
+
+  // Gewerke edit: selection + the active node drag (preview until released).
   private selectedNode: string | null = null;
   private selectedEdge: string | null = null;
   private dragNodeId: string | null = null;
@@ -152,6 +172,11 @@ export class GrundrissView extends Gtk.Box {
   private placeKind: TgaNodeKind = 'heizkoerper';
   private placing = false;
 
+  // Geometry edit: the grabbed corner/vertex cluster + its live preview position.
+  private geomDrag: GeomCluster | null = null;
+  private geomPreview: { x: number; z: number } | null = null;
+  private selectedGeom: GeomCluster | null = null;
+
   constructor(window: Gtk.Window, store: DocumentStore) {
     super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
     this.window = window;
@@ -159,8 +184,11 @@ export class GrundrissView extends Gtk.Box {
     const env = globalThis.process?.env;
     const envMode = env?.BP_APP_COLORMODE as ColoringMode | undefined;
     if (envMode === 'neutral' || envMode === 'uwert' || envMode === 'feuchte') this.mode = envMode;
-    // Dev hooks: start in Gewerke edit mode, optionally with a node pre-selected.
-    if (env?.BP_APP_EDIT) this.editMode = true;
+    // Dev hooks: start in an edit mode. BP_APP_EDIT=geometrie|gewerke (any other
+    // truthy value → gewerke, back-compat); BP_APP_EDITSEL pre-selects a node.
+    const editHook = env?.BP_APP_EDIT;
+    if (editHook === 'geometrie') this.editTarget = 'geometrie';
+    else if (editHook) this.editTarget = 'gewerke';
     if (env?.BP_APP_EDITSEL) this.selectedNode = env.BP_APP_EDITSEL;
     store.subscribe(() => this.render());
     this.render();
@@ -241,7 +269,7 @@ export class GrundrissView extends Gtk.Box {
     // taps (select/connect) and drags (move) of Gewerke nodes instead.
     const click = new Gtk.GestureClick();
     click.connect('pressed', (_g, _n, x, y) => {
-      if (!this.editMode) this.onClick(x, y);
+      if (this.editTarget === 'view') this.onClick(x, y);
     });
     area.add_controller(click);
 
@@ -280,9 +308,11 @@ export class GrundrissView extends Gtk.Box {
         }),
       );
     }
-    const chips = this.buildGewerkeChips();
-    if (chips) topStart.append(chips);
-    if (this.tgaNet) topStart.append(this.buildEditControls());
+    topStart.append(this.buildEditControls());
+    if (this.editTarget !== 'geometrie') {
+      const chips = this.buildGewerkeChips();
+      if (chips) topStart.append(chips);
+    }
 
     const legend = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL,
@@ -375,6 +405,21 @@ export class GrundrissView extends Gtk.Box {
     const sx = (x: number): number => x * s + offX;
     const sy = (z: number): number => z * s + offY;
 
+    // In Geometrie mode, render a live preview of the dragged geometry. The fit
+    // above stays on the original bounds, so the plan doesn't rescale mid-drag.
+    let walls = this.visibleWalls;
+    let drawFloors = floors;
+    if (this.editTarget === 'geometrie' && this.geomDrag && this.geomPreview && this.dragMoved) {
+      const home = this.store.home;
+      if (home) {
+        const preview = applyEditsToHome(home, this.geomEdits(this.geomDrag, this.geomPreview));
+        const ps = buildScene(preview, { wallColor: this.wallColors() });
+        const vis = (l: string): boolean => !this.isolatedLevel || l === this.isolatedLevel;
+        walls = ps.walls.filter((w) => vis(w.level));
+        drawFloors = ps.floors.filter((f) => vis(f.level));
+      }
+    }
+
     // Theme foreground (adapts to light/dark) for grid, outlines and text.
     const fg = area.get_color();
     const fgA = (alpha: number): void => cr.setSourceRGBA(fg.red, fg.green, fg.blue, alpha);
@@ -395,7 +440,7 @@ export class GrundrissView extends Gtk.Box {
     }
 
     // Rooms — filled floor + thin outline.
-    for (const f of floors) {
+    for (const f of drawFloors) {
       if (f.polygon.length < 3) continue;
       cr.moveTo(sx(f.polygon[0].x), sy(f.polygon[0].z));
       for (let i = 1; i < f.polygon.length; i++) cr.lineTo(sx(f.polygon[i].x), sy(f.polygon[i].z));
@@ -411,7 +456,7 @@ export class GrundrissView extends Gtk.Box {
     }
 
     // Walls — mitered footprint filled by mode tint, outlined; selected = accent.
-    for (const w of this.visibleWalls) {
+    for (const w of walls) {
       if (w.footprint.length < 3) continue;
       const path = (): void => {
         cr.moveTo(sx(w.footprint[0].x), sy(w.footprint[0].z));
@@ -433,7 +478,7 @@ export class GrundrissView extends Gtk.Box {
     }
 
     // Door/window openings — a light-blue mark along the wall centreline.
-    for (const w of this.visibleWalls) {
+    for (const w of walls) {
       if (!w.openings?.length) continue;
       const dcx = Math.cos(w.angleRad);
       const dcz = Math.sin(w.angleRad);
@@ -454,7 +499,7 @@ export class GrundrissView extends Gtk.Box {
 
     // Room labels — name (bold) + area at the polygon centroid, if it fits.
     cr.selectFontFace('Sans', 0, 0);
-    for (const f of floors) {
+    for (const f of drawFloors) {
       if (f.polygon.length < 3) continue;
       let bx0 = Infinity;
       let bx1 = -Infinity;
@@ -491,7 +536,10 @@ export class GrundrissView extends Gtk.Box {
       cr.showText(areaText);
     }
 
-    this.drawTga(cr, sx, sy);
+    // Geometrie mode keeps the plan clean (walls/rooms/handles only); the Gewerke
+    // overlay is only shown in Ansicht/Gewerke.
+    if (this.editTarget === 'geometrie') this.drawGeomHandles(cr, sx, sy);
+    else this.drawTga(cr, sx, sy);
     this.drawCompass(cr, width - 34, 38, 15, northAngle, fg);
     this.drawScaleBar(cr, width, height, s, fgA);
   }
@@ -527,7 +575,7 @@ export class GrundrissView extends Gtk.Box {
         for (let i = 1; i < pts.length; i++) cr.lineTo(sx(pts[i][0]), sy(pts[i][1]));
         cr.stroke();
       };
-      if (this.editMode && e.id === this.selectedEdge) {
+      if (this.editTarget === 'gewerke' && e.id === this.selectedEdge) {
         setNum(cr, SELECT_COLOR, 0.9);
         cr.setDash([], 0);
         cr.setLineWidth(5.5);
@@ -562,7 +610,7 @@ export class GrundrissView extends Gtk.Box {
         cr.arc(px, py, 4.3, 0, Math.PI * 2);
         cr.fill();
       }
-      if (this.editMode && n.id === this.selectedNode) {
+      if (this.editTarget === 'gewerke' && n.id === this.selectedNode) {
         setNum(cr, SELECT_COLOR, 1);
         cr.setLineWidth(2);
         cr.arc(px, py, 10.5, 0, Math.PI * 2);
@@ -573,7 +621,7 @@ export class GrundrissView extends Gtk.Box {
 
   // --- Gewerke editing (edit mode) ---
 
-  /** The floating edit card: a "Bearbeiten" toggle; when on, delete + a placement palette. */
+  /** The floating edit card: a mode selector (Ansicht/Geometrie/Gewerke) + per-mode tools. */
   private buildEditControls(): Gtk.Widget {
     const card = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL,
@@ -581,27 +629,69 @@ export class GrundrissView extends Gtk.Box {
       cssClasses: ['osd', 'toolbar'],
       halign: Gtk.Align.START,
     });
-    const row1 = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6 });
-    const toggle = new Gtk.ToggleButton({ label: 'Bearbeiten', active: this.editMode });
-    toggle.connect('toggled', () => {
-      this.editMode = toggle.get_active();
-      this.selectedNode = null;
-      this.selectedEdge = null;
-      this.placing = false;
-      this.showPlan();
-    });
-    row1.append(toggle);
-    if (this.editMode) {
-      const del = new Gtk.Button({ iconName: 'user-trash-symbolic', tooltipText: 'Auswahl löschen', cssClasses: ['flat'] });
-      del.connect('clicked', () => this.deleteSelection());
-      row1.append(del);
-      row1.append(
-        new Gtk.Label({ label: 'ziehen · antippen → verbinden', cssClasses: ['caption', 'dim-label'], valign: Gtk.Align.CENTER }),
-      );
+
+    // Segmented (linked, radio-grouped) mode selector.
+    const seg = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, cssClasses: ['linked'] });
+    const modes: { key: 'view' | 'geometrie' | 'gewerke'; label: string }[] = [
+      { key: 'view', label: 'Ansicht' },
+      { key: 'geometrie', label: 'Geometrie' },
+      { key: 'gewerke', label: 'Gewerke' },
+    ];
+    let group: Gtk.ToggleButton | undefined;
+    for (const m of modes) {
+      const b = new Gtk.ToggleButton({ label: m.label, active: this.editTarget === m.key });
+      if (group) b.set_group(group);
+      else group = b;
+      b.connect('toggled', () => {
+        if (b.get_active()) this.setEditTarget(m.key);
+      });
+      seg.append(b);
     }
-    card.append(row1);
-    if (this.editMode) card.append(this.buildPaletteRow());
+    card.append(seg);
+
+    if (this.editTarget === 'geometrie') card.append(this.buildGeomControls());
+    if (this.editTarget === 'gewerke') card.append(this.buildGewerkeEditRow());
     return card;
+  }
+
+  /** Switch interaction mode, clearing transient drag/selection state. */
+  private setEditTarget(target: 'view' | 'geometrie' | 'gewerke'): void {
+    if (this.editTarget === target) return;
+    this.editTarget = target;
+    this.selectedNode = null;
+    this.selectedEdge = null;
+    this.selectedGeom = null;
+    this.placing = false;
+    this.geomDrag = null;
+    this.geomPreview = null;
+    this.showPlan();
+  }
+
+  /** Geometry-mode hint line (+ an unsaved-changes marker). */
+  private buildGeomControls(): Gtk.Widget {
+    const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, valign: Gtk.Align.CENTER });
+    row.append(
+      new Gtk.Label({ label: 'Ecke oder Raumpunkt ziehen · Raster 5 cm', cssClasses: ['caption', 'dim-label'], valign: Gtk.Align.CENTER }),
+    );
+    if (this.store.geometryDirty) {
+      row.append(new Gtk.Label({ label: '· ungespeichert', cssClasses: ['caption', 'accent'], valign: Gtk.Align.CENTER }));
+    }
+    return row;
+  }
+
+  /** Gewerke-mode tools: delete selection + the placement palette. */
+  private buildGewerkeEditRow(): Gtk.Widget {
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
+    const row1 = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6 });
+    const del = new Gtk.Button({ iconName: 'user-trash-symbolic', tooltipText: 'Auswahl löschen', cssClasses: ['flat'] });
+    del.connect('clicked', () => this.deleteSelection());
+    row1.append(del);
+    row1.append(
+      new Gtk.Label({ label: 'ziehen · antippen → verbinden', cssClasses: ['caption', 'dim-label'], valign: Gtk.Align.CENTER }),
+    );
+    box.append(row1);
+    box.append(this.buildPaletteRow());
+    return box;
   }
 
   /** Palette row: trade + kind pickers and a "Platzieren" toggle (click to drop). */
@@ -687,17 +777,30 @@ export class GrundrissView extends Gtk.Box {
   }
 
   private onDragBegin(sx: number, sy: number): void {
-    if (!this.editMode) return;
     this.dragStartX = sx;
     this.dragStartY = sy;
     this.dragMoved = false;
-    this.dragNodeId = this.nodeAt(sx, sy);
-    this.dragPreview = null;
+    if (this.editTarget === 'geometrie') {
+      this.geomDrag = this.geomClusterAt(sx, sy);
+      this.geomPreview = this.geomDrag ? { x: this.geomDrag.x, z: this.geomDrag.z } : null;
+      return;
+    }
+    if (this.editTarget === 'gewerke') {
+      this.dragNodeId = this.nodeAt(sx, sy);
+      this.dragPreview = null;
+    }
   }
 
   private onDragUpdate(offsetX: number, offsetY: number): void {
-    if (!this.editMode || !this.dragNodeId) return;
     if (Math.hypot(offsetX, offsetY) > 4) this.dragMoved = true;
+    if (this.editTarget === 'geometrie') {
+      if (!this.geomDrag || !this.dragMoved) return;
+      const w = this.toWorld(this.dragStartX + offsetX, this.dragStartY + offsetY);
+      if (w) this.geomPreview = this.snapWorld(w, this.geomDrag);
+      this.drawArea?.queue_draw();
+      return;
+    }
+    if (this.editTarget !== 'gewerke' || !this.dragNodeId) return;
     if (this.dragMoved) {
       this.dragPreview = this.toWorld(this.dragStartX + offsetX, this.dragStartY + offsetY);
       this.drawArea?.queue_draw();
@@ -705,7 +808,24 @@ export class GrundrissView extends Gtk.Box {
   }
 
   private onDragEnd(offsetX: number, offsetY: number): void {
-    if (!this.editMode) return;
+    if (this.editTarget === 'geometrie') {
+      if (this.geomDrag && this.dragMoved && this.geomPreview) {
+        const edits = this.geomEdits(this.geomDrag, this.geomPreview);
+        if (edits.length) this.store.editGeometry(edits, 'Geometrie ändern');
+        this.selectedGeom = null; // positions changed → drop the stale highlight
+      } else if (this.geomDrag) {
+        this.selectedGeom = this.geomDrag; // a tap selects the handle
+        this.drawArea?.queue_draw();
+      } else {
+        this.selectedGeom = null;
+        this.drawArea?.queue_draw();
+      }
+      this.geomDrag = null;
+      this.geomPreview = null;
+      this.dragMoved = false;
+      return;
+    }
+    if (this.editTarget !== 'gewerke') return;
     if (this.dragNodeId && this.dragMoved && this.dragPreview) {
       const round3 = (n: number): number => Math.round(n * 1000) / 1000;
       // Commit the move as an undoable command (this rebuilds the view).
@@ -716,6 +836,100 @@ export class GrundrissView extends Gtk.Box {
     this.dragNodeId = null;
     this.dragPreview = null;
     this.dragMoved = false;
+  }
+
+  // --- Geometry editing (Geometrie mode) ---
+
+  /**
+   * The draggable handles: one per distinct plan position on the active level,
+   * gathering every wall endpoint and room vertex that coincides there so a
+   * corner moves as a unit. Positions are in world metres (X–Z).
+   */
+  private geomClusters(): GeomCluster[] {
+    const home = this.store.home;
+    if (!home) return [];
+    const onLevel = (lvl: string): boolean => !this.isolatedLevel || lvl === this.isolatedLevel;
+    const map = new Map<string, GeomCluster>();
+    const at = (xCm: number, yCm: number): GeomCluster => {
+      const key = `${Math.round(xCm)}:${Math.round(yCm)}`;
+      let c = map.get(key);
+      if (!c) {
+        c = { x: xCm * 0.01, z: yCm * 0.01, walls: [], vertices: [] };
+        map.set(key, c);
+      }
+      return c;
+    };
+    for (const w of home.walls) {
+      if (!w.id || !onLevel(w.level)) continue;
+      at(w.xStart, w.yStart).walls.push({ wallId: w.id, end: 'start' });
+      at(w.xEnd, w.yEnd).walls.push({ wallId: w.id, end: 'end' });
+    }
+    for (const r of home.rooms) {
+      if (!r.id || !onLevel(r.level)) continue;
+      r.vertices.forEach((v, i) => at(v[0], v[1]).vertices.push({ roomId: r.id, index: i }));
+    }
+    return [...map.values()];
+  }
+
+  /** The handle cluster under a screen point (within 14 px), or null. */
+  private geomClusterAt(sx: number, sy: number): GeomCluster | null {
+    const t = this.transform;
+    if (!t) return null;
+    let best: { c: GeomCluster; d: number } | null = null;
+    for (const c of this.geomClusters()) {
+      const d = Math.hypot(c.x * t.s + t.offX - sx, c.z * t.s + t.offY - sy);
+      if (d <= 14 && (!best || d < best.d)) best = { c, d };
+    }
+    return best?.c ?? null;
+  }
+
+  /** Snap a dragged world point to a nearby other handle (closed joints) else a 5 cm grid. */
+  private snapWorld(w: { x: number; z: number }, dragging: GeomCluster): { x: number; z: number } {
+    const t = this.transform;
+    if (t) {
+      let best: { c: GeomCluster; d: number } | null = null;
+      for (const c of this.geomClusters()) {
+        if (Math.abs(c.x - dragging.x) < 1e-6 && Math.abs(c.z - dragging.z) < 1e-6) continue;
+        const d = Math.hypot((c.x - w.x) * t.s, (c.z - w.z) * t.s);
+        if (d <= 12 && (!best || d < best.d)) best = { c, d };
+      }
+      if (best) return { x: best.c.x, z: best.c.z };
+    }
+    const snap = (m: number): number => Math.round(m * 20) / 20; // 0.05 m grid
+    return { x: snap(w.x), z: snap(w.z) };
+  }
+
+  /** Turn a handle move into geometry edits (world m → SH3D cm), one per member. */
+  private geomEdits(cluster: GeomCluster, target: { x: number; z: number }): GeometryEdit[] {
+    const round3 = (n: number): number => Math.round(n * 1000) / 1000;
+    const xCm = round3(target.x * 100);
+    const yCm = round3(target.z * 100);
+    const edits: GeometryEdit[] = [];
+    for (const wref of cluster.walls) edits.push({ op: 'moveWallEndpoint', id: wref.wallId, end: wref.end, x: xCm, y: yCm });
+    for (const vref of cluster.vertices) edits.push({ op: 'moveRoomVertex', id: vref.roomId, index: vref.index, x: xCm, y: yCm });
+    return edits;
+  }
+
+  /** Draw the geometry handles (square markers), the grabbed one following the drag. */
+  private drawGeomHandles(cr: Cr, sx: (x: number) => number, sy: (z: number) => number): void {
+    for (const c of this.geomClusters()) {
+      const isDrag = !!this.geomDrag && Math.abs(this.geomDrag.x - c.x) < 1e-6 && Math.abs(this.geomDrag.z - c.z) < 1e-6;
+      const isSel = !!this.selectedGeom && Math.abs(this.selectedGeom.x - c.x) < 1e-6 && Math.abs(this.selectedGeom.z - c.z) < 1e-6;
+      const moving = isDrag && this.geomPreview && this.dragMoved;
+      const px = sx(moving ? this.geomPreview!.x : c.x);
+      const py = sy(moving ? this.geomPreview!.z : c.z);
+      cr.setSourceRGBA(1, 1, 1, 0.9);
+      cr.rectangle(px - 5, py - 5, 10, 10);
+      cr.fill();
+      setNum(cr, SELECT_COLOR, isSel || isDrag ? 1 : 0.85);
+      cr.rectangle(px - 4, py - 4, 8, 8);
+      if (isSel || isDrag) {
+        cr.fill();
+      } else {
+        cr.setLineWidth(2);
+        cr.stroke();
+      }
+    }
   }
 
   /** A tap in edit mode: place a node (palette armed), pick/connect nodes, or a run. */

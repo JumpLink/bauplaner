@@ -1,20 +1,29 @@
 import { describe, it, expect } from '@gjsify/unit';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 
+import { parseSh3dBytes } from '@bauplaner/core';
 import { DocumentStore } from '../../src/app/document-store.ts';
 
 const WALL = '<home><wall id="w1" xStart="0" yStart="0" xEnd="100" yEnd="0" height="250" thickness="24"/></home>';
+// A wall whose end coincides with a room corner — the shared-corner edit case.
+const WALL_ROOM =
+  '<home><wall id="w1" xStart="0" yStart="0" xEnd="400" yEnd="0" height="250" thickness="24"/>' +
+  '<room id="r1" name="Raum"><point x="0" y="0"/><point x="400" y="0"/><point x="400" y="300"/><point x="0" y="300"/></room></home>';
 
-function loadedStore(): DocumentStore {
+function storeWith(xml: string): DocumentStore {
   const dir = mkdtempSync(join(tmpdir(), 'ecostore-'));
   const sh3dPath = join(dir, 'plan.sh3d');
-  writeFileSync(sh3dPath, zipSync({ 'Home.xml': strToU8(WALL) }));
+  writeFileSync(sh3dPath, zipSync({ 'Home.xml': strToU8(xml) }));
   const store = new DocumentStore();
   store.load(sh3dPath);
   return store;
+}
+
+function loadedStore(): DocumentStore {
+  return storeWith(WALL);
 }
 
 export default async () => {
@@ -66,6 +75,47 @@ export default async () => {
     await it('addCost on an empty store returns null', async () => {
       const store = new DocumentStore();
       expect(store.addCost({ label: 'x', category: 'sonstiges', status: 'geplant', net: 1 })).toBe(null);
+    });
+
+    await it('editGeometry mutates the model, is undoable, and marks it dirty', async () => {
+      const store = loadedStore();
+      expect(store.geometryDirty).toBe(false);
+      store.editGeometry([{ op: 'moveWallEndpoint', id: 'w1', end: 'end', x: 250, y: 0 }], 'test');
+      expect(store.home?.walls[0].xEnd).toBe(250);
+      expect(store.geometryDirty).toBe(true);
+      expect(store.canUndo).toBe(true);
+      store.undo();
+      expect(store.home?.walls[0].xEnd).toBe(100);
+      store.redo();
+      expect(store.home?.walls[0].xEnd).toBe(250);
+    });
+
+    await it('editGeometry moves a shared corner (wall + room vertex) as one step', async () => {
+      const store = storeWith(WALL_ROOM);
+      store.editGeometry(
+        [
+          { op: 'moveWallEndpoint', id: 'w1', end: 'end', x: 500, y: 0 },
+          { op: 'moveRoomVertex', id: 'r1', index: 1, x: 500, y: 0 },
+        ],
+        'Ecke ziehen',
+      );
+      expect(store.home?.walls[0].xEnd).toBe(500);
+      expect(store.home?.rooms[0].vertices[1][0]).toBe(500);
+      // One undo reverts both.
+      store.undo();
+      expect(store.home?.walls[0].xEnd).toBe(400);
+      expect(store.home?.rooms[0].vertices[1][0]).toBe(400);
+    });
+
+    await it('save() writes edited geometry back into the .sh3d', async () => {
+      const store = storeWith(WALL_ROOM);
+      store.editGeometry([{ op: 'moveWallEndpoint', id: 'w1', end: 'end', x: 640, y: 0 }], 'test');
+      const written = store.save();
+      expect(typeof written).toBe('string');
+      expect(store.geometryDirty).toBe(false);
+      // Re-parse the .sh3d on disk: the edit persisted.
+      const onDisk = parseSh3dBytes(new Uint8Array(readFileSync(store.sh3dPath as string)));
+      expect(onDisk.walls[0].xEnd).toBe(640);
     });
   });
 };
