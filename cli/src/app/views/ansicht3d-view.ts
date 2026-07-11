@@ -39,6 +39,8 @@ export class Ansicht3dView extends Gtk.Box {
   private isolatedLevel: string | null = null;
   /** One-shot guard for the BP_APP_LEVEL dev hook. */
   private levelHookDone = false;
+  /** Bumped per showScene; a stale GLArea's async onReady checks it before assigning. */
+  private sceneGen = 0;
 
   constructor(window: Gtk.Window, store: DocumentStore) {
     super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
@@ -154,7 +156,12 @@ export class Ansicht3dView extends Gtk.Box {
       this.view?.resize(width, height);
     });
     const models = this.store.models;
+    // If the store fires again before this GLArea's async onReady runs, a newer
+    // showScene has already replaced the view — don't let the stale callback
+    // clobber this.view with a canvas whose GLArea was removed.
+    const gen = ++this.sceneGen;
     glArea.onReady((canvas) => {
+      if (gen !== this.sceneGen) return;
       this.view = startBuildingView(canvas, scene, models, (id) => this.showInspector(id), tga);
       if (this.isolatedLevel) this.view.setVisibleLevel(this.isolatedLevel);
     });

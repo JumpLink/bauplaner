@@ -135,6 +135,11 @@ export function readBauplanBytes(bytes: Uint8Array): { manifest: BauplanManifest
   const sh3dEntry = findSh3dEntry(entries);
   if (!sh3dEntry) throw new Error('.bauplan: eingebettete .sh3d fehlt (sh3d/…).');
   const sh3dBytes = entries[sh3dEntry];
+  // Enforce the advertised integrity guarantee: the embedded .sh3d must match the
+  // manifest checksum, so a tampered/corrupt container fails loudly, not silently.
+  if (computeSh3dHash(sh3dBytes) !== manifest.checksums.sh3d) {
+    throw new Error('.bauplan: eingebettete .sh3d passt nicht zur Manifest-Prüfsumme (beschädigt oder manipuliert).');
+  }
   const home = parseSh3dBytes(sh3dBytes);
 
   return { manifest, home, project, sh3dBytes, sh3dName: basename(sh3dEntry) };
