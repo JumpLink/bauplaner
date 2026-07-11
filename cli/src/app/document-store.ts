@@ -13,18 +13,23 @@ import {
   addDocCommand,
   addTgaEdgeCommand,
   addTgaNodeCommand,
+  applyEditsToHome,
   deleteDocCommand,
   deleteTgaEdgeCommand,
   deleteTgaNodeCommand,
   extractSh3dModelsFromFile,
+  homeToGeometryEdits,
+  invertEdit,
   loadDocumentFile,
   moveTgaNodeCommand,
   saveProjectFile,
   summarizeCosts,
+  writeSh3dFile,
   type CostItem,
   type CostSummary,
   type DocEntry,
   type EcoProject,
+  type GeometryEdit,
   type HomeData,
   type LoadedDocument,
   type ModelCatalog,
@@ -46,8 +51,10 @@ export class DocumentStore {
   private _error: string | null = null;
   private _models: ModelCatalog | null = null; // lazily extracted from the .sh3d
   private readonly listeners = new Set<DocumentListener>();
-  /** Undo/redo history for editing commands (TGA today; geometry later). */
+  /** Undo/redo history for editing commands (TGA · docs · wall geometry). */
   private readonly commands = new CommandStore(() => this.notify());
+  /** Set when the model geometry was edited; `save()` then rewrites the `.sh3d`. */
+  private geometryDirtyFlag = false;
 
   /** The parsed model, or null if nothing loaded / the last load failed. */
   get home(): HomeData | null {
@@ -118,6 +125,7 @@ export class DocumentStore {
   load(path: string): void {
     this._models = null; // invalidate the cached OBJ geometry for the old doc
     this.commands.clear(); // a new document starts with a fresh undo history
+    this.geometryDirtyFlag = false;
     try {
       this._doc = loadDocumentFile(path);
       this._path = path;
@@ -136,6 +144,14 @@ export class DocumentStore {
    */
   save(): string | null {
     if (!this._doc) return null;
+    // Edited geometry lives in the .sh3d (still the geometry source of truth):
+    // rewrite it first, then saveProjectFile refreshes the sidecar's sha256 to
+    // match — so the reference stays consistent and no false "sh3d changed".
+    if (this.geometryDirtyFlag) {
+      writeSh3dFile(this._doc.sh3dPath, this._doc.sh3dPath, homeToGeometryEdits(this._doc.home));
+      this.geometryDirtyFlag = false;
+      this._models = null; // the .sh3d changed → re-extract OBJ geometry on demand
+    }
     const written = saveProjectFile(
       this._doc.project,
       this._doc.sh3dPath,
@@ -144,6 +160,34 @@ export class DocumentStore {
     this._doc = { ...this._doc, projectPath: written, sh3dChanged: false };
     this.notify();
     return written;
+  }
+
+  /** True while the model geometry has unsaved edits (drives the save hint). */
+  get geometryDirty(): boolean {
+    return this.geometryDirtyFlag;
+  }
+
+  /**
+   * Apply structural geometry edits (wall endpoints / room vertices) as ONE
+   * undoable step, mutating the in-memory model so every view reflects it live.
+   * Persisted back to the `.sh3d` on {@link save}. No-op without a document or
+   * when no edit resolves to an existing element.
+   */
+  editGeometry(edits: readonly GeometryEdit[], label: string): void {
+    const doc = this._doc;
+    if (!doc || edits.length === 0) return;
+    // Capture inverses against the pre-edit model; every edit targets a distinct
+    // element, so order is irrelevant and the pre-state inverses are exact.
+    const inverses = edits
+      .map((e) => invertEdit(doc.home, e))
+      .filter((e): e is GeometryEdit => e !== null);
+    if (inverses.length === 0) return;
+    const apply = (list: readonly GeometryEdit[]): void => {
+      if (!this._doc) return;
+      this._doc.home = applyEditsToHome(this._doc.home, list);
+      this.geometryDirtyFlag = true;
+    };
+    this.commands.execute({ label, do: () => apply(edits), undo: () => apply(inverses) });
   }
 
   /** Assign the same wall build-up to every wall of the model (bulk apply). */

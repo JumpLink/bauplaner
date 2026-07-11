@@ -89,3 +89,56 @@ export function applyEditToHome(home: HomeData, edit: GeometryEdit): HomeData {
 export function applyEditsToHome(home: HomeData, edits: readonly GeometryEdit[]): HomeData {
   return edits.reduce(applyEditToHome, home);
 }
+
+/**
+ * The inverse of an edit, captured against the CURRENT `home` — applying it after
+ * the edit restores the prior geometry. This is what an undo step stores. All
+ * ops are absolute sets, so the inverse is simply the target's present value.
+ * Returns null when the target element (by id / index) does not exist.
+ */
+export function invertEdit(home: HomeData, edit: GeometryEdit): GeometryEdit | null {
+  if (edit.op === 'moveRoomVertex') {
+    const room = home.rooms.find((r) => r.id === edit.id);
+    const v = room?.vertices[edit.index];
+    return v ? { op: 'moveRoomVertex', id: edit.id, index: edit.index, x: v[0], y: v[1] } : null;
+  }
+  const w = home.walls.find((x) => x.id === edit.id);
+  if (!w) return null;
+  switch (edit.op) {
+    case 'moveWall':
+      return { op: 'moveWall', id: w.id, xStart: w.xStart, yStart: w.yStart, xEnd: w.xEnd, yEnd: w.yEnd };
+    case 'moveWallEndpoint':
+      return edit.end === 'start'
+        ? { op: 'moveWallEndpoint', id: w.id, end: 'start', x: w.xStart, y: w.yStart }
+        : { op: 'moveWallEndpoint', id: w.id, end: 'end', x: w.xEnd, y: w.yEnd };
+    case 'setWallThickness':
+      return { op: 'setWallThickness', id: w.id, thickness: w.thickness };
+    case 'setWallHeight':
+      return { op: 'setWallHeight', id: w.id, height: w.height };
+  }
+}
+
+/**
+ * The full geometry of a home expressed as edits — one `moveWall` +
+ * `setWallThickness` + `setWallHeight` per (id-carrying) wall, and one
+ * `moveRoomVertex` per room vertex. Applied to the original `Home.xml` by the
+ * serializer, this rewrites exactly the geometry attributes to the current model
+ * while every unmodelled attribute round-trips. The way the app persists edited
+ * geometry back to the `.sh3d` without diffing.
+ */
+export function homeToGeometryEdits(home: HomeData): GeometryEdit[] {
+  const edits: GeometryEdit[] = [];
+  for (const w of home.walls) {
+    if (!w.id) continue; // can't anchor an edit without an id
+    edits.push({ op: 'moveWall', id: w.id, xStart: w.xStart, yStart: w.yStart, xEnd: w.xEnd, yEnd: w.yEnd });
+    edits.push({ op: 'setWallThickness', id: w.id, thickness: w.thickness });
+    edits.push({ op: 'setWallHeight', id: w.id, height: w.height });
+  }
+  for (const r of home.rooms) {
+    if (!r.id) continue;
+    for (let i = 0; i < r.vertices.length; i++) {
+      edits.push({ op: 'moveRoomVertex', id: r.id, index: i, x: r.vertices[i][0], y: r.vertices[i][1] });
+    }
+  }
+  return edits;
+}
