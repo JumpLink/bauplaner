@@ -128,5 +128,31 @@ export default async () => {
       const removed = diffGeometryEdits(cur, applyEditToHome(cur, { op: 'removeWall', id: 'w1' }));
       expect(removed.some((e) => e.op === 'removeWall')).toBe(true);
     });
+
+    await it('diff emits per-vertex room moves and tolerates sub-precision noise', async () => {
+      const orig = parseSh3dBytes(
+        zipSync({
+          'Home.xml': strToU8(
+            '<home><room id="r1"><point x="0" y="0"/><point x="400" y="0"/><point x="319.20001" y="300"/><point x="0" y="300"/></room></home>',
+          ),
+        }),
+      );
+      // Move only vertex 1 → exactly one moveRoomVertex; the high-precision vertex 2 is untouched.
+      const moved = applyEditToHome(orig, { op: 'moveRoomVertex', id: 'r1', index: 1, x: 500, y: 0 });
+      const edits = diffGeometryEdits(orig, moved);
+      expect(edits.length).toBe(1);
+      expect(edits[0].op).toBe('moveRoomVertex');
+      // A vertex nudged below the write precision (319.20001 → 319.2) → no edit (converges).
+      const noise = applyEditToHome(orig, { op: 'moveRoomVertex', id: 'r1', index: 2, x: 319.2, y: 300 });
+      expect(diffGeometryEdits(orig, noise).length).toBe(0);
+    });
+
+    await it('diff tolerates sub-precision wall noise (no phantom save)', async () => {
+      const orig = parseSh3dBytes(
+        zipSync({ 'Home.xml': strToU8('<home><wall id="w1" xStart="10.00004" yStart="0" xEnd="400" yEnd="0" thickness="24"/></home>') }),
+      );
+      const rounded = applyEditToHome(orig, { op: 'moveWall', id: 'w1', xStart: 10, yStart: 0, xEnd: 400, yEnd: 0 });
+      expect(diffGeometryEdits(orig, rounded).length).toBe(0);
+    });
   });
 };

@@ -766,14 +766,23 @@ export class GrundrissView extends Gtk.Box {
     const cluster = this.selectedVertexCluster();
     if (!cluster) return;
     const home = this.store.home;
-    const edits: GeometryEdit[] = [];
+    // Group the selected vertices by room, then drop ALL of a room's selected
+    // indices in one setRoomPoints (two indices of the same room would otherwise
+    // overwrite each other and only remove one).
+    const byRoom = new Map<string, Set<number>>();
     for (const vref of cluster.vertices) {
-      const room = home?.rooms.find((r) => r.id === vref.roomId);
-      if (!room || room.vertices.length <= 3) continue; // keep a valid polygon
+      const set = byRoom.get(vref.roomId) ?? new Set<number>();
+      set.add(vref.index);
+      byRoom.set(vref.roomId, set);
+    }
+    const edits: GeometryEdit[] = [];
+    for (const [roomId, indices] of byRoom) {
+      const room = home?.rooms.find((r) => r.id === roomId);
+      if (!room || room.vertices.length - indices.size < 3) continue; // keep a valid polygon
       edits.push({
         op: 'setRoomPoints',
-        id: vref.roomId,
-        points: room.vertices.filter((_, i) => i !== vref.index).map(([x, y]): [number, number] => [x, y]),
+        id: roomId,
+        points: room.vertices.filter((_, i) => !indices.has(i)).map(([x, y]): [number, number] => [x, y]),
       });
     }
     if (edits.length) this.store.editGeometry(edits, 'Raumpunkt löschen');
@@ -1250,7 +1259,9 @@ export class GrundrissView extends Gtk.Box {
     });
     const height = new Adw.SpinRow({
       title: 'Höhe (cm)',
-      adjustment: new Gtk.Adjustment({ lower: 1, upper: 600, stepIncrement: 5, value: wall.height }),
+      // lower 0 so an omitted/inherited height (parsed as 0) shows honestly and is
+      // never clamped to 1 (which would fabricate an explicit height on save).
+      adjustment: new Gtk.Adjustment({ lower: 0, upper: 600, stepIncrement: 5, value: wall.height }),
     });
     height.connect('notify::value', () => {
       const v = Math.round(height.get_value());
