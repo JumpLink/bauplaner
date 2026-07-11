@@ -189,6 +189,9 @@ export class GrundrissView extends Gtk.Box {
   // Draw tool: the pending wall's start + live end (world metres), while dragging.
   private drawStart: { x: number; z: number } | null = null;
   private drawEnd: { x: number; z: number } | null = null;
+  // Whole-wall translate: the grabbed wall + its original endpoints (cm) + grab point.
+  private wallDrag: { id: string; origStart: [number, number]; origEnd: [number, number]; grab: { x: number; z: number } } | null = null;
+  private wallDragDelta: { x: number; z: number } | null = null;
 
   constructor(window: Gtk.Window, store: DocumentStore) {
     super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
@@ -358,6 +361,11 @@ export class GrundrissView extends Gtk.Box {
       this.selectedWall = pick;
       renderInspector(inspector, this.store, pick);
     }
+    // In Geometrie mode a picked wall gets the numeric thickness/height editor.
+    if (this.editTarget === 'geometrie' && this.geomTool === 'select') {
+      if (pick && !this.selectedGeomWall && this.visibleWalls.some((w) => w.id === pick)) this.selectedGeomWall = pick;
+      if (this.selectedGeomWall) this.renderGeomInspector();
+    }
   }
 
   /** Re-tint the walls for a new colouring mode without a full view rebuild. */
@@ -422,10 +430,11 @@ export class GrundrissView extends Gtk.Box {
     // above stays on the original bounds, so the plan doesn't rescale mid-drag.
     let walls = this.visibleWalls;
     let drawFloors = floors;
-    if (this.editTarget === 'geometrie' && this.geomDrag && this.geomPreview && this.dragMoved) {
+    const dragEdits = this.editTarget === 'geometrie' && this.dragMoved ? this.activeDragEdits() : [];
+    if (dragEdits.length > 0) {
       const home = this.store.home;
       if (home) {
-        const preview = applyEditsToHome(home, this.geomEdits(this.geomDrag, this.geomPreview));
+        const preview = applyEditsToHome(home, dragEdits);
         const ps = buildScene(preview, { wallColor: this.wallColors() });
         const vis = (l: string): boolean => !this.isolatedLevel || l === this.isolatedLevel;
         walls = ps.walls.filter((w) => vis(w.level));
@@ -732,8 +741,8 @@ export class GrundrissView extends Gtk.Box {
       this.geomTool === 'draw'
         ? 'Ziehen: neue Wand · Raster 5 cm'
         : this.selectedGeomWall
-          ? 'Wand gewählt — Löschen möglich · Ecke/Punkt ziehen'
-          : 'Ecke/Raumpunkt ziehen · Wand antippen zum Wählen · Raster 5 cm';
+          ? 'Wand gewählt — Dicke/Höhe rechts · löschen · ziehen zum Verschieben'
+          : 'Ecke/Punkt ziehen · Wand ziehen = verschieben, antippen = wählen';
     box.append(new Gtk.Label({ label: hint, cssClasses: ['caption', 'dim-label'], xalign: 0 }));
     return box;
   }
@@ -939,6 +948,16 @@ export class GrundrissView extends Gtk.Box {
       }
       this.geomDrag = this.geomClusterAt(sx, sy);
       this.geomPreview = this.geomDrag ? { x: this.geomDrag.x, z: this.geomDrag.z } : null;
+      // No handle under the cursor → maybe grab a wall body to translate it.
+      if (!this.geomDrag) {
+        const wallId = this.wallAtScreen(sx, sy);
+        const grab = this.toWorld(sx, sy);
+        const w = wallId ? this.store.home?.walls.find((x) => x.id === wallId) : undefined;
+        if (w && grab) {
+          this.wallDrag = { id: w.id, origStart: [w.xStart, w.yStart], origEnd: [w.xEnd, w.yEnd], grab };
+          this.wallDragDelta = { x: 0, z: 0 };
+        }
+      }
       return;
     }
     if (this.editTarget === 'gewerke') {
@@ -954,6 +973,15 @@ export class GrundrissView extends Gtk.Box {
         if (!this.drawStart || !this.dragMoved) return;
         const w = this.toWorld(this.dragStartX + offsetX, this.dragStartY + offsetY);
         if (w) this.drawEnd = this.snapPoint(w);
+        this.drawArea?.queue_draw();
+        return;
+      }
+      if (this.wallDrag && this.dragMoved) {
+        const w = this.toWorld(this.dragStartX + offsetX, this.dragStartY + offsetY);
+        if (w) {
+          const snap = (m: number): number => Math.round(m * 20) / 20; // 0.05 m grid
+          this.wallDragDelta = { x: snap(w.x - this.wallDrag.grab.x), z: snap(w.z - this.wallDrag.grab.z) };
+        }
         this.drawArea?.queue_draw();
         return;
       }
@@ -983,16 +1011,16 @@ export class GrundrissView extends Gtk.Box {
         this.drawArea?.queue_draw();
         return;
       }
-      if (this.geomDrag && this.dragMoved && this.geomPreview) {
-        const edits = this.geomEdits(this.geomDrag, this.geomPreview);
-        if (edits.length) this.store.editGeometry(edits, 'Geometrie ändern');
+      if (this.dragMoved && (this.geomDrag || this.wallDrag)) {
+        const edits = this.activeDragEdits();
+        if (edits.length) this.store.editGeometry(edits, this.wallDrag ? 'Wand verschieben' : 'Geometrie ändern');
         this.selectedGeom = null; // positions changed → drop the stale highlight
       } else if (this.geomDrag) {
         this.selectedGeom = this.geomDrag; // a tap selects the handle
         this.selectedGeomWall = null;
         this.drawArea?.queue_draw();
       } else {
-        // Tap on empty → try to pick a wall (for deletion); rebuild controls on change.
+        // Tap → pick / deselect a wall; rebuild controls (delete + inspector) on change.
         const wall = this.wallAtScreen(this.dragStartX + offsetX, this.dragStartY + offsetY);
         this.selectedGeom = null;
         if (wall !== this.selectedGeomWall) {
@@ -1004,6 +1032,8 @@ export class GrundrissView extends Gtk.Box {
       }
       this.geomDrag = null;
       this.geomPreview = null;
+      this.wallDrag = null;
+      this.wallDragDelta = null;
       this.dragMoved = false;
       return;
     }
@@ -1092,6 +1122,73 @@ export class GrundrissView extends Gtk.Box {
     for (const wref of cluster.walls) edits.push({ op: 'moveWallEndpoint', id: wref.wallId, end: wref.end, x: xCm, y: yCm });
     for (const vref of cluster.vertices) edits.push({ op: 'moveRoomVertex', id: vref.roomId, index: vref.index, x: xCm, y: yCm });
     return edits;
+  }
+
+  /** Translate a whole wall by the grabbed delta (world m → cm), both endpoints. */
+  private wallTranslateEdits(): GeometryEdit[] {
+    if (!this.wallDrag || !this.wallDragDelta) return [];
+    const round3 = (n: number): number => Math.round(n * 1000) / 1000;
+    const dx = round3(this.wallDragDelta.x * 100);
+    const dz = round3(this.wallDragDelta.z * 100);
+    const [sx0, sy0] = this.wallDrag.origStart;
+    const [ex0, ey0] = this.wallDrag.origEnd;
+    return [{ op: 'moveWall', id: this.wallDrag.id, xStart: sx0 + dx, yStart: sy0 + dz, xEnd: ex0 + dx, yEnd: ey0 + dz }];
+  }
+
+  /** The edits for whatever is being dragged (a corner/vertex cluster or a whole wall). */
+  private activeDragEdits(): GeometryEdit[] {
+    if (this.geomDrag && this.geomPreview) return this.geomEdits(this.geomDrag, this.geomPreview);
+    if (this.wallDrag && this.wallDragDelta) return this.wallTranslateEdits();
+    return [];
+  }
+
+  /**
+   * The floating geometry inspector for the selected wall (top-end): numeric
+   * thickness + height spin rows that commit on change (each an undoable edit;
+   * SpinRow fires on Enter/defocus/spin, so a full view rebuild happens once).
+   */
+  private renderGeomInspector(): void {
+    const holder = this.inspectorHolder;
+    if (!holder) return;
+    let child = holder.get_first_child();
+    while (child) {
+      const next = child.get_next_sibling();
+      holder.remove(child);
+      child = next;
+    }
+    const id = this.selectedGeomWall;
+    const wall = id ? this.store.home?.walls.find((w) => w.id === id) : undefined;
+    if (!id || !wall) return;
+
+    const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, cssClasses: ['card'], widthRequest: 230 });
+    card.append(
+      new Gtk.Label({ label: `Wand ${id}`, xalign: 0, cssClasses: ['heading'], marginStart: 12, marginTop: 10, marginEnd: 12 }),
+    );
+    const group = new Adw.PreferencesGroup();
+    const thick = new Adw.SpinRow({
+      title: 'Dicke (cm)',
+      adjustment: new Gtk.Adjustment({ lower: 1, upper: 100, stepIncrement: 1, value: wall.thickness }),
+    });
+    thick.connect('notify::value', () => {
+      const v = Math.round(thick.get_value());
+      if (this.selectedGeomWall === id && v !== wall.thickness) {
+        this.store.editGeometry([{ op: 'setWallThickness', id, thickness: v }], 'Wandstärke ändern');
+      }
+    });
+    const height = new Adw.SpinRow({
+      title: 'Höhe (cm)',
+      adjustment: new Gtk.Adjustment({ lower: 1, upper: 600, stepIncrement: 5, value: wall.height }),
+    });
+    height.connect('notify::value', () => {
+      const v = Math.round(height.get_value());
+      if (this.selectedGeomWall === id && v !== wall.height) {
+        this.store.editGeometry([{ op: 'setWallHeight', id, height: v }], 'Wandhöhe ändern');
+      }
+    });
+    group.add(thick);
+    group.add(height);
+    card.append(group);
+    holder.append(card);
   }
 
   /** Snap a world point to a nearby handle (closed joints) else the 5 cm grid — for drawing. */
