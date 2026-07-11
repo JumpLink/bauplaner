@@ -118,6 +118,23 @@ export default async () => {
       expect(onDisk.walls[0].xEnd).toBe(640);
     });
 
+    await it('adds and removes a wall via editGeometry (undoable)', async () => {
+      const store = storeWith(WALL_ROOM);
+      const before = store.home!.walls.length;
+      store.editGeometry(
+        [{ op: 'addWall', id: 'wNew', level: '', xStart: 0, yStart: 0, xEnd: 0, yEnd: 300, thickness: 24, height: 250 }],
+        'Wand zeichnen',
+      );
+      expect(store.home!.walls.length).toBe(before + 1);
+      store.undo();
+      expect(store.home!.walls.length).toBe(before);
+
+      store.editGeometry([{ op: 'removeWall', id: 'w1' }], 'Wand löschen');
+      expect(store.home!.walls.some((w) => w.id === 'w1')).toBe(false);
+      store.undo();
+      expect(store.home!.walls.some((w) => w.id === 'w1')).toBe(true);
+    });
+
     await it('opens a .bauplan, edits it, saves and re-bundles into the same file', async () => {
       const dir = mkdtempSync(join(tmpdir(), 'ecostore-'));
       const sh3dPath = join(dir, 'plan.sh3d');

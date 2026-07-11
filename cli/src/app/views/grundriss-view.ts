@@ -182,6 +182,13 @@ export class GrundrissView extends Gtk.Box {
   private geomDrag: GeomCluster | null = null;
   private geomPreview: { x: number; z: number } | null = null;
   private selectedGeom: GeomCluster | null = null;
+  // Geometry sub-tool: reshape existing (select) vs. draw a new wall (draw).
+  private geomTool: 'select' | 'draw' = 'select';
+  /** A wall picked in Geometrie mode (for deletion), or null. */
+  private selectedGeomWall: string | null = null;
+  // Draw tool: the pending wall's start + live end (world metres), while dragging.
+  private drawStart: { x: number; z: number } | null = null;
+  private drawEnd: { x: number; z: number } | null = null;
 
   constructor(window: Gtk.Window, store: DocumentStore) {
     super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
@@ -476,7 +483,8 @@ export class GrundrissView extends Gtk.Box {
       else setNum(cr, NEUTRAL_WALL, 0.9);
       cr.fill();
       path();
-      const selected = w.id === this.selectedWall;
+      const selected =
+        w.id === this.selectedWall || (this.editTarget === 'geometrie' && w.id === this.selectedGeomWall);
       if (selected) setNum(cr, SELECT_COLOR, 1);
       else fgA(0.55);
       cr.setLineWidth(selected ? 2.5 : 1);
@@ -670,22 +678,103 @@ export class GrundrissView extends Gtk.Box {
     this.selectedNode = null;
     this.selectedEdge = null;
     this.selectedGeom = null;
+    this.selectedGeomWall = null;
     this.placing = false;
     this.geomDrag = null;
     this.geomPreview = null;
+    this.drawStart = null;
+    this.drawEnd = null;
     this.showPlan();
   }
 
-  /** Geometry-mode hint line (+ an unsaved-changes marker). */
+  /** Geometry-mode tools: a select/draw sub-tool switch + delete + hint. */
   private buildGeomControls(): Gtk.Widget {
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
     const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, valign: Gtk.Align.CENTER });
-    row.append(
-      new Gtk.Label({ label: 'Ecke oder Raumpunkt ziehen · Raster 5 cm', cssClasses: ['caption', 'dim-label'], valign: Gtk.Align.CENTER }),
-    );
+
+    // Sub-tool: reshape existing geometry vs. draw a new wall.
+    const seg = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, cssClasses: ['linked'] });
+    const tools: { key: 'select' | 'draw'; label: string }[] = [
+      { key: 'select', label: 'Auswählen' },
+      { key: 'draw', label: 'Wand zeichnen' },
+    ];
+    let group: Gtk.ToggleButton | undefined;
+    for (const t of tools) {
+      const b = new Gtk.ToggleButton({ label: t.label, active: this.geomTool === t.key });
+      if (group) b.set_group(group);
+      else group = b;
+      b.connect('toggled', () => {
+        if (b.get_active() && this.geomTool !== t.key) {
+          this.geomTool = t.key;
+          this.selectedGeom = null;
+          this.selectedGeomWall = null;
+          this.drawStart = null;
+          this.drawEnd = null;
+          this.showPlan();
+        }
+      });
+      seg.append(b);
+    }
+    row.append(seg);
+
+    if (this.geomTool === 'select') {
+      const del = new Gtk.Button({ iconName: 'user-trash-symbolic', tooltipText: 'Ausgewählte Wand löschen', cssClasses: ['flat'] });
+      del.set_sensitive(this.selectedGeomWall !== null);
+      del.connect('clicked', () => this.deleteSelectedWall());
+      row.append(del);
+    }
     if (this.store.geometryDirty) {
       row.append(new Gtk.Label({ label: '· ungespeichert', cssClasses: ['caption', 'accent'], valign: Gtk.Align.CENTER }));
     }
-    return row;
+    box.append(row);
+
+    const hint =
+      this.geomTool === 'draw'
+        ? 'Ziehen: neue Wand · Raster 5 cm'
+        : this.selectedGeomWall
+          ? 'Wand gewählt — Löschen möglich · Ecke/Punkt ziehen'
+          : 'Ecke/Raumpunkt ziehen · Wand antippen zum Wählen · Raster 5 cm';
+    box.append(new Gtk.Label({ label: hint, cssClasses: ['caption', 'dim-label'], xalign: 0 }));
+    return box;
+  }
+
+  /** How many project references (assembly/diagnosis/docs) anchor to a wall id. */
+  private wallReferenceCount(id: string): number {
+    let n = this.store.wallAnnotation(id) ? 1 : 0;
+    n += this.store.docs.filter((d) => d.anchor.targetType === 'wall' && d.anchor.targetId === id).length;
+    return n;
+  }
+
+  /** Delete the picked wall (undoable); warn first if project data references it (§1.2). */
+  private deleteSelectedWall(): void {
+    const id = this.selectedGeomWall;
+    if (!id) return;
+    const commit = (): void => {
+      this.store.editGeometry([{ op: 'removeWall', id }], 'Wand löschen');
+      this.selectedGeomWall = null;
+    };
+    const refs = this.wallReferenceCount(id);
+    if (refs === 0) {
+      commit();
+      return;
+    }
+    // Controlled invalidation: never silent data loss — confirm, keeping the
+    // referencing data as (tolerated) dangling references.
+    const dialog = new Adw.MessageDialog({
+      transient_for: this.window,
+      modal: true,
+      heading: 'Wand löschen?',
+      body: `Diese Wand ist mit ${refs} Projekt-Eintrag/-Einträgen verknüpft (Aufbau · Diagnose · Dokumente). Beim Löschen bleiben diese als verwaiste Verknüpfungen zurück.`,
+    });
+    dialog.add_response('cancel', 'Abbrechen');
+    dialog.add_response('delete', 'Trotzdem löschen');
+    dialog.set_response_appearance('delete', Adw.ResponseAppearance.DESTRUCTIVE);
+    dialog.set_default_response('cancel');
+    dialog.set_close_response('cancel');
+    dialog.connect('response', (_d, resp) => {
+      if (resp === 'delete') commit();
+    });
+    dialog.present();
   }
 
   /** Gewerke-mode tools: delete selection + the placement palette. */
@@ -842,6 +931,12 @@ export class GrundrissView extends Gtk.Box {
     this.dragStartY = sy;
     this.dragMoved = false;
     if (this.editTarget === 'geometrie') {
+      if (this.geomTool === 'draw') {
+        const w = this.toWorld(sx, sy);
+        this.drawStart = w ? this.snapPoint(w) : null;
+        this.drawEnd = this.drawStart;
+        return;
+      }
       this.geomDrag = this.geomClusterAt(sx, sy);
       this.geomPreview = this.geomDrag ? { x: this.geomDrag.x, z: this.geomDrag.z } : null;
       return;
@@ -855,6 +950,13 @@ export class GrundrissView extends Gtk.Box {
   private onDragUpdate(offsetX: number, offsetY: number): void {
     if (Math.hypot(offsetX, offsetY) > 4) this.dragMoved = true;
     if (this.editTarget === 'geometrie') {
+      if (this.geomTool === 'draw') {
+        if (!this.drawStart || !this.dragMoved) return;
+        const w = this.toWorld(this.dragStartX + offsetX, this.dragStartY + offsetY);
+        if (w) this.drawEnd = this.snapPoint(w);
+        this.drawArea?.queue_draw();
+        return;
+      }
       if (!this.geomDrag || !this.dragMoved) return;
       const w = this.toWorld(this.dragStartX + offsetX, this.dragStartY + offsetY);
       if (w) this.geomPreview = this.snapWorld(w, this.geomDrag);
@@ -870,16 +972,35 @@ export class GrundrissView extends Gtk.Box {
 
   private onDragEnd(offsetX: number, offsetY: number): void {
     if (this.editTarget === 'geometrie') {
+      if (this.geomTool === 'draw') {
+        if (this.drawStart && this.drawEnd && this.dragMoved) {
+          const lenM = Math.hypot(this.drawEnd.x - this.drawStart.x, this.drawEnd.z - this.drawStart.z);
+          if (lenM >= 0.1) this.addDrawnWall(this.drawStart, this.drawEnd); // ≥ 10 cm
+        }
+        this.drawStart = null;
+        this.drawEnd = null;
+        this.dragMoved = false;
+        this.drawArea?.queue_draw();
+        return;
+      }
       if (this.geomDrag && this.dragMoved && this.geomPreview) {
         const edits = this.geomEdits(this.geomDrag, this.geomPreview);
         if (edits.length) this.store.editGeometry(edits, 'Geometrie ändern');
         this.selectedGeom = null; // positions changed → drop the stale highlight
       } else if (this.geomDrag) {
         this.selectedGeom = this.geomDrag; // a tap selects the handle
+        this.selectedGeomWall = null;
         this.drawArea?.queue_draw();
       } else {
+        // Tap on empty → try to pick a wall (for deletion); rebuild controls on change.
+        const wall = this.wallAtScreen(this.dragStartX + offsetX, this.dragStartY + offsetY);
         this.selectedGeom = null;
-        this.drawArea?.queue_draw();
+        if (wall !== this.selectedGeomWall) {
+          this.selectedGeomWall = wall;
+          this.showPlan();
+        } else {
+          this.drawArea?.queue_draw();
+        }
       }
       this.geomDrag = null;
       this.geomPreview = null;
@@ -973,7 +1094,55 @@ export class GrundrissView extends Gtk.Box {
     return edits;
   }
 
-  /** Draw the geometry handles (square markers), the grabbed one following the drag. */
+  /** Snap a world point to a nearby handle (closed joints) else the 5 cm grid — for drawing. */
+  private snapPoint(w: { x: number; z: number }): { x: number; z: number } {
+    const t = this.transform;
+    if (t) {
+      let best: { c: GeomCluster; d: number } | null = null;
+      for (const c of this.geomClusters()) {
+        const d = Math.hypot((c.x - w.x) * t.s, (c.z - w.z) * t.s);
+        if (d <= 12 && (!best || d < best.d)) best = { c, d };
+      }
+      if (best) return { x: best.c.x, z: best.c.z };
+    }
+    const snap = (m: number): number => Math.round(m * 20) / 20; // 0.05 m grid
+    return { x: snap(w.x), z: snap(w.z) };
+  }
+
+  /** The visible wall whose footprint is under a screen point, or null. */
+  private wallAtScreen(sx: number, sy: number): string | null {
+    const t = this.transform;
+    if (!t) return null;
+    const wx = (sx - t.offX) / t.s;
+    const wz = (sy - t.offY) / t.s;
+    return this.visibleWalls.find((w) => inFootprint(wx, wz, w.footprint))?.id ?? null;
+  }
+
+  /** Commit a freshly drawn wall (world m → cm) on the active level, undoable. */
+  private addDrawnWall(a: { x: number; z: number }, b: { x: number; z: number }): void {
+    const round3 = (n: number): number => Math.round(n * 1000) / 1000;
+    const home = this.store.home;
+    const level = this.isolatedLevel ?? home?.levels[0]?.id ?? '';
+    const height = home?.levels.find((l) => l.id === level)?.height || 250;
+    this.store.editGeometry(
+      [
+        {
+          op: 'addWall',
+          id: this.nextId('wall'),
+          level,
+          xStart: round3(a.x * 100),
+          yStart: round3(a.z * 100),
+          xEnd: round3(b.x * 100),
+          yEnd: round3(b.z * 100),
+          thickness: 24,
+          height,
+        },
+      ],
+      'Wand zeichnen',
+    );
+  }
+
+  /** Draw the geometry handles (square markers) + a live draw preview. */
   private drawGeomHandles(cr: Cr, sx: (x: number) => number, sy: (z: number) => number): void {
     for (const c of this.geomClusters()) {
       const isDrag = !!this.geomDrag && Math.abs(this.geomDrag.x - c.x) < 1e-6 && Math.abs(this.geomDrag.z - c.z) < 1e-6;
@@ -991,6 +1160,25 @@ export class GrundrissView extends Gtk.Box {
       } else {
         cr.setLineWidth(2);
         cr.stroke();
+      }
+    }
+    // Live preview of the wall being drawn.
+    if (this.geomTool === 'draw' && this.drawStart && this.drawEnd && this.dragMoved) {
+      const ax = sx(this.drawStart.x);
+      const ay = sy(this.drawStart.z);
+      const bx = sx(this.drawEnd.x);
+      const by = sy(this.drawEnd.z);
+      setNum(cr, SELECT_COLOR, 0.9);
+      cr.setLineWidth(3);
+      cr.moveTo(ax, ay);
+      cr.lineTo(bx, by);
+      cr.stroke();
+      for (const [px, py] of [
+        [ax, ay],
+        [bx, by],
+      ]) {
+        cr.arc(px, py, 4, 0, Math.PI * 2);
+        cr.fill();
       }
     }
   }
