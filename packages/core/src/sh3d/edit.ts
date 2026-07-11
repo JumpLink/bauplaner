@@ -29,7 +29,20 @@ export type GeometryEdit =
   | { op: 'moveWallEndpoint'; id: string; end: WallEnd; x: number; y: number }
   | { op: 'setWallThickness'; id: string; thickness: number }
   | { op: 'setWallHeight'; id: string; height: number }
-  | { op: 'moveRoomVertex'; id: string; index: number; x: number; y: number };
+  | { op: 'moveRoomVertex'; id: string; index: number; x: number; y: number }
+  | {
+      op: 'addWall';
+      id: string;
+      level: string;
+      xStart: number;
+      yStart: number;
+      xEnd: number;
+      yEnd: number;
+      thickness: number;
+      height: number;
+    }
+  | { op: 'removeWall'; id: string }
+  | { op: 'setRoomPoints'; id: string; points: readonly (readonly [number, number])[] };
 
 /** Shoelace area (cm² → m²), matching the parser's room-area convention. */
 function polygonAreaM2(vertices: readonly (readonly [number, number])[]): number {
@@ -68,21 +81,44 @@ function editRoomVertex(room: Room, edit: Extract<GeometryEdit, { op: 'moveRoomV
   return { ...room, vertices, area: Number(polygonAreaM2(vertices).toFixed(2)) };
 }
 
+/** Build a fresh {@link Wall} from an `addWall` edit. */
+function wallFromEdit(edit: Extract<GeometryEdit, { op: 'addWall' }>): Wall {
+  return {
+    id: edit.id,
+    level: edit.level,
+    xStart: edit.xStart,
+    yStart: edit.yStart,
+    xEnd: edit.xEnd,
+    yEnd: edit.yEnd,
+    height: edit.height,
+    thickness: edit.thickness,
+  };
+}
+
 /**
  * Apply one geometry edit to a home, returning a **new** {@link HomeData}
  * (immutable — the input is untouched). Unknown ids are a no-op.
  */
 export function applyEditToHome(home: HomeData, edit: GeometryEdit): HomeData {
-  if (edit.op === 'moveRoomVertex') {
-    return {
-      ...home,
-      rooms: home.rooms.map((r) => (r.id === edit.id ? editRoomVertex(r, edit) : r)),
-    };
+  switch (edit.op) {
+    case 'addWall':
+      return { ...home, walls: [...home.walls, wallFromEdit(edit)] };
+    case 'removeWall':
+      return { ...home, walls: home.walls.filter((w) => w.id !== edit.id) };
+    case 'moveRoomVertex':
+      return { ...home, rooms: home.rooms.map((r) => (r.id === edit.id ? editRoomVertex(r, edit) : r)) };
+    case 'setRoomPoints': {
+      const points = edit.points.map(([x, y]): [number, number] => [x, y]);
+      return {
+        ...home,
+        rooms: home.rooms.map((r) =>
+          r.id === edit.id ? { ...r, vertices: points, area: Number(polygonAreaM2(points).toFixed(2)) } : r,
+        ),
+      };
+    }
+    default:
+      return { ...home, walls: home.walls.map((w) => (w.id === edit.id ? editWall(w, edit) : w)) };
   }
-  return {
-    ...home,
-    walls: home.walls.map((w) => (w.id === edit.id ? editWall(w, edit) : w)),
-  };
 }
 
 /** Apply many edits in order (left-to-right), returning a new {@link HomeData}. */
@@ -97,25 +133,104 @@ export function applyEditsToHome(home: HomeData, edits: readonly GeometryEdit[])
  * Returns null when the target element (by id / index) does not exist.
  */
 export function invertEdit(home: HomeData, edit: GeometryEdit): GeometryEdit | null {
-  if (edit.op === 'moveRoomVertex') {
-    const room = home.rooms.find((r) => r.id === edit.id);
-    const v = room?.vertices[edit.index];
-    return v ? { op: 'moveRoomVertex', id: edit.id, index: edit.index, x: v[0], y: v[1] } : null;
-  }
-  const w = home.walls.find((x) => x.id === edit.id);
-  if (!w) return null;
   switch (edit.op) {
-    case 'moveWall':
-      return { op: 'moveWall', id: w.id, xStart: w.xStart, yStart: w.yStart, xEnd: w.xEnd, yEnd: w.yEnd };
-    case 'moveWallEndpoint':
-      return edit.end === 'start'
-        ? { op: 'moveWallEndpoint', id: w.id, end: 'start', x: w.xStart, y: w.yStart }
-        : { op: 'moveWallEndpoint', id: w.id, end: 'end', x: w.xEnd, y: w.yEnd };
-    case 'setWallThickness':
-      return { op: 'setWallThickness', id: w.id, thickness: w.thickness };
-    case 'setWallHeight':
-      return { op: 'setWallHeight', id: w.id, height: w.height };
+    case 'addWall':
+      // Undo of adding a wall is removing it (no lookup needed).
+      return { op: 'removeWall', id: edit.id };
+    case 'removeWall': {
+      const w = home.walls.find((x) => x.id === edit.id);
+      return w
+        ? {
+            op: 'addWall',
+            id: w.id,
+            level: w.level,
+            xStart: w.xStart,
+            yStart: w.yStart,
+            xEnd: w.xEnd,
+            yEnd: w.yEnd,
+            thickness: w.thickness,
+            height: w.height,
+          }
+        : null;
+    }
+    case 'setRoomPoints': {
+      const room = home.rooms.find((r) => r.id === edit.id);
+      return room ? { op: 'setRoomPoints', id: edit.id, points: room.vertices.map(([x, y]): [number, number] => [x, y]) } : null;
+    }
+    case 'moveRoomVertex': {
+      const room = home.rooms.find((r) => r.id === edit.id);
+      const v = room?.vertices[edit.index];
+      return v ? { op: 'moveRoomVertex', id: edit.id, index: edit.index, x: v[0], y: v[1] } : null;
+    }
+    default: {
+      const w = home.walls.find((x) => x.id === edit.id);
+      if (!w) return null;
+      switch (edit.op) {
+        case 'moveWall':
+          return { op: 'moveWall', id: w.id, xStart: w.xStart, yStart: w.yStart, xEnd: w.xEnd, yEnd: w.yEnd };
+        case 'moveWallEndpoint':
+          return edit.end === 'start'
+            ? { op: 'moveWallEndpoint', id: w.id, end: 'start', x: w.xStart, y: w.yStart }
+            : { op: 'moveWallEndpoint', id: w.id, end: 'end', x: w.xEnd, y: w.yEnd };
+        case 'setWallThickness':
+          return { op: 'setWallThickness', id: w.id, thickness: w.thickness };
+        case 'setWallHeight':
+          return { op: 'setWallHeight', id: w.id, height: w.height };
+      }
+    }
   }
+  return null;
+}
+
+/**
+ * The minimal edit list that turns `original` geometry into `current` — added /
+ * removed / moved walls and changed room polygons. This is how the app persists
+ * to the `.sh3d`: diff the in-memory model against the file on disk and patch
+ * only what changed. Because it emits `setWallHeight`/`setWallThickness` ONLY
+ * when the value actually differs, it never fabricates `height="0"` on a wall
+ * whose source omitted the (nullable) height — the value only appears once a user
+ * explicitly changes it. Walls/rooms without an id can't be anchored and are
+ * skipped; room add/remove is not modelled yet (the editor doesn't do it).
+ */
+export function diffGeometryEdits(original: HomeData, current: HomeData): GeometryEdit[] {
+  const edits: GeometryEdit[] = [];
+  const origWalls = new Map(original.walls.filter((w) => w.id).map((w) => [w.id, w]));
+  const curWallIds = new Set(current.walls.map((w) => w.id));
+  for (const w of original.walls) {
+    if (w.id && !curWallIds.has(w.id)) edits.push({ op: 'removeWall', id: w.id });
+  }
+  for (const w of current.walls) {
+    if (!w.id) continue;
+    const o = origWalls.get(w.id);
+    if (!o) {
+      edits.push({
+        op: 'addWall',
+        id: w.id,
+        level: w.level,
+        xStart: w.xStart,
+        yStart: w.yStart,
+        xEnd: w.xEnd,
+        yEnd: w.yEnd,
+        thickness: w.thickness,
+        height: w.height,
+      });
+      continue;
+    }
+    if (o.xStart !== w.xStart || o.yStart !== w.yStart || o.xEnd !== w.xEnd || o.yEnd !== w.yEnd) {
+      edits.push({ op: 'moveWall', id: w.id, xStart: w.xStart, yStart: w.yStart, xEnd: w.xEnd, yEnd: w.yEnd });
+    }
+    if (o.thickness !== w.thickness) edits.push({ op: 'setWallThickness', id: w.id, thickness: w.thickness });
+    if (o.height !== w.height) edits.push({ op: 'setWallHeight', id: w.id, height: w.height });
+  }
+  const origRooms = new Map(original.rooms.filter((r) => r.id).map((r) => [r.id, r]));
+  for (const r of current.rooms) {
+    if (!r.id) continue;
+    const o = origRooms.get(r.id);
+    if (o && JSON.stringify(o.vertices) !== JSON.stringify(r.vertices)) {
+      edits.push({ op: 'setRoomPoints', id: r.id, points: r.vertices.map(([x, y]): [number, number] => [x, y]) });
+    }
+  }
+  return edits;
 }
 
 /**
