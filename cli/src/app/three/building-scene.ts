@@ -14,7 +14,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
-import type { FurniturePart, ModelCatalog, SceneModel, WallSolid } from '@bauplaner/core';
+import type { FurniturePart, ModelCatalog, SceneModel, TgaScene3D, TgaTrade, WallSolid } from '@bauplaner/core';
 
 export interface BuildingView {
   /** Re-render the current frame. */
@@ -178,6 +178,7 @@ export function startBuildingView(
   scene: SceneModel,
   models?: ModelCatalog,
   onPick?: (wallId: string | null) => void,
+  tga?: { scene: TgaScene3D; colors: Partial<Record<TgaTrade, number>> },
 ): BuildingView {
   // oxlint-disable-next-line typescript/no-explicit-any -- GJS canvas ≠ DOM HTMLCanvasElement (no DOM lib in tsconfig)
   const canvas = canvasLike as any;
@@ -278,6 +279,50 @@ export function startBuildingView(
     mesh.position.set(p.center.x, p.center.y, p.center.z);
     mesh.rotation.y = -p.angleRad;
     threeScene.add(mesh);
+  }
+
+  // TGA (Gewerke) network: nodes as small spheres, runs as thin cylinders, one
+  // colour per trade; planned runs translucent, risers (Steigstränge across
+  // storeys) thicker so they read clearly. Within-level items follow the level
+  // isolation; risers stay visible across floors.
+  const tgaMaterials = new Map<string, THREE.MeshLambertMaterial>();
+  const tgaMaterialFor = (color: number, planned: boolean): THREE.MeshLambertMaterial => {
+    const key = `${color}-${planned ? 'p' : 'b'}`;
+    let material = tgaMaterials.get(key);
+    if (!material) {
+      material = new THREE.MeshLambertMaterial({ color, transparent: planned, opacity: planned ? 0.5 : 1 });
+      tgaMaterials.set(key, material);
+    }
+    return material;
+  };
+  if (tga) {
+    const DEFAULT_TGA_COLOR = 0x9e9e9e;
+    const yAxis = new THREE.Vector3(0, 1, 0);
+    for (const n of tga.scene.nodes) {
+      const geom = new THREE.SphereGeometry(0.13, 12, 10);
+      ownedGeometries.push(geom);
+      const mesh = new THREE.Mesh(geom, tgaMaterialFor(tga.colors[n.trade] ?? DEFAULT_TGA_COLOR, false));
+      mesh.position.set(n.pos.x, n.pos.y, n.pos.z);
+      threeScene.add(mesh);
+      leveledObjects.push({ object: mesh, level: n.level });
+    }
+    for (const e of tga.scene.edges) {
+      const dir = new THREE.Vector3(e.to.x - e.from.x, e.to.y - e.from.y, e.to.z - e.from.z);
+      const len = dir.length();
+      if (len < 1e-4) continue; // coincident endpoints (a riser seen from straight above)
+      // Risers read as solid vertical strands even when planned (a Steigstrang is
+      // a structural element, not a faint dashed hint) and are drawn thicker.
+      const radius = e.isRiser ? 0.07 : 0.03;
+      const planned = e.status === 'geplant' && !e.isRiser;
+      const geom = new THREE.CylinderGeometry(radius, radius, len, e.isRiser ? 12 : 8);
+      ownedGeometries.push(geom);
+      const mesh = new THREE.Mesh(geom, tgaMaterialFor(tga.colors[e.trade] ?? DEFAULT_TGA_COLOR, planned));
+      mesh.position.set((e.from.x + e.to.x) / 2, (e.from.y + e.to.y) / 2, (e.from.z + e.to.z) / 2);
+      mesh.quaternion.setFromUnitVectors(yAxis, dir.clone().normalize());
+      threeScene.add(mesh);
+      // Risers span storeys → always visible; flat runs follow level isolation.
+      if (!e.isRiser) leveledObjects.push({ object: mesh, level: e.level });
+    }
   }
 
   // Furniture / doors / windows: real embedded OBJ geometry when the model
@@ -411,6 +456,7 @@ export function startBuildingView(
       controls.dispose();
       for (const material of wallMaterials.values()) material.dispose();
       for (const material of furnitureMaterials.values()) material.dispose();
+      for (const material of tgaMaterials.values()) material.dispose();
       for (const geometry of ownedGeometries) geometry.dispose();
       floorMaterial.dispose();
       renderer.dispose();

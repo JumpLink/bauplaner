@@ -12,6 +12,8 @@
  */
 
 import type { Command } from './commands.ts';
+import type { Vec3 } from './scene.ts';
+import type { Level } from './sh3d/types.ts';
 
 /** A building-services trade (Gewerk). */
 export type TgaTrade = 'heizung' | 'fbh' | 'wasser' | 'strom' | 'lueftung';
@@ -136,6 +138,93 @@ export function deriveTgaStats(net: TgaNetwork): TgaTradeStat[] {
 /** Total run length across all trades, meters. */
 export function totalTgaLengthM(net: TgaNetwork): number {
   return round2(deriveTgaStats(net).reduce((s, t) => s + t.lengthM, 0));
+}
+
+// --- 3D derivation (nodes/edges placed in space; risers across storeys) ---
+
+/**
+ * Mounting height above the level floor (m) per node kind — where the fixture
+ * physically sits, so the 3D view places nodes and runs at plausible heights
+ * (a socket low, a light at the ceiling, a manifold mid-wall).
+ */
+const MOUNT_HEIGHT_M: Record<TgaNodeKind, number> = {
+  erzeuger: 0.8,
+  verteiler: 1.0,
+  heizkoerper: 0.5,
+  ventil: 0.5,
+  zapfstelle: 1.0,
+  steckdose: 0.3,
+  leuchte: 2.4,
+  auslass: 2.2,
+};
+
+/** A network node placed in 3D space. */
+export interface TgaNode3D {
+  id: string;
+  trade: TgaTrade;
+  kind: TgaNodeKind;
+  /** Owning level id (for level isolation in the 3D view). */
+  level: string;
+  pos: Vec3;
+}
+
+/** A run between two placed nodes; a **riser** when its ends sit on different storeys. */
+export interface TgaEdge3D {
+  id: string;
+  trade: TgaTrade;
+  status: TgaStatus;
+  from: Vec3;
+  to: Vec3;
+  /** True when the two nodes are on different levels — a Steigstrang. */
+  isRiser: boolean;
+  /** The from-node's level (level isolation shows same-level runs; risers always show). */
+  level: string;
+}
+
+export interface TgaScene3D {
+  nodes: TgaNode3D[];
+  edges: TgaEdge3D[];
+}
+
+/**
+ * Place the TGA network in 3D: each node at its plan (x, z) lifted to its level's
+ * elevation plus the kind's mounting height; each edge as a straight run between
+ * its two nodes. An edge whose nodes are on different levels is a **riser**
+ * (Steigstrang) — a naturally vertical run the 3D view draws across storeys, per
+ * the v3 concept ("Steigstränge → geschossübergreifende 3D-Darstellung"). Pure;
+ * derived on demand, never stored. Dangling edges (unresolved node) are skipped.
+ */
+export function deriveTgaScene(net: TgaNetwork, levels: Level[]): TgaScene3D {
+  const elevOf = new Map(levels.map((l) => [l.id, l.elevation * 0.01]));
+  const byId = tgaNodesById(net);
+  const posOf = (n: TgaNode): Vec3 => ({
+    x: n.x,
+    y: (elevOf.get(n.levelId) ?? 0) + (MOUNT_HEIGHT_M[n.kind] ?? 0.5),
+    z: n.z,
+  });
+  const nodes: TgaNode3D[] = net.nodes.map((n) => ({
+    id: n.id,
+    trade: n.trade,
+    kind: n.kind,
+    level: n.levelId,
+    pos: posOf(n),
+  }));
+  const edges: TgaEdge3D[] = [];
+  for (const e of net.edges) {
+    const a = byId.get(e.from);
+    const b = byId.get(e.to);
+    if (!a || !b) continue;
+    edges.push({
+      id: e.id,
+      trade: e.trade,
+      status: e.status,
+      from: posOf(a),
+      to: posOf(b),
+      isRiser: a.levelId !== b.levelId,
+      level: a.levelId,
+    });
+  }
+  return { nodes, edges };
 }
 
 // --- Edit commands (undoable) ---

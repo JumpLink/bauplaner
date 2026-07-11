@@ -55,7 +55,8 @@
       { "id": "e-zs", "levelId": "L0", "trade": "strom", "kind": "verteiler", "x": 0.5, "z": 9.5, "label": "Zählerschrank" },
       { "id": "e-1", "levelId": "L0", "trade": "strom", "kind": "steckdose", "x": 3, "z": 0.4 },
       { "id": "e-2", "levelId": "L0", "trade": "strom", "kind": "steckdose", "x": 9, "z": 0.4 },
-      { "id": "e-3", "levelId": "L0", "trade": "strom", "kind": "steckdose", "x": 0.4, "z": 4 }
+      { "id": "e-3", "levelId": "L0", "trade": "strom", "kind": "steckdose", "x": 0.4, "z": 4 },
+      { "id": "w-bad-og", "levelId": "L1", "trade": "wasser", "kind": "zapfstelle", "x": 11.4, "z": 0.6, "label": "Bad OG (geplant)" }
     ],
     "edges": [
       { "id": "he-1", "levelId": "L0", "trade": "heizung", "from": "h-erz", "to": "h-vert", "status": "bestand", "dimension": "DN25" },
@@ -67,7 +68,8 @@
       { "id": "wa-2", "levelId": "L0", "trade": "wasser", "from": "w-anschluss", "to": "w-bad", "status": "geplant", "dimension": "DN20" },
       { "id": "st-1", "levelId": "L0", "trade": "strom", "from": "e-zs", "to": "e-1", "status": "bestand" },
       { "id": "st-2", "levelId": "L0", "trade": "strom", "from": "e-zs", "to": "e-2", "status": "bestand" },
-      { "id": "st-3", "levelId": "L0", "trade": "strom", "from": "e-zs", "to": "e-3", "status": "bestand" }
+      { "id": "st-3", "levelId": "L0", "trade": "strom", "from": "e-zs", "to": "e-3", "status": "bestand" },
+      { "id": "wa-steig", "levelId": "L0", "trade": "wasser", "from": "w-kueche", "to": "w-bad-og", "status": "geplant", "dimension": "DN20" }
     ]
   },
   "docs": [

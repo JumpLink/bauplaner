@@ -12,11 +12,12 @@ import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 import { WebGLBridge } from '@gjsify/webgl';
 
-import { buildScene } from '@bauplaner/core';
+import { buildScene, deriveTgaScene, type TgaTrade } from '@bauplaner/core';
 
 import type { DocumentStore } from '../document-store.ts';
 import { buildLegend, buildLevelControl, buildModeControls, ensureLegendCss } from '../model-overlays.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
+import { TRADE_META } from '../tga.ts';
 import { startBuildingView, type BuildingView } from '../three/building-scene.ts';
 import { renderInspector } from '../wall-inspector-card.ts';
 import { COLORING_MODES, computeWallColors, type ColoringMode } from '../wall-coloring.ts';
@@ -115,6 +116,13 @@ export class Ansicht3dView extends Gtk.Box {
     return computeWallColors(this.store.project?.annotations?.walls, this.mode);
   }
 
+  /** Trade → 0xRRGGBB line/marker colour for the 3D TGA overlay (shared with 2D). */
+  private tgaColors(): Partial<Record<TgaTrade, number>> {
+    const colors: Partial<Record<TgaTrade, number>> = {};
+    for (const t of Object.keys(TRADE_META) as TgaTrade[]) colors[t] = TRADE_META[t].color;
+    return colors;
+  }
+
   private showScene(): void {
     const home = this.store.home;
     if (!home) return;
@@ -133,6 +141,9 @@ export class Ansicht3dView extends Gtk.Box {
       wallColor: this.wallColors(),
       works: this.store.project?.works ?? [],
     });
+    // Derive the TGA network's 3D placement (with risers across storeys), if any.
+    const net = this.store.tga;
+    const tga = net ? { scene: deriveTgaScene(net, home.levels), colors: this.tgaColors() } : undefined;
 
     const glArea = new WebGLBridge();
     glArea.set_hexpand(true);
@@ -144,7 +155,7 @@ export class Ansicht3dView extends Gtk.Box {
     });
     const models = this.store.models;
     glArea.onReady((canvas) => {
-      this.view = startBuildingView(canvas, scene, models, (id) => this.showInspector(id));
+      this.view = startBuildingView(canvas, scene, models, (id) => this.showInspector(id), tga);
       if (this.isolatedLevel) this.view.setVisibleLevel(this.isolatedLevel);
     });
 
