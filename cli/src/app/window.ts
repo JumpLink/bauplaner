@@ -30,7 +30,6 @@ import { MaterialienView } from './views/materialien-view.ts';
 import { ModellView } from './views/modell-view.ts';
 import { RaumklimaView } from './views/raumklima-view.ts';
 import { UebersichtView } from './views/uebersicht-view.ts';
-import { VorhabenView } from './views/vorhaben-view.ts';
 
 interface NavItem {
   view: string;
@@ -108,10 +107,8 @@ export class MainWindow extends Adw.ApplicationWindow {
     this.stack.add_named(new MaterialienView(this.store), 'material');
     this.stack.add_named(new RaumklimaView(this.store), 'raumklima');
     this.stack.add_named(new DokumentationView(this, this.store), 'dokumentation');
-    // Vorhaben (Lehmgraben/earthworks) has no top-nav entry in v3 — it stays
-    // registered (renders in 3D, keeps the works path) and is absorbed into
-    // Modell in a later stage.
-    this.stack.add_named(new VorhabenView(this.store), 'vorhaben');
+    // Vorhaben (Lehmgraben/earthworks) is absorbed into the Modell view's
+    // "Erdarbeiten" mode (2D + 3D), so it has no separate view or nav entry.
 
     // Save action — enabled only with a document.
     const saveAction = new Gio.SimpleAction({ name: 'save-project' });
