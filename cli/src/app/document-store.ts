@@ -8,6 +8,10 @@
  * it stays testable; format logic is reused from `@bauplaner/core`.
  */
 
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+
 import {
   CommandStore,
   addDocCommand,
@@ -17,6 +21,8 @@ import {
   deleteDocCommand,
   deleteTgaEdgeCommand,
   deleteTgaNodeCommand,
+  exportBauplanFile,
+  extractBauplanFile,
   extractSh3dModelsFromFile,
   homeToGeometryEdits,
   invertEdit,
@@ -55,6 +61,8 @@ export class DocumentStore {
   private readonly commands = new CommandStore(() => this.notify());
   /** Set when the model geometry was edited; `save()` then rewrites the `.sh3d`. */
   private geometryDirtyFlag = false;
+  /** When a `.bauplan` was opened: its path, so `save()` re-bundles into it. */
+  private bauplanPath: string | null = null;
 
   /** The parsed model, or null if nothing loaded / the last load failed. */
   get home(): HomeData | null {
@@ -126,9 +134,20 @@ export class DocumentStore {
     this._models = null; // invalidate the cached OBJ geometry for the old doc
     this.commands.clear(); // a new document starts with a fresh undo history
     this.geometryDirtyFlag = false;
+    this.bauplanPath = null;
     try {
-      this._doc = loadDocumentFile(path);
-      this._path = path;
+      let loadPath = path;
+      // A .bauplan is self-contained: unbundle it into a temp .sh3d + sidecar the
+      // rest of the store already understands, and remember the .bauplan so save()
+      // re-bundles into it.
+      if (/\.bauplan$/i.test(path)) {
+        const dir = mkdtempSync(join(tmpdir(), 'bauplan-'));
+        const { projectPath } = extractBauplanFile(path, dir);
+        loadPath = projectPath;
+        this.bauplanPath = resolve(path);
+      }
+      this._doc = loadDocumentFile(loadPath);
+      this._path = path; // keep the original path for display
       this._error = null;
     } catch (error) {
       this._doc = null;
@@ -158,6 +177,12 @@ export class DocumentStore {
       this._doc.projectPath ?? undefined,
     );
     this._doc = { ...this._doc, projectPath: written, sh3dChanged: false };
+    // Opened from a .bauplan → re-bundle the (temp) sidecar + .sh3d back into it.
+    if (this.bauplanPath) {
+      exportBauplanFile(written, this.bauplanPath);
+      this.notify();
+      return this.bauplanPath;
+    }
     this.notify();
     return written;
   }
