@@ -284,8 +284,10 @@ export class GrundrissView extends Gtk.Box {
     // Click inspects a wall in view mode; in edit mode the drag gesture handles
     // taps (select/connect) and drags (move) of Gewerke nodes instead.
     const click = new Gtk.GestureClick();
-    click.connect('pressed', (_g, _n, x, y) => {
+    click.connect('pressed', (_g, nPress, x, y) => {
       if (this.editTarget === 'view') this.onClick(x, y);
+      // Double-click a room edge in Geometrie/Auswählen inserts a vertex there.
+      else if (this.editTarget === 'geometrie' && this.geomTool === 'select' && nPress >= 2) this.insertRoomVertexAt(x, y);
     });
     area.add_controller(click);
 
@@ -727,9 +729,9 @@ export class GrundrissView extends Gtk.Box {
     row.append(seg);
 
     if (this.geomTool === 'select') {
-      const del = new Gtk.Button({ iconName: 'user-trash-symbolic', tooltipText: 'Ausgewählte Wand löschen', cssClasses: ['flat'] });
-      del.set_sensitive(this.selectedGeomWall !== null);
-      del.connect('clicked', () => this.deleteSelectedWall());
+      const del = new Gtk.Button({ iconName: 'user-trash-symbolic', tooltipText: 'Auswahl löschen (Wand oder Raumpunkt)', cssClasses: ['flat'] });
+      del.set_sensitive(this.selectedGeomWall !== null || this.selectedVertexCluster() !== null);
+      del.connect('clicked', () => this.deleteGeomSelection());
       row.append(del);
     }
     if (this.store.geometryDirty) {
@@ -742,9 +744,78 @@ export class GrundrissView extends Gtk.Box {
         ? 'Ziehen: neue Wand · Raster 5 cm'
         : this.selectedGeomWall
           ? 'Wand gewählt — Dicke/Höhe rechts · löschen · ziehen zum Verschieben'
-          : 'Ecke/Punkt ziehen · Wand ziehen = verschieben, antippen = wählen';
+          : this.selectedVertexCluster()
+            ? 'Raumpunkt gewählt — löschen möglich'
+            : 'Ziehen: Ecke/Punkt · Wand ziehen=verschieben · Doppelklick Kante=Punkt +';
     box.append(new Gtk.Label({ label: hint, cssClasses: ['caption', 'dim-label'], xalign: 0 }));
     return box;
+  }
+
+  /** The current selection if it is a pure room-vertex handle (no wall), else null. */
+  private selectedVertexCluster(): GeomCluster | null {
+    const c = this.selectedGeom;
+    return c && c.walls.length === 0 && c.vertices.length > 0 ? c : null;
+  }
+
+  /** Delete whatever is selected: a wall (with the reference warning) or room vertices. */
+  private deleteGeomSelection(): void {
+    if (this.selectedGeomWall) {
+      this.deleteSelectedWall();
+      return;
+    }
+    const cluster = this.selectedVertexCluster();
+    if (!cluster) return;
+    const home = this.store.home;
+    const edits: GeometryEdit[] = [];
+    for (const vref of cluster.vertices) {
+      const room = home?.rooms.find((r) => r.id === vref.roomId);
+      if (!room || room.vertices.length <= 3) continue; // keep a valid polygon
+      edits.push({
+        op: 'setRoomPoints',
+        id: vref.roomId,
+        points: room.vertices.filter((_, i) => i !== vref.index).map(([x, y]): [number, number] => [x, y]),
+      });
+    }
+    if (edits.length) this.store.editGeometry(edits, 'Raumpunkt löschen');
+    this.selectedGeom = null;
+  }
+
+  /** Insert a room vertex where a double-click lands on a room edge (snapped). */
+  private insertRoomVertexAt(sx: number, sy: number): void {
+    const t = this.transform;
+    const home = this.store.home;
+    if (!t || !home) return;
+    const wx = (sx - t.offX) / t.s;
+    const wz = (sy - t.offY) / t.s;
+    const onLevel = (lvl: string): boolean => !this.isolatedLevel || lvl === this.isolatedLevel;
+    let best: { roomId: string; index: number; px: number; py: number; d: number } | null = null;
+    for (const r of home.rooms) {
+      if (!r.id || !onLevel(r.level)) continue;
+      const n = r.vertices.length;
+      for (let i = 0; i < n; i++) {
+        const [ax, ay] = r.vertices[i];
+        const [bx, by] = r.vertices[(i + 1) % n];
+        const axm = ax * 0.01;
+        const aym = ay * 0.01;
+        const dx = bx * 0.01 - axm;
+        const dy = by * 0.01 - aym;
+        const len2 = dx * dx + dy * dy;
+        const proj = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((wx - axm) * dx + (wz - aym) * dy) / len2));
+        const px = axm + proj * dx;
+        const py = aym + proj * dy;
+        const dScreen = Math.hypot((px - wx) * t.s, (py - wz) * t.s);
+        // Skip clicks near an endpoint — that reshapes an existing vertex, not inserts.
+        const nearEnd = proj * Math.hypot(dx, dy) < 0.2 || (1 - proj) * Math.hypot(dx, dy) < 0.2;
+        if (dScreen <= 10 && !nearEnd && (!best || dScreen < best.d)) best = { roomId: r.id, index: i + 1, px, py, d: dScreen };
+      }
+    }
+    if (!best) return;
+    const snap = (m: number): number => Math.round(m * 20) / 20;
+    const room = home.rooms.find((r) => r.id === best!.roomId);
+    if (!room) return;
+    const points = room.vertices.map(([x, y]): [number, number] => [x, y]);
+    points.splice(best.index, 0, [Math.round(snap(best.px) * 100), Math.round(snap(best.py) * 100)]);
+    this.store.editGeometry([{ op: 'setRoomPoints', id: best.roomId, points }], 'Raumpunkt hinzufügen');
   }
 
   /** How many project references (assembly/diagnosis/docs) anchor to a wall id. */
@@ -1018,7 +1089,9 @@ export class GrundrissView extends Gtk.Box {
       } else if (this.geomDrag) {
         this.selectedGeom = this.geomDrag; // a tap selects the handle
         this.selectedGeomWall = null;
-        this.drawArea?.queue_draw();
+        // A pure room-vertex handle enables the delete button → rebuild controls.
+        if (this.geomDrag.walls.length === 0) this.showPlan();
+        else this.drawArea?.queue_draw();
       } else {
         // Tap → pick / deselect a wall; rebuild controls (delete + inspector) on change.
         const wall = this.wallAtScreen(this.dragStartX + offsetX, this.dragStartY + offsetY);

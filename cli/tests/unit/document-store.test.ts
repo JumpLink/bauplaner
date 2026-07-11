@@ -135,6 +135,18 @@ export default async () => {
       expect(store.home!.walls.some((w) => w.id === 'w1')).toBe(true);
     });
 
+    await it('inserts and removes a room vertex via editGeometry (undoable)', async () => {
+      const store = storeWith(WALL_ROOM);
+      const room = () => store.home!.rooms.find((r) => r.id === 'r1')!;
+      const orig = room().vertices.length;
+      const inserted = room().vertices.map((v): [number, number] => [v[0], v[1]]);
+      inserted.splice(2, 0, [500, 150]);
+      store.editGeometry([{ op: 'setRoomPoints', id: 'r1', points: inserted }], 'Raumpunkt hinzufügen');
+      expect(room().vertices.length).toBe(orig + 1);
+      store.undo();
+      expect(room().vertices.length).toBe(orig);
+    });
+
     await it('opens a .bauplan, edits it, saves and re-bundles into the same file', async () => {
       const dir = mkdtempSync(join(tmpdir(), 'ecostore-'));
       const sh3dPath = join(dir, 'plan.sh3d');
