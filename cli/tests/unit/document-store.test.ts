@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 
-import { parseSh3dBytes } from '@bauplaner/core';
+import { exportBauplanFile, parseSh3dBytes } from '@bauplaner/core';
 import { DocumentStore } from '../../src/app/document-store.ts';
 
 const WALL = '<home><wall id="w1" xStart="0" yStart="0" xEnd="100" yEnd="0" height="250" thickness="24"/></home>';
@@ -116,6 +116,26 @@ export default async () => {
       // Re-parse the .sh3d on disk: the edit persisted.
       const onDisk = parseSh3dBytes(new Uint8Array(readFileSync(store.sh3dPath as string)));
       expect(onDisk.walls[0].xEnd).toBe(640);
+    });
+
+    await it('opens a .bauplan, edits it, saves and re-bundles into the same file', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'ecostore-'));
+      const sh3dPath = join(dir, 'plan.sh3d');
+      writeFileSync(sh3dPath, zipSync({ 'Home.xml': strToU8(WALL_ROOM) }));
+      const bauplanPath = join(dir, 'plan.bauplan');
+      exportBauplanFile(sh3dPath, bauplanPath);
+
+      const store = new DocumentStore();
+      store.load(bauplanPath);
+      expect(store.home?.walls[0].id).toBe('w1');
+      store.editGeometry([{ op: 'moveWallEndpoint', id: 'w1', end: 'end', x: 500, y: 0 }], 'test');
+      // save() returns the .bauplan path (not the temp sidecar).
+      expect(store.save()).toBe(bauplanPath);
+
+      // Re-open the same .bauplan in a fresh store: the edit is inside it.
+      const reopened = new DocumentStore();
+      reopened.load(bauplanPath);
+      expect(reopened.home?.walls[0].xEnd).toBe(500);
     });
   });
 };

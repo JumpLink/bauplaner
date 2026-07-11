@@ -1,8 +1,8 @@
 /**
  * Single entry point for opening a document into the shared
- * {@link DocumentStore} — either an bauplaner project (`*.ecoretrofit.json`)
- * or a bare Sweet Home 3D `.sh3d`. Used by the header button and every view's
- * welcome screen, so there is exactly one file-open path.
+ * {@link DocumentStore} — a `.bauplan` container, an bauplaner project
+ * (`*.ecoretrofit.json`), or a bare Sweet Home 3D `.sh3d`. Used by the header
+ * button and every view's welcome screen, so there is exactly one file-open path.
  */
 
 import Gio from '@girs/gio-2.0';
@@ -11,10 +11,14 @@ import Gtk from '@girs/gtk-4.0';
 import type { DocumentStore } from './document-store.ts';
 
 function buildFilters(): Gio.ListStore {
-  const combined = new Gtk.FileFilter({ name: 'Projekt / Sweet Home 3D' });
+  const combined = new Gtk.FileFilter({ name: 'Bauplan / Projekt / Sweet Home 3D' });
+  combined.add_pattern('*.bauplan');
   combined.add_pattern('*.sh3d');
   combined.add_pattern('*.ecoretrofit.json');
   combined.add_pattern('*.json');
+
+  const bauplan = new Gtk.FileFilter({ name: 'Bauplan (*.bauplan)' });
+  bauplan.add_pattern('*.bauplan');
 
   const project = new Gtk.FileFilter({ name: 'Eco-Retrofit-Projekt (*.ecoretrofit.json)' });
   project.add_pattern('*.ecoretrofit.json');
@@ -25,6 +29,7 @@ function buildFilters(): Gio.ListStore {
 
   const filters = Gio.ListStore.new(Gtk.FileFilter.$gtype);
   filters.append(combined);
+  filters.append(bauplan);
   filters.append(project);
   filters.append(sh3d);
   return filters;
