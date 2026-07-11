@@ -183,14 +183,29 @@ export function invertEdit(home: HomeData, edit: GeometryEdit): GeometryEdit | n
 }
 
 /**
+ * Below the serializer's write precision (3 decimals of a cm ≈ 10 µm). Coordinates
+ * closer than this are treated as equal, so a re-parsed (rounded) `.sh3d` diffs as
+ * unchanged against the full-precision in-memory model — the save converges and a
+ * no-op save writes nothing.
+ */
+const COORD_EPS = 1e-3;
+const same = (a: number, b: number): boolean => Math.abs(a - b) <= COORD_EPS;
+
+/**
  * The minimal edit list that turns `original` geometry into `current` — added /
  * removed / moved walls and changed room polygons. This is how the app persists
  * to the `.sh3d`: diff the in-memory model against the file on disk and patch
- * only what changed. Because it emits `setWallHeight`/`setWallThickness` ONLY
- * when the value actually differs, it never fabricates `height="0"` on a wall
- * whose source omitted the (nullable) height — the value only appears once a user
- * explicitly changes it. Walls/rooms without an id can't be anchored and are
- * skipped; room add/remove is not modelled yet (the editor doesn't do it).
+ * only what changed.
+ *
+ * - Emits `setWallHeight`/`setWallThickness` ONLY when the value actually differs,
+ *   so it never fabricates `height="0"` on a wall whose source omitted the
+ *   (nullable) height — the value appears only once a user explicitly changes it.
+ * - Same-count room edits diff **per vertex** (`moveRoomVertex`), so untouched
+ *   vertices are never rewritten (and never truncated to the serializer's
+ *   precision); only a changed vertex count falls back to `setRoomPoints`.
+ * - Comparisons use {@link COORD_EPS} so sub-precision float noise doesn't produce
+ *   phantom edits. Walls/rooms without an id can't be anchored and are skipped;
+ *   room add/remove is not modelled yet (the editor doesn't do it).
  */
 export function diffGeometryEdits(original: HomeData, current: HomeData): GeometryEdit[] {
   const edits: GeometryEdit[] = [];
@@ -216,18 +231,26 @@ export function diffGeometryEdits(original: HomeData, current: HomeData): Geomet
       });
       continue;
     }
-    if (o.xStart !== w.xStart || o.yStart !== w.yStart || o.xEnd !== w.xEnd || o.yEnd !== w.yEnd) {
+    if (!same(o.xStart, w.xStart) || !same(o.yStart, w.yStart) || !same(o.xEnd, w.xEnd) || !same(o.yEnd, w.yEnd)) {
       edits.push({ op: 'moveWall', id: w.id, xStart: w.xStart, yStart: w.yStart, xEnd: w.xEnd, yEnd: w.yEnd });
     }
-    if (o.thickness !== w.thickness) edits.push({ op: 'setWallThickness', id: w.id, thickness: w.thickness });
-    if (o.height !== w.height) edits.push({ op: 'setWallHeight', id: w.id, height: w.height });
+    if (!same(o.thickness, w.thickness)) edits.push({ op: 'setWallThickness', id: w.id, thickness: w.thickness });
+    if (!same(o.height, w.height)) edits.push({ op: 'setWallHeight', id: w.id, height: w.height });
   }
   const origRooms = new Map(original.rooms.filter((r) => r.id).map((r) => [r.id, r]));
   for (const r of current.rooms) {
     if (!r.id) continue;
     const o = origRooms.get(r.id);
-    if (o && JSON.stringify(o.vertices) !== JSON.stringify(r.vertices)) {
+    if (!o) continue;
+    if (o.vertices.length !== r.vertices.length) {
+      // Structure changed (a vertex added/removed) → replace the whole polygon.
       edits.push({ op: 'setRoomPoints', id: r.id, points: r.vertices.map(([x, y]): [number, number] => [x, y]) });
+      continue;
+    }
+    for (let i = 0; i < r.vertices.length; i++) {
+      if (!same(o.vertices[i][0], r.vertices[i][0]) || !same(o.vertices[i][1], r.vertices[i][1])) {
+        edits.push({ op: 'moveRoomVertex', id: r.id, index: i, x: r.vertices[i][0], y: r.vertices[i][1] });
+      }
     }
   }
   return edits;
