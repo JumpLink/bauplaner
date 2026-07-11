@@ -6,3 +6,4 @@ export { bauteilCommand } from './bauteil.ts';
 export { feuchteCommand } from './feuchte.ts';
 export { wandCommand } from './wand.ts';
 export { wandSetCommand } from './wand-set.ts';
+export { bauplanCommand } from './bauplan.ts';

@@ -18,6 +18,7 @@ import {
   feuchteCommand,
   wandCommand,
   wandSetCommand,
+  bauplanCommand,
 } from './commands/index.ts';
 
 function reportError(err: unknown): void {
@@ -38,6 +39,7 @@ async function main(): Promise<void> {
     .command(feuchteCommand)
     .command(wandCommand)
     .command(wandSetCommand)
+    .command(bauplanCommand)
     .demandCommand(1, 'Bitte ein Kommando angeben.')
     .strict()
     .help()
