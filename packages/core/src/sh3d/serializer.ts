@@ -100,20 +100,59 @@ function patchRoomVertex(node: RawNode, edit: Extract<GeometryEdit, { op: 'moveR
   setAttr(point, 'y', edit.y);
 }
 
+/** Build a `<point x=… y=…/>` raw node. */
+function makePointNode(x: number, y: number): RawNode {
+  return { point: [], ':@': { '@_x': fmtNum(x), '@_y': fmtNum(y) } };
+}
+
+/** Replace all of a `<room>`'s `<point>` children (keeps any non-point children). */
+function patchRoomPoints(node: RawNode, edit: Extract<GeometryEdit, { op: 'setRoomPoints' }>): void {
+  const nonPoints = (node.room as RawNode[]).filter((c) => !isTag(c, 'point'));
+  node.room = [...nonPoints, ...edit.points.map(([x, y]) => makePointNode(x, y))];
+}
+
+/** Build a fresh self-closing `<wall …/>` raw node from an `addWall` edit. */
+function makeWallNode(edit: Extract<GeometryEdit, { op: 'addWall' }>): RawNode {
+  const at: Record<string, string> = {
+    '@_id': edit.id,
+    '@_xStart': fmtNum(edit.xStart),
+    '@_yStart': fmtNum(edit.yStart),
+    '@_xEnd': fmtNum(edit.xEnd),
+    '@_yEnd': fmtNum(edit.yEnd),
+    '@_height': fmtNum(edit.height),
+    '@_thickness': fmtNum(edit.thickness),
+  };
+  if (edit.level) at['@_level'] = edit.level; // omit for level-less models
+  return { wall: [], ':@': at };
+}
+
 /**
- * Apply one geometry edit to the raw tree, matching the element by `id` and tag.
- * Returns true if the target element was found and patched.
+ * Apply one geometry edit to the raw tree. Positional edits match an element by
+ * `id` and patch it in place; `addWall`/`removeWall` insert/remove a `<wall>`;
+ * `setRoomPoints` replaces a room's points. Returns true if the edit applied.
  */
 export function applyGeometryEditToTree(tree: RawNode[], edit: GeometryEdit): boolean {
-  const wantWall = edit.op !== 'moveRoomVertex';
-  for (const node of homeChildren(tree)) {
+  const kids = homeChildren(tree);
+  if (edit.op === 'addWall') {
+    kids.push(makeWallNode(edit));
+    return true;
+  }
+  if (edit.op === 'removeWall') {
+    const i = kids.findIndex((n) => isTag(n, 'wall') && attr(n, 'id') === edit.id);
+    if (i < 0) return false;
+    kids.splice(i, 1);
+    return true;
+  }
+  const wantWall = edit.op !== 'moveRoomVertex' && edit.op !== 'setRoomPoints';
+  for (const node of kids) {
     if (attr(node, 'id') !== edit.id) continue;
     if (wantWall && isTag(node, 'wall')) {
       patchWall(node, edit);
       return true;
     }
     if (!wantWall && isTag(node, 'room')) {
-      patchRoomVertex(node, edit as Extract<GeometryEdit, { op: 'moveRoomVertex' }>);
+      if (edit.op === 'setRoomPoints') patchRoomPoints(node, edit);
+      else patchRoomVertex(node, edit as Extract<GeometryEdit, { op: 'moveRoomVertex' }>);
       return true;
     }
   }

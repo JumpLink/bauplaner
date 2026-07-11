@@ -4,6 +4,7 @@ import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import {
   type GeometryEdit,
   applyEditToHome,
+  diffGeometryEdits,
   homeToGeometryEdits,
   invertEdit,
   parseSh3dBytes,
@@ -83,6 +84,49 @@ export default async () => {
       const written = writeSh3dBytes(noHeight, homeToGeometryEdits(parseSh3dBytes(noHeight)));
       const xml = strFromU8(unzipSync(written)['Home.xml']);
       expect(xml.includes('height=')).toBe(false);
+    });
+
+    await it('adds and removes a wall through the serializer', async () => {
+      const src = bytes();
+      const add: GeometryEdit = { op: 'addWall', id: 'w3', level: 'L0', xStart: 0, yStart: 0, xEnd: 0, yEnd: 300, thickness: 24, height: 250 };
+      const written = writeSh3dBytes(src, [add]);
+      const withWall = parseSh3dBytes(written);
+      expect(withWall.walls.some((w) => w.id === 'w3')).toBe(true);
+      // Removing it again returns the model to the original.
+      const removed = parseSh3dBytes(writeSh3dBytes(written, [{ op: 'removeWall', id: 'w3' }]));
+      expect(json(removed)).toBe(json(parseSh3dBytes(src)));
+    });
+
+    await it('replaces a room polygon with setRoomPoints', async () => {
+      const src = bytes();
+      const points: [number, number][] = [[0, 0], [500, 0], [500, 400], [0, 400]];
+      const out = parseSh3dBytes(writeSh3dBytes(src, [{ op: 'setRoomPoints', id: 'r1', points }]));
+      expect(json(out.rooms.find((r) => r.id === 'r1')!.vertices)).toBe(json(points));
+    });
+
+    await it('invertEdit undoes addWall / removeWall / setRoomPoints', async () => {
+      const home = parseSh3dBytes(bytes());
+      const byId = (h: typeof home) => JSON.stringify([...h.walls].sort((a, b) => a.id.localeCompare(b.id)));
+      const add: GeometryEdit = { op: 'addWall', id: 'w9', level: 'L0', xStart: 0, yStart: 0, xEnd: 1, yEnd: 1, thickness: 24, height: 250 };
+      expect(byId(applyEditToHome(applyEditToHome(home, add), invertEdit(home, add)!))).toBe(byId(home));
+      const rm: GeometryEdit = { op: 'removeWall', id: 'w1' };
+      expect(byId(applyEditToHome(applyEditToHome(home, rm), invertEdit(home, rm)!))).toBe(byId(home));
+      const sp: GeometryEdit = { op: 'setRoomPoints', id: 'r1', points: [[0, 0], [1, 0], [1, 1]] };
+      expect(json(applyEditToHome(applyEditToHome(home, sp), invertEdit(home, sp)!))).toBe(json(home));
+    });
+
+    await it('diffGeometryEdits emits add/remove/move and skips unchanged height', async () => {
+      const orig = parseSh3dBytes(
+        zipSync({ 'Home.xml': strToU8('<home><wall id="w1" xStart="0" yStart="0" xEnd="400" yEnd="0" thickness="24"/></home>') }),
+      );
+      let cur = applyEditToHome(orig, { op: 'moveWallEndpoint', id: 'w1', end: 'end', x: 500, y: 0 });
+      cur = applyEditToHome(cur, { op: 'addWall', id: 'w2', level: '', xStart: 0, yStart: 0, xEnd: 0, yEnd: 300, thickness: 24, height: 250 });
+      const ops = diffGeometryEdits(orig, cur).map((e) => e.op);
+      expect(ops.includes('moveWall')).toBe(true);
+      expect(ops.includes('addWall')).toBe(true);
+      expect(ops.includes('setWallHeight')).toBe(false); // w1 height unchanged (0) → not re-emitted
+      const removed = diffGeometryEdits(cur, applyEditToHome(cur, { op: 'removeWall', id: 'w1' }));
+      expect(removed.some((e) => e.op === 'removeWall')).toBe(true);
     });
   });
 };

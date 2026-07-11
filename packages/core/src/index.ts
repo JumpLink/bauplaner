@@ -12,7 +12,13 @@ export { parseSh3dBytes, parseSh3dFile } from './sh3d/parser.ts';
 export { extractSh3dModels, extractSh3dModelsFromFile } from './sh3d/models.ts';
 export type { ModelAsset, ModelCatalog } from './sh3d/models.ts';
 export type { GeometryEdit, WallEnd } from './sh3d/edit.ts';
-export { applyEditToHome, applyEditsToHome, invertEdit, homeToGeometryEdits } from './sh3d/edit.ts';
+export {
+  applyEditToHome,
+  applyEditsToHome,
+  invertEdit,
+  homeToGeometryEdits,
+  diffGeometryEdits,
+} from './sh3d/edit.ts';
 export {
   parseHomeXml,
   buildHomeXml,

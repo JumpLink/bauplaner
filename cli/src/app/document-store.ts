@@ -8,7 +8,7 @@
  * it stays testable; format logic is reused from `@bauplaner/core`.
  */
 
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -21,13 +21,14 @@ import {
   deleteDocCommand,
   deleteTgaEdgeCommand,
   deleteTgaNodeCommand,
+  diffGeometryEdits,
   exportBauplanFile,
   extractBauplanFile,
   extractSh3dModelsFromFile,
-  homeToGeometryEdits,
   invertEdit,
   loadDocumentFile,
   moveTgaNodeCommand,
+  parseSh3dBytes,
   saveProjectFile,
   summarizeCosts,
   writeSh3dFile,
@@ -164,10 +165,15 @@ export class DocumentStore {
   save(): string | null {
     if (!this._doc) return null;
     // Edited geometry lives in the .sh3d (still the geometry source of truth):
-    // rewrite it first, then saveProjectFile refreshes the sidecar's sha256 to
-    // match — so the reference stays consistent and no false "sh3d changed".
+    // diff the in-memory model against the file on disk and patch only what
+    // changed (adds/removes/moves), then saveProjectFile refreshes the sidecar's
+    // sha256 to match — so the reference stays consistent and no false "sh3d
+    // changed". Diffing (vs. re-emitting everything) also never fabricates a
+    // height on a wall whose source omitted the nullable attribute.
     if (this.geometryDirtyFlag) {
-      writeSh3dFile(this._doc.sh3dPath, this._doc.sh3dPath, homeToGeometryEdits(this._doc.home));
+      const original = parseSh3dBytes(new Uint8Array(readFileSync(this._doc.sh3dPath)));
+      const edits = diffGeometryEdits(original, this._doc.home);
+      if (edits.length > 0) writeSh3dFile(this._doc.sh3dPath, this._doc.sh3dPath, edits);
       this.geometryDirtyFlag = false;
       this._models = null; // the .sh3d changed → re-extract OBJ geometry on demand
     }
