@@ -7,6 +7,7 @@ import bauphysik from './unit/bauphysik.test.ts';
 import lehmgraben from './unit/lehmgraben.test.ts';
 import kosten from './unit/kosten.test.ts';
 import sh3d from './unit/sh3d.test.ts';
+import sh3dSerializer from './unit/sh3d-serializer.test.ts';
 import models from './unit/models.test.ts';
 import feuchte from './unit/feuchte.test.ts';
 import geometry from './unit/geometry.test.ts';
@@ -31,6 +32,7 @@ run({
   lehmgraben,
   kosten,
   sh3d,
+  sh3dSerializer,
   models,
   feuchte,
   geometry,
