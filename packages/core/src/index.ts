@@ -29,3 +29,13 @@ export * from './tga.ts';
 export * from './doc.ts';
 export * from './raumklima.ts';
 export * from './project.ts';
+export {
+  BAUPLAN_SUFFIX,
+  BAUPLAN_FORMAT_VERSION,
+  writeBauplanBytes,
+  readBauplanBytes,
+  readBauplanFile,
+  exportBauplanFile,
+  extractBauplanFile,
+} from './io/bauplan.ts';
+export type { BauplanManifest, BauplanContents } from './io/bauplan.ts';
