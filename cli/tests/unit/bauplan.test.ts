@@ -89,5 +89,20 @@ export default async () => {
       }
       expect(threwVersion).toBe(true);
     });
+
+    await it('rejects a manifest without checksums (no crash downstream)', async () => {
+      const noChecksums = zipSync({
+        'manifest.json': strToU8(JSON.stringify({ formatVersion: 1, app: 'bauplaner' })),
+        'project.json': strToU8(JSON.stringify(project())),
+        'sh3d/plan.sh3d': sh3d(),
+      });
+      let threw = false;
+      try {
+        readBauplanBytes(noChecksums);
+      } catch {
+        threw = true;
+      }
+      expect(threw).toBe(true);
+    });
   });
 };

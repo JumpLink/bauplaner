@@ -119,20 +119,25 @@ export function invertEdit(home: HomeData, edit: GeometryEdit): GeometryEdit | n
 }
 
 /**
- * The full geometry of a home expressed as edits — one `moveWall` +
- * `setWallThickness` + `setWallHeight` per (id-carrying) wall, and one
- * `moveRoomVertex` per room vertex. Applied to the original `Home.xml` by the
- * serializer, this rewrites exactly the geometry attributes to the current model
- * while every unmodelled attribute round-trips. The way the app persists edited
- * geometry back to the `.sh3d` without diffing.
+ * The full **positional** geometry of a home expressed as edits — one `moveWall`
+ * per (id-carrying) wall and one `moveRoomVertex` per room vertex. Applied to the
+ * original `Home.xml` by the serializer, this rewrites exactly those coordinates
+ * to the current model while every unmodelled attribute round-trips. The way the
+ * app persists edited geometry back to the `.sh3d` without diffing.
+ *
+ * Deliberately NO `setWallThickness` / `setWallHeight`: Sweet Home 3D writes
+ * `thickness` always but `height` is a NULLABLE float it OMITS when a wall
+ * inherits the level/default height — our parser then reads the missing attribute
+ * as 0. Re-emitting it here would fabricate `height="0"` onto every such wall on
+ * the next save, silently zeroing untouched walls. The drag editor only moves
+ * points anyway; thickness/height edits go through explicit {@link GeometryEdit}s
+ * (e.g. the `wand-set` CLI), which only touch the wall they name.
  */
 export function homeToGeometryEdits(home: HomeData): GeometryEdit[] {
   const edits: GeometryEdit[] = [];
   for (const w of home.walls) {
     if (!w.id) continue; // can't anchor an edit without an id
     edits.push({ op: 'moveWall', id: w.id, xStart: w.xStart, yStart: w.yStart, xEnd: w.xEnd, yEnd: w.yEnd });
-    edits.push({ op: 'setWallThickness', id: w.id, thickness: w.thickness });
-    edits.push({ op: 'setWallHeight', id: w.id, height: w.height });
   }
   for (const r of home.rooms) {
     if (!r.id) continue;

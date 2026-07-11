@@ -124,6 +124,9 @@ export function readBauplanBytes(bytes: Uint8Array): { manifest: BauplanManifest
       `.bauplan: formatVersion ${manifest.formatVersion} ist neuer als unterstützt (${BAUPLAN_FORMAT_VERSION}).`,
     );
   }
+  if (!manifest.checksums || typeof manifest.checksums.sh3d !== 'string') {
+    throw new Error('.bauplan: manifest.checksums.sh3d fehlt.');
+  }
 
   const projectRaw = entries['project.json'];
   if (!projectRaw) throw new Error('.bauplan: project.json fehlt.');

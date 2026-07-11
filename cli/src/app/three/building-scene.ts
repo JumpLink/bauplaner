@@ -298,13 +298,15 @@ export function startBuildingView(
   if (tga) {
     const DEFAULT_TGA_COLOR = 0x9e9e9e;
     const yAxis = new THREE.Vector3(0, 1, 0);
+    // One shared sphere geometry for all node markers (positioned per mesh).
+    const nodeGeom = new THREE.SphereGeometry(0.13, 12, 10);
+    if (tga.scene.nodes.length > 0) ownedGeometries.push(nodeGeom);
     for (const n of tga.scene.nodes) {
-      const geom = new THREE.SphereGeometry(0.13, 12, 10);
-      ownedGeometries.push(geom);
-      const mesh = new THREE.Mesh(geom, tgaMaterialFor(tga.colors[n.trade] ?? DEFAULT_TGA_COLOR, false));
+      const mesh = new THREE.Mesh(nodeGeom, tgaMaterialFor(tga.colors[n.trade] ?? DEFAULT_TGA_COLOR, false));
       mesh.position.set(n.pos.x, n.pos.y, n.pos.z);
       threeScene.add(mesh);
-      leveledObjects.push({ object: mesh, level: n.level });
+      // Riser endpoints stay visible across storeys (with the riser); others follow isolation.
+      if (!n.isRiserEndpoint) leveledObjects.push({ object: mesh, level: n.level });
     }
     for (const e of tga.scene.edges) {
       const dir = new THREE.Vector3(e.to.x - e.from.x, e.to.y - e.from.y, e.to.z - e.from.z);
@@ -459,6 +461,11 @@ export function startBuildingView(
       for (const material of tgaMaterials.values()) material.dispose();
       for (const geometry of ownedGeometries) geometry.dispose();
       floorMaterial.dispose();
+      // The scene helpers own GL buffers too; the view is rebuilt on every store
+      // change, so these must be freed or they accumulate on the GPU.
+      grid.geometry.dispose();
+      (grid.material as THREE.Material).dispose();
+      northArrow.dispose();
       renderer.dispose();
     },
   };

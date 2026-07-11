@@ -166,6 +166,8 @@ export interface TgaNode3D {
   /** Owning level id (for level isolation in the 3D view). */
   level: string;
   pos: Vec3;
+  /** An endpoint of a riser — kept visible under level isolation so the strand keeps its marker. */
+  isRiserEndpoint: boolean;
 }
 
 /** A run between two placed nodes; a **riser** when its ends sit on different storeys. */
@@ -202,12 +204,24 @@ export function deriveTgaScene(net: TgaNetwork, levels: Level[]): TgaScene3D {
     y: (elevOf.get(n.levelId) ?? 0) + (MOUNT_HEIGHT_M[n.kind] ?? 0.5),
     z: n.z,
   });
+  // Nodes that terminate a riser: kept visible under level isolation so a riser
+  // strand never floats without its base/top marker.
+  const riserEndpoints = new Set<string>();
+  for (const e of net.edges) {
+    const a = byId.get(e.from);
+    const b = byId.get(e.to);
+    if (a && b && a.levelId !== b.levelId) {
+      riserEndpoints.add(e.from);
+      riserEndpoints.add(e.to);
+    }
+  }
   const nodes: TgaNode3D[] = net.nodes.map((n) => ({
     id: n.id,
     trade: n.trade,
     kind: n.kind,
     level: n.levelId,
     pos: posOf(n),
+    isRiserEndpoint: riserEndpoints.has(n.id),
   }));
   const edges: TgaEdge3D[] = [];
   for (const e of net.edges) {
