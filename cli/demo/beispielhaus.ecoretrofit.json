@@ -33,7 +33,14 @@
       }
     }
   },
-  "works": [],
+  "works": [
+    {
+      "id": "lehmgraben",
+      "kind": "lehmgraben",
+      "note": "Lehmgraben (Standard, an der längsten Außenseite)",
+      "data": { "points": [[0, -0.4], [12, -0.4]], "depthM": 0.9, "widthM": 0.5 }
+    }
+  ],
   "tga": {
     "nodes": [
       { "id": "h-erz", "levelId": "L0", "trade": "heizung", "kind": "erzeuger", "x": 11, "z": 9, "label": "Gastherme" },

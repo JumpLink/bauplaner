@@ -25,6 +25,7 @@ import {
   TGA_TRADE_ORDER,
   applyEditsToHome,
   buildScene,
+  defaultLehmgrabenForModel,
   deriveTgaStats,
   polygonCentroid,
   tgaEdgePath,
@@ -51,8 +52,13 @@ const SELECT_COLOR = 0x3584e4;
 const OPENING_COLOR = 0x62a0ea;
 /** Neutral wall fill (used in Neutral mode / for un-assessed walls), warm clay. */
 const NEUTRAL_WALL = 0x9a8478;
+/** Earthwork (Lehmgraben/Vorhaben) overlay colour — clay/brown, dotted = planned. */
+const WORK_COLOR = 0x8d6e63;
 /** Screen padding around the fitted plan, px. */
 const PAD = 26;
+
+/** The Grundriss interaction mode. */
+type EditTarget = 'view' | 'geometrie' | 'gewerke' | 'erdarbeiten';
 
 /** The world→screen fit: screenX = worldX·s + offX, screenY = worldZ·s + offY. */
 interface PlanTransform {
@@ -155,8 +161,8 @@ export class GrundrissView extends Gtk.Box {
   private readonly activeTrades = new Set<TgaTrade>();
   private tgaInitDone = false;
 
-  // Interaction mode: inspect (view), reshape geometry, or edit Gewerke.
-  private editTarget: 'view' | 'geometrie' | 'gewerke' = 'view';
+  // Interaction mode: inspect (view), reshape geometry, edit Gewerke, or Erdarbeiten.
+  private editTarget: EditTarget = 'view';
 
   // Gewerke edit: selection + the active node drag (preview until released).
   private selectedNode: string | null = null;
@@ -184,10 +190,10 @@ export class GrundrissView extends Gtk.Box {
     const env = globalThis.process?.env;
     const envMode = env?.BP_APP_COLORMODE as ColoringMode | undefined;
     if (envMode === 'neutral' || envMode === 'uwert' || envMode === 'feuchte') this.mode = envMode;
-    // Dev hooks: start in an edit mode. BP_APP_EDIT=geometrie|gewerke (any other
-    // truthy value → gewerke, back-compat); BP_APP_EDITSEL pre-selects a node.
+    // Dev hooks: start in an edit mode. BP_APP_EDIT=geometrie|gewerke|erdarbeiten
+    // (any other truthy value → gewerke, back-compat); BP_APP_EDITSEL pre-selects.
     const editHook = env?.BP_APP_EDIT;
-    if (editHook === 'geometrie') this.editTarget = 'geometrie';
+    if (editHook === 'geometrie' || editHook === 'gewerke' || editHook === 'erdarbeiten') this.editTarget = editHook;
     else if (editHook) this.editTarget = 'gewerke';
     if (env?.BP_APP_EDITSEL) this.selectedNode = env.BP_APP_EDITSEL;
     store.subscribe(() => this.render());
@@ -309,7 +315,7 @@ export class GrundrissView extends Gtk.Box {
       );
     }
     topStart.append(this.buildEditControls());
-    if (this.editTarget !== 'geometrie') {
+    if (this.editTarget === 'view' || this.editTarget === 'gewerke') {
       const chips = this.buildGewerkeChips();
       if (chips) topStart.append(chips);
     }
@@ -536,10 +542,11 @@ export class GrundrissView extends Gtk.Box {
       cr.showText(areaText);
     }
 
-    // Geometrie mode keeps the plan clean (walls/rooms/handles only); the Gewerke
-    // overlay is only shown in Ansicht/Gewerke.
+    // Earthworks (Vorhaben) belong to the model — always shown, in every mode.
+    this.drawWorks(cr, sx, sy);
+    // Geometrie shows drag handles; the Gewerke overlay only in Ansicht/Gewerke.
     if (this.editTarget === 'geometrie') this.drawGeomHandles(cr, sx, sy);
-    else this.drawTga(cr, sx, sy);
+    else if (this.editTarget === 'view' || this.editTarget === 'gewerke') this.drawTga(cr, sx, sy);
     this.drawCompass(cr, width - 34, 38, 15, northAngle, fg);
     this.drawScaleBar(cr, width, height, s, fgA);
   }
@@ -632,10 +639,11 @@ export class GrundrissView extends Gtk.Box {
 
     // Segmented (linked, radio-grouped) mode selector.
     const seg = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, cssClasses: ['linked'] });
-    const modes: { key: 'view' | 'geometrie' | 'gewerke'; label: string }[] = [
+    const modes: { key: EditTarget; label: string }[] = [
       { key: 'view', label: 'Ansicht' },
       { key: 'geometrie', label: 'Geometrie' },
       { key: 'gewerke', label: 'Gewerke' },
+      { key: 'erdarbeiten', label: 'Erdarbeiten' },
     ];
     let group: Gtk.ToggleButton | undefined;
     for (const m of modes) {
@@ -651,11 +659,12 @@ export class GrundrissView extends Gtk.Box {
 
     if (this.editTarget === 'geometrie') card.append(this.buildGeomControls());
     if (this.editTarget === 'gewerke') card.append(this.buildGewerkeEditRow());
+    if (this.editTarget === 'erdarbeiten') card.append(this.buildErdarbeitenControls());
     return card;
   }
 
   /** Switch interaction mode, clearing transient drag/selection state. */
-  private setEditTarget(target: 'view' | 'geometrie' | 'gewerke'): void {
+  private setEditTarget(target: EditTarget): void {
     if (this.editTarget === target) return;
     this.editTarget = target;
     this.selectedNode = null;
@@ -692,6 +701,58 @@ export class GrundrissView extends Gtk.Box {
     box.append(row1);
     box.append(this.buildPaletteRow());
     return box;
+  }
+
+  /** Erdarbeiten (Vorhaben) tools: add a default Lehmgraben, list + remove works. */
+  private buildErdarbeitenControls(): Gtk.Widget {
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
+    const works = this.store.works;
+    if (works.length === 0) {
+      const add = new Gtk.Button({ label: 'Lehmgraben hinzufügen', cssClasses: ['flat'], halign: Gtk.Align.START });
+      add.connect('clicked', () => {
+        const home = this.store.home;
+        if (home) this.store.addWork(defaultLehmgrabenForModel(home));
+      });
+      box.append(add);
+      box.append(
+        new Gtk.Label({ label: 'an der längsten Außenseite · 0,5 m × 0,9 m', cssClasses: ['caption', 'dim-label'], xalign: 0 }),
+      );
+    } else {
+      for (const w of works) {
+        const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 });
+        const swatch = new Gtk.DrawingArea({ widthRequest: 12, heightRequest: 12, valign: Gtk.Align.CENTER });
+        swatch.set_draw_func((_a, c, cw, ch) => {
+          const cc = c as unknown as Cr;
+          setNum(cc, WORK_COLOR, 1);
+          cc.rectangle(0, 0, cw, ch);
+          cc.fill();
+        });
+        row.append(swatch);
+        row.append(new Gtk.Label({ label: w.note ?? w.kind, xalign: 0, hexpand: true, valign: Gtk.Align.CENTER }));
+        const del = new Gtk.Button({ iconName: 'user-trash-symbolic', cssClasses: ['flat'], valign: Gtk.Align.CENTER, tooltipText: 'Entfernen' });
+        del.connect('clicked', () => this.store.removeWork(w.id));
+        row.append(del);
+        box.append(row);
+      }
+    }
+    return box;
+  }
+
+  /** Draw the earthwork (Vorhaben) polylines over the plan — clay, dotted = planned. */
+  private drawWorks(cr: Cr, sx: (x: number) => number, sy: (z: number) => number): void {
+    const t = this.transform;
+    for (const w of this.store.works) {
+      const data = (w.data ?? {}) as { points?: [number, number][]; widthM?: number };
+      const pts = data.points;
+      if (!pts || pts.length < 2) continue;
+      setNum(cr, WORK_COLOR, 0.85);
+      cr.setLineWidth(Math.max(3, (data.widthM ?? 0.5) * (t?.s ?? 1)));
+      cr.setDash([2, 6], 0);
+      cr.moveTo(sx(pts[0][0]), sy(pts[0][1]));
+      for (let i = 1; i < pts.length; i++) cr.lineTo(sx(pts[i][0]), sy(pts[i][1]));
+      cr.stroke();
+      cr.setDash([], 0);
+    }
   }
 
   /** Palette row: trade + kind pickers and a "Platzieren" toggle (click to drop). */
