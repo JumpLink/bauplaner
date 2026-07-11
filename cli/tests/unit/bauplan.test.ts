@@ -104,5 +104,20 @@ export default async () => {
       }
       expect(threw).toBe(true);
     });
+
+    await it('rejects a container whose embedded .sh3d fails the checksum', async () => {
+      const tampered = zipSync({
+        'manifest.json': strToU8(JSON.stringify({ formatVersion: 1, app: 'bauplaner', checksums: { sh3d: 'deadbeef' } })),
+        'project.json': strToU8(JSON.stringify(project())),
+        'sh3d/plan.sh3d': sh3d(),
+      });
+      let threw = false;
+      try {
+        readBauplanBytes(tampered);
+      } catch {
+        threw = true;
+      }
+      expect(threw).toBe(true);
+    });
   });
 };
