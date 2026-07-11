@@ -87,6 +87,11 @@ export default async () => {
       expect(riser.from.x).toBe(riser.to.x);
       expect(riser.from.z).toBe(riser.to.z);
       expect(riser.to.y > riser.from.y).toBe(true);
+      // Riser endpoints are flagged (stay visible under level isolation); the
+      // flat-only node is not.
+      expect(a.isRiserEndpoint).toBe(true);
+      expect(c.isRiserEndpoint).toBe(true);
+      expect(s3d.nodes.find((n) => n.id === 'b')!.isRiserEndpoint).toBe(false);
     });
   });
 };

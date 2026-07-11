@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@gjsify/unit';
-import { zipSync, strToU8 } from 'fflate';
+import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 
 import {
   type GeometryEdit,
@@ -67,6 +67,22 @@ export default async () => {
       });
       const written = writeSh3dBytes(src, homeToGeometryEdits(edited));
       expect(json(parseSh3dBytes(written))).toBe(json(edited));
+    });
+
+    await it('homeToGeometryEdits emits only positional edits (never thickness/height)', async () => {
+      const ops = homeToGeometryEdits(parseSh3dBytes(bytes())).map((e) => e.op);
+      expect(ops.every((op) => op === 'moveWall' || op === 'moveRoomVertex')).toBe(true);
+    });
+
+    await it('does not fabricate height="0" on a wall whose .sh3d omitted height', async () => {
+      // Sweet Home 3D omits the nullable `height` attribute for inherited-height
+      // walls; a full-geometry save must not add height="0" and zero them out.
+      const noHeight = zipSync({
+        'Home.xml': strToU8('<home><wall id="w1" xStart="0" yStart="0" xEnd="400" yEnd="0" thickness="24"/></home>'),
+      });
+      const written = writeSh3dBytes(noHeight, homeToGeometryEdits(parseSh3dBytes(noHeight)));
+      const xml = strFromU8(unzipSync(written)['Home.xml']);
+      expect(xml.includes('height=')).toBe(false);
     });
   });
 };

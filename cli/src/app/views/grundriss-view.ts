@@ -912,7 +912,9 @@ export class GrundrissView extends Gtk.Box {
     const onLevel = (lvl: string): boolean => !this.isolatedLevel || lvl === this.isolatedLevel;
     const map = new Map<string, GeomCluster>();
     const at = (xCm: number, yCm: number): GeomCluster => {
-      const key = `${Math.round(xCm)}:${Math.round(yCm)}`;
+      // Key at 0.1 mm so only truly-coincident points (SH3D welds corners to
+      // exactly-equal floats) group; distinct points a few mm apart stay separate.
+      const key = `${Math.round(xCm * 100)}:${Math.round(yCm * 100)}`;
       let c = map.get(key);
       if (!c) {
         c = { x: xCm * 0.01, z: yCm * 0.01, walls: [], vertices: [] };
