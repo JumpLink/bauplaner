@@ -17,9 +17,11 @@ import Gtk from '@girs/gtk-4.0';
 import Pango from '@girs/pango-1.0';
 
 import { climateWarningCount } from '@bauplaner/core';
+import { renderReportPdf } from '@bauplaner/report';
 
 import { APP_NAME } from './constants.ts';
 import { DocumentStore } from './document-store.ts';
+import { buildPlanForStore, exportPlanDialog } from './export-dialog.ts';
 import { openDocumentDialog } from './open-dialog.ts';
 import { BauteileView } from './views/bauteile-view.ts';
 import { DokumentationView } from './views/dokumentation-view.ts';
@@ -126,6 +128,17 @@ export class MainWindow extends Adw.ApplicationWindow {
     });
     this.add_action(saveAction);
 
+    // PDF export — same precondition as saving: there has to be a document.
+    const exportAction = new Gio.SimpleAction({ name: 'export-pdf' });
+    exportAction.set_enabled(false);
+    this.store.subscribe(() => exportAction.set_enabled(this.store.hasDocument));
+    exportAction.connect('activate', () => {
+      exportPlanDialog(this, this.store, (message) => {
+        this.toastOverlay.add_toast(new Adw.Toast({ title: message }));
+      });
+    });
+    this.add_action(exportAction);
+
     // Jump from the 3D inspector to a specific wall: switch to the target view
     // (Bauteile / Feuchte) and focus that wall. Param = "<view>:<wall-id>".
     const editWall = new Gio.SimpleAction({ name: 'edit-wall', parameterType: GLib.VariantType.new('s') });
@@ -198,6 +211,24 @@ export class MainWindow extends Adw.ApplicationWindow {
     const preload = globalThis.process?.env?.BP_APP_FILE;
     if (preload) this.store.load(preload);
 
+    // Dev hook: export the plan to BP_APP_EXPORT=<path> and report on stderr.
+    // Runs the real app export path (minus the file chooser), so a headless run
+    // verifies what the button does, not a parallel copy of it.
+    const exportHook = globalThis.process?.env?.BP_APP_EXPORT;
+    if (exportHook) {
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        try {
+          const plan = buildPlanForStore(this.store);
+          if (!plan) throw new Error('kein Dokument geladen');
+          const { pages } = renderReportPdf(plan, exportHook);
+          console.error(`[BP_APP_EXPORT] ${exportHook} (${pages} Seiten)`);
+        } catch (error) {
+          console.error(`[BP_APP_EXPORT] fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return GLib.SOURCE_REMOVE;
+      });
+    }
+
     // Dev hook: trigger the inspector edit-jump (BP_APP_EDITWALL=<view>:<wall-id>).
     // Deferred to idle so it runs after the window is presented (focus/scroll
     // need a mapped window); activates the action directly (map-independent).
@@ -221,8 +252,16 @@ export class MainWindow extends Adw.ApplicationWindow {
     openButton.connect('clicked', () => openDocumentDialog(this, this.store));
     header.pack_start(openButton);
 
+    const exportButton = new Gtk.Button({
+      iconName: 'document-send-symbolic',
+      tooltipText: 'Sanierungsplan als PDF exportieren',
+    });
+    exportButton.set_action_name('win.export-pdf');
+    header.pack_start(exportButton);
+
     const menu = new Gio.Menu();
     menu.append('Projekt speichern', 'win.save-project');
+    menu.append('Sanierungsplan als PDF …', 'win.export-pdf');
     menu.append(`Über ${APP_NAME}`, 'app.about');
     menu.append('Beenden', 'app.quit');
     header.pack_end(new Gtk.MenuButton({ iconName: 'open-menu-symbolic', primary: true, menuModel: menu }));

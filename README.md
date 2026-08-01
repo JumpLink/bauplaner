@@ -26,9 +26,14 @@ materials** — and *calculating* the real retrofit, not just drawing it.
 - **Vorhaben** — own earthworks (e.g. a *Lehmgraben* clay-sealed trench) with
   material quantities.
 - **Materialien** — the ecological material stock (ρ, λ, µ).
+- **Sanierungsplan als PDF** — export the whole assessment as a laid-out A4
+  document in the app's own visual language: Kennzahlen, the A+…H energy scale,
+  the iSFP measure roadmap with subsidy and own share, and the ranked wall
+  build-ups with their layer strips. Built for the conversation with a bank or a
+  Finanzberater, and explicit about what it is not.
 
 Also usable headless via the CLI (`@bauplaner/cli`: `inspect`, `wand`,
-`lehmgraben`, `bauteil`, `feuchte`, `materials`).
+`lehmgraben`, `bauteil`, `feuchte`, `materials`, `varianten`, `report`).
 
 Status: **early** — a read-only diagnostic surface today (Sweet Home 3D stays the
 geometry editor; a project sidecar adds the retrofit layer). See the
@@ -44,6 +49,7 @@ and the native app are thin adapters that reuse it **in-process** (no HTTP).
 | `packages/core` | `@bauplaner/core` | geometry, `.sh3d` import, project model, scene |
 | `packages/materials` | `@bauplaner/materials` | material stock + calculations (quantities, U-value, Glaser) |
 | `packages/diagnose` | `@bauplaner/diagnose` | rule-based damp-wall diagnosis |
+| `packages/report` | `@bauplaner/report` | Sanierungsplan document model + PDF renderer (cairo/Pango) |
 | `cli` | `@bauplaner/cli` | CLI + the native GNOME/Adwaita app (`cli/src/app`) |
 
 ## Build & run
@@ -60,6 +66,15 @@ gjsify run dev:app      # build + launch the native app
 gjsify run build        # build the CLI bundle
 gjsify run check        # type-check (gjsify tsc)
 gjsify run test         # run the test suite under gjs
+```
+
+Export a plan without opening the app:
+
+```bash
+cd cli
+gjsify run dist/bauplaner.gjs.mjs report --file demo/beispielhaus.ecoretrofit.json \
+  --out sanierungsplan.pdf
+gjsify run dist/bauplaner.gjs.mjs report --area 200 --out wandentscheidung.pdf
 ```
 
 The root scripts delegate into the `cli` workspace; you can also run them there

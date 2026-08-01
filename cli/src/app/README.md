@@ -92,6 +92,10 @@ system (GJS uses the real libraries via GObject-Introspection).
   (as if picked in the *Geschoss* dropdown).
 - `BP_APP_EDITWALL=<bauteile|feuchte>:<wall-id>` — fire the inspector's edit-jump
   on startup (switch to that view with the wall focused).
+- `BP_APP_EXPORT=/path/out.pdf` — export the Sanierungsplan there on startup and
+  report the result on stderr as `[BP_APP_EXPORT] <path> (<n> Seiten)`. Runs the
+  real export path minus the file chooser, so a headless run verifies what the
+  toolbar button does rather than a parallel copy of it. Needs `BP_APP_FILE`.
 - `GJSIFY_DEVTOOLS=1` — expose the `org.gjsify.Devtools` D-Bus control plane
   (inspect / screenshot / drive the app). Its `Screenshot` renders the window
   in-process via the GSK renderer (`@gjsify/devtools`, the same `captureWidgetPng`

@@ -13,7 +13,7 @@ import Gtk from '@girs/gtk-4.0';
 import { computeRoadmap, type Massnahmenpaket, type PaketElement } from '@bauplaner/materials';
 
 import type { DocumentStore } from '../document-store.ts';
-import { buildEnergyScreenings } from '../energy.ts';
+import { buildEnergyScreenings } from '../../energy.ts';
 import { escapeMarkup, fmtEur } from '../../format.ts';
 
 export class FahrplanView extends Gtk.Box {

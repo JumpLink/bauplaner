@@ -13,47 +13,30 @@ import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
 import { assessRoomClimate, deriveRoomClimate, type HomeData } from '@bauplaner/core';
-import { BEG_FOERDERFAEHIG, computeFoerderung, type EnergyScreening } from '@bauplaner/materials';
+import {
+  BEG_FOERDERFAEHIG,
+  ENERGIEKLASSEN,
+  KLASSE_FARBE,
+  computeFoerderung,
+  klassePosition,
+  type EnergyScreening,
+} from '@bauplaner/materials';
+import { VERLUST_FARBE } from '@bauplaner/report';
 
 import type { DocumentStore } from '../document-store.ts';
-import { buildEnergyScreenings } from '../energy.ts';
+import { buildEnergyScreenings } from '../../energy.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
+import { setHex } from '../paint.ts';
 import { escapeMarkup, fmtEur } from '../../format.ts';
 
-/** Energieausweis class colours A+ … H (green → red), indexed by class. */
-const EFF_COLORS = [
-  '#1a7e3c', '#26a269', '#5bc236', '#a8c22e', '#e5a50a', '#e07f0e', '#e66100', '#d4441c', '#c01c28',
-];
-const EFF_CLASSES = ['A+', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-/** kWh/m²·a band edges the class scale maps onto (matches the v3 design). */
-const KWH_BANDS = [0, 30, 50, 75, 100, 130, 160, 200, 250, 300];
-
-/** Heat-loss bar colour per envelope element (matches the v3 design). */
-const LOSS_COLORS: Record<string, string> = {
-  wall: '#c01c28',
-  roof: '#e66100',
-  window: '#e5a50a',
-  ventilation: '#813d9c',
-  floor: '#26a269',
-};
-
-/** Position (0..1) of a demand on the A+…H scale, matching the design's kwhPos. */
-function kwhPos(kwh: number): number {
-  for (let i = 0; i < 9; i++) {
-    if (kwh <= KWH_BANDS[i + 1]) return (i + (kwh - KWH_BANDS[i]) / (KWH_BANDS[i + 1] - KWH_BANDS[i])) / 9;
-  }
-  return 1;
-}
+// The class letters, their colours, the scale position and the heat-loss bar
+// colours all live in the kernel, so this dashboard and the exported PDF cannot
+// end up showing the same building in two different palettes.
+const EFF_COLORS = ENERGIEKLASSEN.map((k) => KLASSE_FARBE[k]);
 
 /** Pick the singular or plural German wording for a count. */
 function plural(n: number, one: string, many: string): string {
   return n === 1 ? one : many;
-}
-
-/** Feed a Cairo context a 0xRRGGBB-style hex string. */
-function setHex(cr: { setSourceRGB(r: number, g: number, b: number): void }, hex: string): void {
-  const n = parseInt(hex.slice(1), 16);
-  cr.setSourceRGB(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 }
 
 let effCssInstalled = false;
@@ -186,7 +169,7 @@ export class UebersichtView extends Gtk.Box {
     const foerderfaehigNet = costs.filter((k) => BEG_FOERDERFAEHIG.includes(k.category)).reduce((s, k) => s + k.net, 0);
     const foerder = computeFoerderung(foerderfaehigNet, { isfpBonus: true });
 
-    const classIdx = EFF_CLASSES.indexOf(heute.energieklasse);
+    const classIdx = ENERGIEKLASSEN.indexOf(heute.energieklasse);
     const badge = new Gtk.Label({ label: heute.energieklasse, valign: Gtk.Align.CENTER });
     badge.add_css_class('eff-badge');
     badge.add_css_class(`eff-${classIdx < 0 ? 8 : classIdx}`);
@@ -309,23 +292,23 @@ export class UebersichtView extends Gtk.Box {
     area.set_draw_func((_a, cr, width) => {
       const barTop = 22;
       const barH = 26;
-      const seg = width / 9;
+      const seg = width / EFF_COLORS.length;
       // Segments + class letters.
-      for (let i = 0; i < 9; i++) {
+      for (let i = 0; i < EFF_COLORS.length; i++) {
         setHex(cr, EFF_COLORS[i]);
         cr.rectangle(i * seg, barTop, seg - 1.5, barH);
         cr.fill();
         cr.setSourceRGB(1, 1, 1);
         cr.selectFontFace('Sans', 0, 1);
         cr.setFontSize(11);
-        const t = EFF_CLASSES[i];
+        const t = ENERGIEKLASSEN[i];
         const ext = cr.textExtents(t);
         cr.moveTo(i * seg + seg / 2 - ext.width / 2, barTop + barH / 2 + ext.height / 2);
         cr.showText(t);
       }
       // Markers (triangles + value labels).
       for (const m of markers) {
-        const x = Math.max(4, Math.min(width - 4, kwhPos(m.kwh) * width));
+        const x = Math.max(4, Math.min(width - 4, klassePosition(m.kwh) * width));
         setHex(cr, m.color);
         if (m.below) {
           cr.moveTo(x, barTop + barH);
@@ -443,7 +426,7 @@ export class UebersichtView extends Gtk.Box {
       marginEnd: 14,
     });
     for (const s of heute.shares) {
-      const color = LOSS_COLORS[s.kind] ?? '#3584e4';
+      const color = VERLUST_FARBE[s.kind] ?? '#3584e4';
       const head = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 });
       const name = new Gtk.Label({ label: s.label, xalign: 0, hexpand: true });
       const pct = new Gtk.Label({ label: `${Math.round(s.fraction * 100)} %`, xalign: 1 });

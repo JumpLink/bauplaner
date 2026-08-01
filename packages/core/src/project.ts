@@ -89,6 +89,31 @@ export type CostCategory =
   | 'sonstiges';
 
 /**
+ * Human labels for the cost enums. They live next to the types rather than in a
+ * view, because the register is shown in the app AND printed into the exported
+ * plan — and `daemmung` is a storage key, not something to put in front of a
+ * bank.
+ */
+export const COST_STATUS_LABEL: Record<CostStatus, string> = {
+  geplant: 'Geplant',
+  angeboten: 'Angeboten',
+  beauftragt: 'Beauftragt',
+  bezahlt: 'Bezahlt',
+};
+
+export const COST_CATEGORY_LABEL: Record<CostCategory, string> = {
+  abdichtung: 'Abdichtung',
+  drainage: 'Drainage',
+  daemmung: 'Dämmung',
+  erdarbeiten: 'Erdarbeiten',
+  material: 'Material',
+  lieferung: 'Lieferung',
+  verarbeitung: 'Verarbeitung',
+  fassade: 'Fassade',
+  sonstiges: 'Sonstiges',
+};
+
+/**
  * One cost line in the project's financing register — a planned figure, a
  * supplier quote (Angebot) or a booked invoice. Amounts are **net €**; `gross`
  * is derived from `vatRate` (see {@link deriveGross}). Optional `workId` links

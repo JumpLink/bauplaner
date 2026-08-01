@@ -9,7 +9,13 @@ import Adw from '@girs/adw-1';
 import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
-import type { CostCategory, CostStatus, HomeData } from '@bauplaner/core';
+import {
+  COST_CATEGORY_LABEL,
+  COST_STATUS_LABEL,
+  type CostCategory,
+  type CostStatus,
+  type HomeData,
+} from '@bauplaner/core';
 import {
   BEG_FOERDERFAEHIG,
   computeAmortisation,
@@ -19,29 +25,20 @@ import {
 } from '@bauplaner/materials';
 
 import type { DocumentStore } from '../document-store.ts';
-import { buildEnergyScreenings } from '../energy.ts';
+import { buildEnergyScreenings } from '../../energy.ts';
 import { escapeMarkup, fmtEur } from '../../format.ts';
 
-const CATEGORIES: { key: CostCategory; label: string }[] = [
-  { key: 'abdichtung', label: 'Abdichtung' },
-  { key: 'drainage', label: 'Drainage' },
-  { key: 'daemmung', label: 'Dämmung' },
-  { key: 'erdarbeiten', label: 'Erdarbeiten' },
-  { key: 'material', label: 'Material' },
-  { key: 'lieferung', label: 'Lieferung' },
-  { key: 'verarbeitung', label: 'Verarbeitung' },
-  { key: 'fassade', label: 'Fassade' },
-  { key: 'sonstiges', label: 'Sonstiges' },
-];
-const STATUSES: { key: CostStatus; label: string }[] = [
-  { key: 'geplant', label: 'Geplant' },
-  { key: 'angeboten', label: 'Angeboten' },
-  { key: 'beauftragt', label: 'Beauftragt' },
-  { key: 'bezahlt', label: 'Bezahlt' },
-];
+const CATEGORIES = (Object.keys(COST_CATEGORY_LABEL) as CostCategory[]).map((key) => ({
+  key,
+  label: COST_CATEGORY_LABEL[key],
+}));
+const STATUSES = (Object.keys(COST_STATUS_LABEL) as CostStatus[]).map((key) => ({
+  key,
+  label: COST_STATUS_LABEL[key],
+}));
 
-const catLabel = (k: CostCategory): string => CATEGORIES.find((c) => c.key === k)?.label ?? k;
-const statusLabel = (k: CostStatus): string => STATUSES.find((s) => s.key === k)?.label ?? k;
+const catLabel = (k: CostCategory): string => COST_CATEGORY_LABEL[k] ?? k;
+const statusLabel = (k: CostStatus): string => COST_STATUS_LABEL[k] ?? k;
 
 export class KostenView extends Gtk.Box {
   static {

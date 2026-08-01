@@ -1,9 +1,10 @@
 /**
- * App-layer energy glue: build the Bauplaner energy screenings for a model from
- * the shared document's wall assemblies. Pure over `@bauplaner/core`
+ * Energy glue shared by BOTH adapters: build the Bauplaner energy screenings for
+ * a model from a document's wall assemblies. Pure over `@bauplaner/core`
  * (deriveEnvelope) + `@bauplaner/materials` (computeAssembly /
- * computeEnergyScreening), shared by the Übersicht dashboard, Kosten & Förderung
- * and the Fahrplan so the numbers never diverge (like `wall-inspector.ts`).
+ * computeEnergyScreening), used by the Übersicht dashboard, Kosten & Förderung,
+ * the Fahrplan and the `report` command — so the dashboard and the exported PDF
+ * cannot show two different numbers for the same house.
  *
  * Three screenings for the same envelope:
  *   start — every exterior wall at the Bestand default U (pre-retrofit baseline)

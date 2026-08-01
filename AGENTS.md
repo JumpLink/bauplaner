@@ -14,10 +14,19 @@ native app are thin adapters that reuse it in-process (never a second copy).
 - `packages/core` (`@bauplaner/core`) — building model, `.sh3d` import, project format
 - `packages/materials` (`@bauplaner/materials`) — material stock, U-value/Glaser, DERNOTON/clay quantities, cost model
 - `packages/diagnose` (`@bauplaner/diagnose`) — damp-wall diagnosis
+- `packages/report` (`@bauplaner/report`) — Sanierungsplan document model +
+  builder (pure) and the cairo/Pango PDF renderer (`render.gjs.ts`; a stub on Node)
 - `cli` (`@bauplaner/cli`) — yargs CLI **and** the Adwaita app (`cli/src/app`)
 
 Build a feature in the core, then expose it through the CLI **and** the app — no
 per-surface duplication.
+
+That extends to **presentation constants**, not just calculations. Colours, labels
+and number formatting that both surfaces show live in the kernel:
+`KLASSE_FARBE` / `klassePosition` / `ENERGIEKLASSEN` and `KATEGORIE_FARBE` in
+`@bauplaner/materials`, `COST_CATEGORY_LABEL` / `COST_STATUS_LABEL` in
+`@bauplaner/core`, `fmtEur` / `fmtNum` in `@bauplaner/report`. A second copy in a
+view is how the app and the exported PDF end up disagreeing about the same house.
 
 ## Toolchain — gjsify, not npm
 
@@ -27,9 +36,15 @@ The whole loop is `gjsify` end-to-end. From the repo root:
 gjsify install        # deps — NEVER `npm install` (it prunes the gjsify deps)
 gjsify run dev:app    # build + launch the native app
 gjsify run build      # CLI bundle
-gjsify run check      # type-check (gjsify tsc)
+gjsify run check      # type-check (cli + every package) + markup scan
 gjsify run test       # test suite under gjs
 ```
+
+`check` runs `gjsify tsc` over `cli/`, then `check:packages` over each
+`packages/*/tsconfig.json`, then `check:markup`. The second step is not
+redundant: `cli`'s tsc resolves `@bauplaner/*` through the **node** export
+condition, so a GJS-only entrypoint (`*.gjs.ts`, e.g. the PDF renderer) is never
+reached from there and would otherwise ship unchecked.
 
 Root scripts delegate into the `cli` workspace; `cd cli && gjsify run <script>`
 works too. (`gjsify run -w cli <script>` does **not** chdir into the workspace
@@ -68,6 +83,17 @@ How it works (and why the pieces exist):
 Dev hooks that make a view screenshot-ready: `BP_APP_FILE` (load a model),
 `BP_APP_VIEW` (initial view), `BP_APP_TAB`/`BP_APP_COLORMODE`/`BP_APP_PICKWALL`/
 `BP_APP_LEVEL`/`BP_APP_EDITWALL`. Full list: [`cli/src/app/README.md`](cli/src/app/README.md).
+
+**PDF output is verified the same way** — a green build says nothing about a
+document. Render it and *look* at it:
+
+```bash
+cd cli && gjsify run dist/bauplaner.gjs.mjs report --area 200 --out /tmp/plan.pdf
+pdftoppm -png -r 110 /tmp/plan.pdf /tmp/plan   # then read the pages
+```
+
+The app's own export path (not the CLI's) runs headless via
+`BP_APP_EXPORT=/tmp/app.pdf` alongside `BP_APP_FILE`.
 
 ## Adwaita gotchas (learned from screenshots)
 
