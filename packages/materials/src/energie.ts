@@ -13,6 +13,26 @@
 /** Volumetric heat capacity of air, Wh/(m³·K). */
 const SPECIFIC_HEAT_AIR = 0.34;
 
+/**
+ * Defaults shared by the whole-building screening and the per-component one, so
+ * a single wall and the house it sits in are always rated against the same
+ * climate and the same boiler.
+ */
+export const ENERGIE_DEFAULTS = {
+  /** Annual heating degree kilo-hours, kKh/a (typical German climate). */
+  degreeKilohours: 84,
+  /** Heat-generation + distribution efficiency (old gas boiler). */
+  systemEfficiency: 0.85,
+  /** Air changes per hour. */
+  airChangeRate: 0.5,
+  /** Domestic hot-water final energy, kWh/m²·a. */
+  dhwKwhM2a: 12.5,
+  /** CO₂ emission factor of the final energy carrier, kg/kWh (natural gas). */
+  co2FactorKgPerKwh: 0.201,
+  /** Energy price for operating-cost estimates, €/kWh (gas, incl. levies). */
+  energiePreisEurKwh: 0.12,
+} as const;
+
 export type Energieklasse = 'A+' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H';
 
 /** Energieausweis class band upper bounds (kWh/m²·a), matching the v3 scale. */
@@ -117,11 +137,11 @@ function round(n: number, digits = 1): number {
  * heat `H·G` (heating degree kilo-hours); final energy `heat / η + DHW`.
  */
 export function computeEnergyScreening(input: EnergyInput): EnergyScreening {
-  const n = input.airChangeRate ?? 0.5;
-  const g = input.degreeKilohours ?? 84;
-  const eta = input.systemEfficiency ?? 0.85;
-  const dhw = input.dhwKwhM2a ?? 12.5;
-  const co2f = input.co2FactorKgPerKwh ?? 0.201;
+  const n = input.airChangeRate ?? ENERGIE_DEFAULTS.airChangeRate;
+  const g = input.degreeKilohours ?? ENERGIE_DEFAULTS.degreeKilohours;
+  const eta = input.systemEfficiency ?? ENERGIE_DEFAULTS.systemEfficiency;
+  const dhw = input.dhwKwhM2a ?? ENERGIE_DEFAULTS.dhwKwhM2a;
+  const co2f = input.co2FactorKgPerKwh ?? ENERGIE_DEFAULTS.co2FactorKgPerKwh;
   const area = input.heatedFloorAreaM2 > 0 ? input.heatedFloorAreaM2 : 1;
 
   const byKind = new Map<EnvelopeElementKind, number>();
@@ -162,5 +182,55 @@ export function computeEnergyScreening(input: EnergyInput): EnergyScreening {
     energieklasse: energieklasseFor(endenergieKwhM2a),
     co2TonsYear: round(co2TonsYear, 1),
     shares,
+  };
+}
+
+export interface BauteilVerlustInput {
+  /** U-value of the component, W/(m²·K). */
+  u: number;
+  areaM2: number;
+  /** Element kind, only used for the temperature-correction factor. Default `wall`. */
+  kind?: EnvelopeElementKind;
+  degreeKilohours?: number;
+  systemEfficiency?: number;
+  /** Energy price, €/kWh (default {@link ENERGIE_DEFAULTS}.energiePreisEurKwh). */
+  energiePreisEurKwh?: number;
+  co2FactorKgPerKwh?: number;
+}
+
+export interface BauteilVerlust {
+  /** Loss coefficient of this component, W/K. */
+  wattPerK: number;
+  /** Final energy lost through it per year (incl. system losses), kWh/a. */
+  endenergieKwhA: number;
+  /** Cost of that energy per year, €. */
+  kostenEurA: number;
+  /** CO₂ of that energy per year, kg. */
+  co2KgA: number;
+}
+
+/**
+ * Heat lost through ONE component per year, in energy, money and CO₂.
+ *
+ * The whole-building screening ranks the envelope; this ranks two build-ups of
+ * the *same* component against each other — the arithmetic a variant comparison
+ * needs to turn a U-value into a heating bill. Same defaults
+ * ({@link ENERGIE_DEFAULTS}), same degree-kilo-hour method, so a component figure
+ * and the building figure stay consistent.
+ */
+export function bauteilVerlust(input: BauteilVerlustInput): BauteilVerlust {
+  const kind = input.kind ?? 'wall';
+  const g = input.degreeKilohours ?? ENERGIE_DEFAULTS.degreeKilohours;
+  const eta = input.systemEfficiency ?? ENERGIE_DEFAULTS.systemEfficiency;
+  const preis = input.energiePreisEurKwh ?? ENERGIE_DEFAULTS.energiePreisEurKwh;
+  const co2f = input.co2FactorKgPerKwh ?? ENERGIE_DEFAULTS.co2FactorKgPerKwh;
+
+  const wattPerK = input.u * input.areaM2 * FX[kind];
+  const endenergieKwhA = (wattPerK * g) / eta;
+  return {
+    wattPerK: round(wattPerK, 2),
+    endenergieKwhA: round(endenergieKwhA),
+    kostenEurA: round(endenergieKwhA * preis, 2),
+    co2KgA: round(endenergieKwhA * co2f, 1),
   };
 }

@@ -7,12 +7,15 @@
  * invented in the material stock.
  */
 
+import type { LayerSpec } from './bauphysik.ts';
 import { getMaterial, type Packaging, type Price, type PriceUnit } from './materials.ts';
 
 export interface LayerCost {
   key: string;
   name: string;
   thicknessM: number;
+  /** True for existing fabric — kept, not bought, so it costs nothing. */
+  bestand: boolean;
   areaM2: number;
   volumeM3: number;
   massT: number;
@@ -186,12 +189,16 @@ export function materialCost(
 /**
  * Estimate the material cost of a layered assembly over a given area.
  *
- * @param layers Layers (material key + thickness).
+ * Layers marked `bestand` are existing fabric: they are reported with zero
+ * quantity and cost, and never count as a missing price. Without that, a retrofit
+ * comparison would bill you for the wall you already own.
+ *
+ * @param layers Layers (material key + thickness, optionally `bestand`).
  * @param areaM2 Component area in m².
  * @param priceOverrides Map of material key → price (takes precedence over the stock price).
  */
 export function estimateAssemblyCost(
-  layers: { materialKey: string; thicknessM: number }[],
+  layers: LayerSpec[],
   areaM2: number,
   priceOverrides: Record<string, Price> = {},
 ): AssemblyCost {
@@ -200,11 +207,14 @@ export function estimateAssemblyCost(
 
   const layerCosts: LayerCost[] = layers.map((l) => {
     const m = getMaterial(l.materialKey);
-    const volumeM3 = areaM2 * l.thicknessM;
+    const bestand = l.bestand === true;
+    const volumeM3 = bestand ? 0 : areaM2 * l.thicknessM;
     const massT = volumeM3 * m.density;
     const price = priceOverrides[l.materialKey] ?? m.price;
     let cost: number | undefined;
-    if (price) {
+    if (bestand) {
+      cost = 0;
+    } else if (price) {
       cost = materialCost(price, areaM2, l.thicknessM, m.density);
       total += cost;
     } else {
@@ -214,10 +224,11 @@ export function estimateAssemblyCost(
       key: m.key,
       name: m.name,
       thicknessM: l.thicknessM,
+      bestand,
       areaM2,
       volumeM3: Math.round(volumeM3 * 1000) / 1000,
       massT: Math.round(massT * 1000) / 1000,
-      price,
+      price: bestand ? undefined : price,
       cost: cost != null ? Math.round(cost * 100) / 100 : undefined,
     };
   });

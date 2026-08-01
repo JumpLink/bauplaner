@@ -28,6 +28,8 @@ import commands from './unit/commands.test.ts';
 import doc from './unit/doc.test.ts';
 import raumklima from './unit/raumklima.test.ts';
 import works from './unit/works.test.ts';
+import oekobilanz from './unit/oekobilanz.test.ts';
+import varianten from './unit/varianten.test.ts';
 
 run({
   bauphysik,
@@ -55,4 +57,6 @@ run({
   doc,
   raumklima,
   works,
+  oekobilanz,
+  varianten,
 });

@@ -71,7 +71,7 @@ export class KostenView extends Gtk.Box {
       this.setChild(
         new Adw.StatusPage({
           iconName: 'accessories-calculator-symbolic',
-          title: 'Kosten & Finanzierung',
+          title: 'Kosten &amp; Finanzierung',
           description: 'Erst ein Modell (.sh3d oder Projekt) öffnen.',
           hexpand: true,
           vexpand: true,
@@ -170,7 +170,7 @@ export class KostenView extends Gtk.Box {
   /** BEG-EM subsidy on the eligible envelope costs + the resulting own share. */
   private buildFoerderung(foerder: FoerderResult, eigenanteil: number): Adw.PreferencesGroup {
     const group = new Adw.PreferencesGroup({
-      title: 'Förderung & Eigenanteil',
+      title: 'Förderung &amp; Eigenanteil',
       description: 'BEG-Einzelmaßnahmen (Gebäudehülle) — Schätzung, kein Bescheid.',
     });
     const isfpRow = new Adw.SwitchRow({
