@@ -1,0 +1,24 @@
+{
+  "name": "@bauplaner/report",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sanierungsplan report: a runtime-agnostic document model + builder, and a GJS (cairo/Pango) PDF renderer in the app's Adwaita visual language. On Node the renderer is a stub.",
+  "exports": {
+    ".": {
+      "browser": "./src/index.gjs.ts",
+      "node": "./src/index.node.ts",
+      "default": "./src/index.node.ts"
+    }
+  },
+  "scripts": {
+    "check": "tsc --noEmit --project tsconfig.json"
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@bauplaner/core": "*",
+    "@bauplaner/materials": "*"
+  }
+}

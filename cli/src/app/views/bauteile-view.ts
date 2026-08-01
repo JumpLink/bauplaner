@@ -14,17 +14,18 @@ import Gtk from '@girs/gtk-4.0';
 
 import { deriveEnvelope, wallLengthM, type Wall } from '@bauplaner/core';
 import {
+  KATEGORIE_FARBE,
   PRESET_ASSEMBLIES,
   assessAssembly,
   getMaterial,
   presetByKey,
   vergleicheVarianten,
-  type MaterialCategory,
   type VariantenErgebnis,
 } from '@bauplaner/materials';
 
 import { escapeMarkup, fmtEur, fmtNum } from '../../format.ts';
 import type { AssemblyLayers, DocumentStore } from '../document-store.ts';
+import { setHex } from '../paint.ts';
 
 /** The build-up the comparison measures every candidate against. */
 const REFERENZ_KEY = 'bestand-vollziegel-365';
@@ -38,18 +39,6 @@ const RISIKO_TEXT = {
 const RISIKO_CSS = { gering: 'success', mittel: 'warning', hoch: 'error' } as const;
 
 const PRESET_NAMES = ['(keiner)', ...PRESET_ASSEMBLIES.map((p) => p.name)];
-
-/** Layer-bar segment colours per material category (0xRRGGBB). */
-const CATEGORY_COLOR: Record<MaterialCategory, number> = {
-  putz: 0xc0bfbc,
-  mauerwerk: 0xb5835a,
-  daemmung: 0x8ff0a4,
-  dichtung: 0x986a44,
-  boden: 0xcdab8f,
-  platte: 0xcdab8f,
-  holz: 0xf5c211,
-  sonstiges: 0x9a9996,
-};
 
 export class BauteileView extends Gtk.Box {
   static {
@@ -255,7 +244,7 @@ export class BauteileView extends Gtk.Box {
         title: escapeMarkup(l.bestand ? `${l.name} (Bestand)` : l.name),
         subtitle: `${fmtNum(l.thicknessM * 100, 1)} cm · λ ${fmtNum(l.lambda, 3)} · µ ${l.mu}`,
       });
-      lr.add_prefix(this.colorSwatch(CATEGORY_COLOR[l.category]));
+      lr.add_prefix(this.colorSwatch(KATEGORIE_FARBE[l.category]));
       row.add_row(lr);
     }
 
@@ -342,8 +331,7 @@ export class BauteileView extends Gtk.Box {
       let x = 0;
       for (const l of layers) {
         const w = (l.thicknessM / total) * usable;
-        const hex = CATEGORY_COLOR[getMaterial(l.materialKey).category];
-        cr.setSourceRGB(((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255);
+        setHex(cr, KATEGORIE_FARBE[getMaterial(l.materialKey).category]);
         cr.rectangle(x, 0, w, height);
         cr.fill();
         x += w + gap;
@@ -353,10 +341,10 @@ export class BauteileView extends Gtk.Box {
   }
 
   /** A 12×12 category-colour swatch. */
-  private colorSwatch(hex: number): Gtk.Widget {
+  private colorSwatch(hex: string): Gtk.Widget {
     const s = new Gtk.DrawingArea({ widthRequest: 12, heightRequest: 12, valign: Gtk.Align.CENTER });
     s.set_draw_func((_a, cr, width, height) => {
-      cr.setSourceRGB(((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255);
+      setHex(cr, hex);
       cr.rectangle(0, 0, width, height);
       cr.fill();
     });

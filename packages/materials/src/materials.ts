@@ -25,6 +25,26 @@ export type MaterialCategory =
   | 'holz' // timber
   | 'sonstiges';
 
+/**
+ * Colour of a material category wherever a build-up is drawn — the layer bar in
+ * the app, the layer strip in the exported PDF, a swatch next to a layer row.
+ * Earthy and material-suggestive rather than decorative: brick brown, plaster
+ * grey, insulation green.
+ *
+ * Lives here, next to the category itself, so the app and the report cannot
+ * drift into two palettes for the same wall.
+ */
+export const KATEGORIE_FARBE: Record<MaterialCategory, string> = {
+  putz: '#c0bfbc',
+  mauerwerk: '#b5835a',
+  daemmung: '#8ff0a4',
+  dichtung: '#986a44',
+  boden: '#cdab8f',
+  platte: '#cdab8f',
+  holz: '#f5c211',
+  sonstiges: '#9a9996',
+};
+
 /** Unit a price refers to. */
 export type PriceUnit = 'm3' | 't' | 'kg' | 'm2';
 

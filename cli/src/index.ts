@@ -20,6 +20,7 @@ import {
   wandCommand,
   wandSetCommand,
   bauplanCommand,
+  reportCommand,
 } from './commands/index.ts';
 
 function reportError(err: unknown): void {
@@ -42,6 +43,7 @@ async function main(): Promise<void> {
     .command(wandCommand)
     .command(wandSetCommand)
     .command(bauplanCommand)
+    .command(reportCommand)
     .demandCommand(1, 'Bitte ein Kommando angeben.')
     .strict()
     .help()

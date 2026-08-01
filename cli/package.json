@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "gjsify run dist/bauplaner.gjs.mjs",
-    "check": "gjsify tsc --noEmit && gjsify run check:markup",
+    "check": "gjsify tsc --noEmit && gjsify run check:packages && gjsify run check:markup",
     "check:markup": "gjs -m dev/check-markup.js src",
     "build": "gjsify run build:gjs",
     "build:gjs": "gjsify build src/index.ts --app gjs --outfile dist/bauplaner.gjs.mjs --exclude-globals document,navigator,HTMLElement,location,Image,HTMLCanvasElement,HTMLImageElement,FontFace,matchMedia,MutationObserver,ResizeObserver,IntersectionObserver",
@@ -23,12 +23,14 @@
     "build:test:node": "gjsify build tests/test.mts --app node --outfile dist/test.node.mjs",
     "test": "gjsify run build:test:gjs && gjsify run test:gjs",
     "test:gjs": "gjsify run dist/test.gjs.mjs",
-    "test:node": "gjsify run build:test:node && node dist/test.node.mjs"
+    "test:node": "gjsify run build:test:node && node dist/test.node.mjs",
+    "check:packages": "for d in ../packages/*/; do tsc --noEmit --project \"$d/tsconfig.json\" || exit 1; done"
   },
   "dependencies": {
     "@bauplaner/core": "*",
     "@bauplaner/diagnose": "*",
     "@bauplaner/materials": "*",
+    "@bauplaner/report": "*",
     "@gjsify/devtools": "0.26.0",
     "@gjsify/webgl": "0.26.0",
     "three": "0.185.1",

@@ -54,6 +54,55 @@ export function energieklasseFor(kwhM2a: number): Energieklasse {
   return 'H';
 }
 
+/** Class letters best → worst, in the order the scale draws them. */
+export const ENERGIEKLASSEN: readonly Energieklasse[] = KLASSE_BANDS.map(([k]) => k);
+
+/**
+ * Where the open-ended H band is cut off when the scale is *drawn*, kWh/m²·a.
+ * The class itself has no upper bound; a bar does.
+ */
+export const KLASSE_SKALA_MAX = 300;
+
+/**
+ * Band edges of the drawn class scale, kWh/m²·a — `[0, 30, 50, …, 250, 300]`.
+ * Derived from {@link KLASSE_BANDS} so a changed band cannot leave the scale
+ * behind: the drawing and the classification are the same numbers.
+ */
+export const KLASSE_SKALA_KANTEN: readonly number[] = [
+  0,
+  ...KLASSE_BANDS.map(([, max]) => (Number.isFinite(max) ? max : KLASSE_SKALA_MAX)),
+];
+
+/** Energieausweis class colours, green (A+) → red (H). */
+export const KLASSE_FARBE: Record<Energieklasse, string> = {
+  'A+': '#1a7e3c',
+  A: '#26a269',
+  B: '#5bc236',
+  C: '#a8c22e',
+  D: '#e5a50a',
+  E: '#e07f0e',
+  F: '#e66100',
+  G: '#d4441c',
+  H: '#c01c28',
+};
+
+/**
+ * Position of a demand on the class scale, 0 (left edge of A+) … 1 (right edge
+ * of H) — where the "Heute"/"Ziel" markers go. Interpolates inside the band, so
+ * two values in the same class still sit apart.
+ */
+export function klassePosition(kwhM2a: number): number {
+  const kanten = KLASSE_SKALA_KANTEN;
+  const bands = kanten.length - 1;
+  for (let i = 0; i < bands; i++) {
+    if (kwhM2a <= kanten[i + 1]) {
+      const anteil = (kwhM2a - kanten[i]) / (kanten[i + 1] - kanten[i]);
+      return (i + Math.max(0, anteil)) / bands;
+    }
+  }
+  return 1;
+}
+
 export type EnvelopeElementKind = 'wall' | 'roof' | 'window' | 'floor';
 
 /** Default Bestand (unrenovated) U-values, W/(m²·K), for elements without an assembly. */

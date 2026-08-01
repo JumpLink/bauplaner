@@ -6,22 +6,31 @@ on:
   pull_request:
 
 # Node-free gjsify toolchain (mirrors the buchhaltung CI). Everything runs on the
-# gjsify 0.16 stack: `gjsify install --immutable` (from gjsify-lock.json), the
-# bundled `gjsify tsc` type-check, `gjsify build` for the CLI + native-app
-# bundles, and the GJS test bundle under `gjs`. Node is present only to bootstrap
-# the gjsify CLI (its published bin is Node; its work targets gjs). A Fedora
-# container ships `gjs`; no GTK/GL system libs are needed because the build only
-# bundles (it never loads the gi:// typelibs) and the tests are pure TS.
+# gjsify stack pinned in cli/package.json: `gjsify install --immutable` (from
+# gjsify-lock.json), the bundled `gjsify tsc` type-check, `gjsify build` for the
+# CLI + native-app bundles, and the GJS test bundle under `gjs`. Node is present
+# only to bootstrap the gjsify CLI (its published bin is Node; its work targets
+# gjs).
+#
+# System libraries: the builds only *bundle* and never load a gi:// typelib, and
+# almost every test is pure TypeScript — so no GTK or GL is needed. The one
+# exception is the PDF renderer, which draws through cairo + PangoCairo at
+# runtime; `pango` is installed so that test actually executes here instead of
+# skipping.
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     container:
       image: fedora:44
     steps:
-      - name: Install system prerequisites (gjs)
+      # pango ships the PangoCairo typelib the PDF renderer needs. Without it the
+      # render test skips and the renderer would never run in CI at all — the
+      # build only bundles, it never loads a gi:// typelib, so nothing else would
+      # have noticed a broken export.
+      - name: Install system prerequisites (gjs + PangoCairo typelib)
         run: >
           dnf install -y --setopt=install_weak_deps=False
-          git tar xz findutils gjs
+          git tar xz findutils gjs pango
 
       - uses: actions/checkout@v4
 
@@ -43,20 +52,26 @@ jobs:
           restore-keys: gjsify-tarballs-
 
       # Bootstrap the gjsify CLI so `gjsify install` is runnable before node_modules
-      # exists. Pin to the SAME version the deps use (0.16.5) — a global-CLI ↔
-      # pinned-libs mismatch produces broken bundles.
+      # exists. It must be the SAME version the deps pin — a global-CLI ↔
+      # pinned-libs mismatch produces broken bundles. Read that version out of
+      # cli/package.json instead of repeating it here: hardcoded, it silently fell
+      # behind when the workspace moved 0.16.5 → 0.26.0 and CI kept bootstrapping
+      # the old CLI.
       - name: Bootstrap the gjsify CLI
-        run: npm install -g @gjsify/cli@0.16.5
+        run: |
+          VERSION=$(node -p "require('./cli/package.json').devDependencies['@gjsify/cli']")
+          echo "Bootstrapping @gjsify/cli@$VERSION (from cli/package.json)"
+          npm install -g "@gjsify/cli@$VERSION"
 
       - name: Install dependencies (gjsify install --immutable)
         run: gjsify install --immutable
 
-      - name: Type check (gjsify tsc)
-        run: |
-          npm run check --workspace packages/core
-          npm run check --workspace packages/materials
-          npm run check --workspace packages/diagnose
-          npm run check --workspace cli
+      # One entry point: cli's `check` runs gjsify tsc over the CLI + app, then
+      # tsc over every packages/*/tsconfig.json, then the Adwaita markup scan.
+      # It replaces a hand-written package list that had to be extended by hand
+      # for each new package — and would have missed @bauplaner/report.
+      - name: Type check (cli + every package) and markup scan
+        run: npm run check --workspace cli
 
       - name: Build (CLI + native-app bundles)
         run: |
