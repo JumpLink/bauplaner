@@ -11,7 +11,16 @@ export function escapeMarkup(s: string): string {
 
 /** Format a euro amount with German separators (1.234,56 €). */
 export function fmtEur(n: number): string {
-  const [int, frac] = Math.abs(n).toFixed(2).split('.');
+  return `${fmtNum(n, 2)} €`;
+}
+
+/**
+ * Format a number German-style: comma as the decimal mark, dot as the thousands
+ * separator. `toFixed` alone produces `0.191`, which reads as a different number
+ * to a German eye — and this tool prints U-values next to euro amounts.
+ */
+export function fmtNum(n: number, digits = 2): string {
+  const [int, frac] = Math.abs(n).toFixed(digits).split('.');
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${n < 0 ? '-' : ''}${grouped},${frac} €`;
+  return `${n < 0 ? '-' : ''}${grouped}${frac ? `,${frac}` : ''}`;
 }
