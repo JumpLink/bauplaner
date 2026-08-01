@@ -204,12 +204,17 @@ export const MATERIALS: Record<string, Material> = {
   // — Masonry (Bestand) —
   vollziegel: {
     key: 'vollziegel',
-    name: 'Vollziegel-Mauerwerk (Bestand)',
+    // Whether it is existing fabric is a property of the LAYER (`bestand`), not
+    // of the material — the same brick can be new in a build-up.
+    name: 'Vollziegel-Mauerwerk',
     category: 'mauerwerk',
     density: 1.8,
     lambda: 0.68,
     mu: 8,
     diffusionsoffen: true,
+    // Fired clay wicks water strongly — which is why rising damp climbs a brick
+    // wall, and why the wall can also dry itself out again if you let it.
+    kapillaraktiv: true,
     source: DIN,
   },
   lehmmauermoertel: {
@@ -303,6 +308,12 @@ export const MATERIALS: Record<string, Material> = {
     mu: 5,
     diffusionsoffen: true,
     kapillaraktiv: true,
+    price: {
+      amount: 300,
+      per: 'm3',
+      source: 'Richtwert 25–35 €/m² bei 100 mm (WDVS-Platte, Herstellerpreislisten) → Mitte ~300 €/m³',
+      retrievedAt: '2026-08-01',
+    },
     source: DIN,
   },
   holzfaserflex: {
@@ -370,6 +381,46 @@ export const MATERIALS: Record<string, Material> = {
       retrievedAt: '2026-07-10',
     },
     source: DIN,
+  },
+
+  // — Insulation, conventional (benchmarks, NOT recommendations) —
+  // Carried so an ecological build-up can be compared against the mainstream
+  // one on equal terms — same U-value, very different Ökobilanz. EPS in
+  // particular is the reason "Außendämmung = diffusionsdicht" became folklore:
+  // it is the *material* that is vapour-tight, not the position.
+  eps: {
+    key: 'eps',
+    name: 'EPS-Hartschaum (WDVS, Vergleichswert)',
+    category: 'daemmung',
+    density: 0.018,
+    lambda: 0.035,
+    mu: 40,
+    diffusionsoffen: false, // µ 20–100 — the vapour brake that damages damp masonry
+    kapillaraktiv: false,
+    price: {
+      amount: 80,
+      per: 'm3',
+      source: 'Richtwert ~8 €/m² bei 100 mm (WDVS-Platte 035) → ~80 €/m³',
+      retrievedAt: '2026-08-01',
+    },
+    source: `${DIN}; als Vergleichsmaßstab geführt, nicht als Empfehlung`,
+  },
+  mineralwolle: {
+    key: 'mineralwolle',
+    name: 'Mineralwolle (WDVS-Platte, Vergleichswert)',
+    category: 'daemmung',
+    density: 0.03,
+    lambda: 0.035,
+    mu: 1,
+    diffusionsoffen: true, // very open to vapour, but not capillary-active
+    kapillaraktiv: false,
+    price: {
+      amount: 200,
+      per: 'm3',
+      source: 'Richtwert ~20 €/m² bei 100 mm (WDVS-Platte) → ~200 €/m³',
+      retrievedAt: '2026-08-01',
+    },
+    source: `${DIN}; diffusionsoffen, aber nicht kapillaraktiv — puffert keine Feuchte`,
   },
 
   // — Timber —

@@ -15,6 +15,7 @@ import {
   lehmgrabenCommand,
   materialsCommand,
   bauteilCommand,
+  variantenCommand,
   feuchteCommand,
   wandCommand,
   wandSetCommand,
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
     .command(lehmgrabenCommand)
     .command(materialsCommand)
     .command(bauteilCommand)
+    .command(variantenCommand)
     .command(feuchteCommand)
     .command(wandCommand)
     .command(wandSetCommand)

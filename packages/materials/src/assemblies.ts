@@ -13,17 +13,60 @@ export interface AssemblyPreset {
   name: string;
   /** Layers inside → outside. */
   layers: LayerSpec[];
+  /**
+   * System material that is not a thermal layer, per m² — adhesive, dowels,
+   * reinforcing mesh, top coat, scaffolding, fixings. **Labour is deliberately
+   * excluded**: this planner assumes Eigenleistung, and a wage rate is the one
+   * number that differs most between builders. Add it explicitly when you give
+   * the work out.
+   */
+  zusatzkostenProM2?: number;
+  /** Where {@link zusatzkostenProM2} comes from. */
+  zusatzkostenQuelle?: string;
+  /** Constraints and caveats that belong to this build-up, not to the material. */
+  hinweise?: string[];
 }
 
-/** A handful of natural, diffusion-open build-ups (Bestand + retrofits). */
+const WDVS_ZUSATZ_QUELLE =
+  'Kleber/Dübel/Armiergewebe/Oberputz ≈ 30 €/m² + Gerüst ≈ 15 €/m² (Richtwert, ' +
+  'ohne Lohn — Eigenleistung unterstellt)';
+const INNEN_ZUSATZ_QUELLE =
+  'Unterkonstruktion/Befestigung/Armierung ≈ 15 €/m² (Richtwert, ohne Lohn)';
+
+/** The existing solid-brick wall every retrofit preset below builds on. */
+const BESTAND_ZIEGEL: LayerSpec = {
+  materialKey: 'vollziegel',
+  thicknessM: 0.365,
+  bestand: true,
+};
+/** The existing exterior render — kept under interior insulation, stripped under a façade. */
+const BESTAND_AUSSENPUTZ: LayerSpec = {
+  materialKey: 'kalkzementputz',
+  thicknessM: 0.02,
+  bestand: true,
+};
+
+/**
+ * Build-ups for a solid-brick exterior wall of ~1900, spanning the real decision
+ * space: do nothing, insulate inside, insulate outside, or combine both.
+ *
+ * The `-eps-` and `-mineralwolle-` entries are **benchmarks, not
+ * recommendations**: they are dimensioned to the same U-value as the wood-fibre
+ * façade so the comparison isolates the one thing that differs — the material
+ * and its Ökobilanz.
+ *
+ * Exterior thicknesses are chosen to clear the BEG-EM threshold of U ≤ 0,20
+ * W/(m²·K); 16 cm of wood fibre lands at 0,211 and misses it, which is exactly
+ * the kind of near-miss `varianten.ts` prices in.
+ */
 export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
   {
     key: 'bestand-vollziegel-365',
     name: 'Bestand: Vollziegel 36,5 cm',
     layers: [
-      { materialKey: 'kalkputz', thicknessM: 0.015 },
-      { materialKey: 'vollziegel', thicknessM: 0.365 },
-      { materialKey: 'kalkzementputz', thicknessM: 0.02 },
+      { materialKey: 'kalkputz', thicknessM: 0.015, bestand: true },
+      BESTAND_ZIEGEL,
+      BESTAND_AUSSENPUTZ,
     ],
   },
   {
@@ -32,25 +75,87 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
     layers: [
       { materialKey: 'lehmputz', thicknessM: 0.015 },
       { materialKey: 'holzfaser', thicknessM: 0.06 },
-      { materialKey: 'vollziegel', thicknessM: 0.365 },
-      { materialKey: 'kalkzementputz', thicknessM: 0.02 },
+      BESTAND_ZIEGEL,
+      BESTAND_AUSSENPUTZ,
     ],
+    zusatzkostenProM2: 15,
+    zusatzkostenQuelle: INNEN_ZUSATZ_QUELLE,
+    hinweise: ['Fassade bleibt unverändert — die Option, wenn das Ortsbild bindet.'],
   },
   {
-    key: 'aussendaemmung-holzfaser-120',
-    name: 'Außendämmung: 12 cm Holzfaser',
+    key: 'innendaemmung-holzfaser-100-lehmplatte',
+    name: 'Innendämmung: 10 cm Holzfaser + Lehmbauplatte',
     layers: [
-      { materialKey: 'vollziegel', thicknessM: 0.365 },
-      { materialKey: 'holzfaser', thicknessM: 0.12 },
-      { materialKey: 'kalkputz', thicknessM: 0.02 },
+      { materialKey: 'lehmputz', thicknessM: 0.01 },
+      { materialKey: 'lehmbauplatte', thicknessM: 0.022 },
+      { materialKey: 'holzfaser', thicknessM: 0.1 },
+      BESTAND_ZIEGEL,
+      BESTAND_AUSSENPUTZ,
+    ],
+    zusatzkostenProM2: 15,
+    zusatzkostenQuelle: INNEN_ZUSATZ_QUELLE,
+    hinweise: [
+      'Fensterlaibungen sind der kritische Punkt jeder Innendämmung — dort bleibt die ' +
+        'Wärmebrücke und muss kapillaraktiv eingebunden werden.',
     ],
   },
   {
     key: 'aussendaemmung-holzfaser-160',
     name: 'Außendämmung: 16 cm Holzfaser',
+    layers: [BESTAND_ZIEGEL, { materialKey: 'holzfaser', thicknessM: 0.16 }, { materialKey: 'kalkputz', thicknessM: 0.02 }],
+    zusatzkostenProM2: 45,
+    zusatzkostenQuelle: WDVS_ZUSATZ_QUELLE,
+    hinweise: ['Verfehlt den BEG-Grenzwert von U ≤ 0,20 knapp — 2 cm mehr entscheiden über die Förderung.'],
+  },
+  {
+    key: 'aussendaemmung-holzfaser-180',
+    name: 'Außendämmung: 18 cm Holzfaser',
+    layers: [BESTAND_ZIEGEL, { materialKey: 'holzfaser', thicknessM: 0.18 }, { materialKey: 'kalkputz', thicknessM: 0.02 }],
+    zusatzkostenProM2: 45,
+    zusatzkostenQuelle: WDVS_ZUSATZ_QUELLE,
+    hinweise: [
+      'Dachüberstand muss die Dämmstärke aufnehmen, sonst Traufe verlängern.',
+      'Sockel-/Spritzwasserbereich braucht ein feuchteunempfindliches Material (Schaumglas).',
+    ],
+  },
+  {
+    key: 'aussendaemmung-eps-150',
+    name: 'Außendämmung: 15 cm EPS (Vergleichsmaßstab)',
+    layers: [BESTAND_ZIEGEL, { materialKey: 'eps', thicknessM: 0.15 }, { materialKey: 'kalkzementputz', thicknessM: 0.02 }],
+    zusatzkostenProM2: 45,
+    zusatzkostenQuelle: WDVS_ZUSATZ_QUELLE,
+    hinweise: [
+      'Nur als Vergleich geführt: µ 40 macht die Wand dampfbremsend. Auf feuchtebelastetem ' +
+        'Altbau-Mauerwerk ist genau das die Schadensursache, aus der der Ruf der Außendämmung stammt.',
+    ],
+  },
+  {
+    key: 'aussendaemmung-mineralwolle-150',
+    name: 'Außendämmung: 15 cm Mineralwolle (Vergleichsmaßstab)',
+    layers: [BESTAND_ZIEGEL, { materialKey: 'mineralwolle', thicknessM: 0.15 }, { materialKey: 'kalkputz', thicknessM: 0.02 }],
+    zusatzkostenProM2: 45,
+    zusatzkostenQuelle: WDVS_ZUSATZ_QUELLE,
+    hinweise: ['Diffusionsoffen (µ 1), aber nicht kapillaraktiv und nicht nachwachsend.'],
+  },
+  {
+    key: 'kombi-aussen-180-innen-wandheizung',
+    name: 'Kombination: 18 cm Holzfaser außen + Wandheizung in Lehm innen',
+    zusatzkostenProM2: 55,
+    zusatzkostenQuelle: `${WDVS_ZUSATZ_QUELLE}; + 10 €/m² innen für Träger/Befestigung`,
+    hinweise: [
+      'Die Wandheizung selbst (Rohr, Verteiler, Regelung) ist ein eigenes Gewerk und hier NICHT eingerechnet.',
+      'Dachüberstand und Sockelanschluss wie bei der reinen Außendämmung.',
+    ],
+    // A wall heating on an exterior wall needs an insulating layer BEHIND the
+    // pipes or it heats the street. With the thermal envelope carried outside,
+    // that interior layer can stay thin — it decouples the heating, it does not
+    // have to insulate, which is what keeps the masonry warm and the moisture
+    // risk of interior insulation off the table.
     layers: [
-      { materialKey: 'vollziegel', thicknessM: 0.365 },
-      { materialKey: 'holzfaser', thicknessM: 0.16 },
+      { materialKey: 'lehmputz', thicknessM: 0.03 },
+      { materialKey: 'holzfaser', thicknessM: 0.04 },
+      BESTAND_ZIEGEL,
+      { materialKey: 'holzfaser', thicknessM: 0.18 },
       { materialKey: 'kalkputz', thicknessM: 0.02 },
     ],
   },
