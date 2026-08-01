@@ -1,17 +1,41 @@
 /**
- * Bauteile view — assign a wall build-up from a preset, globally (all walls) or
- * per wall (grouped by level). Shows the live assessment (U-value, Tauwasser,
- * GEG); the 3D view recolours walls by U-value. Stored in the project.
+ * Bauteile view — compare retrofit build-ups for the model's exterior walls, and
+ * assign one globally or per wall.
+ *
+ * The catalogue is driven by `vergleicheVarianten`, so the build-ups appear
+ * *ranked for this house* rather than as a neutral list: same U-value, very
+ * different cost and embodied carbon. The 3D view recolours walls by U-value.
+ * Assignments are stored in the project.
  */
 
 import Adw from '@girs/adw-1';
 import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
-import { wallLengthM, type Wall } from '@bauplaner/core';
-import { PRESET_ASSEMBLIES, assessAssembly, getMaterial, type MaterialCategory } from '@bauplaner/materials';
+import { deriveEnvelope, wallLengthM, type Wall } from '@bauplaner/core';
+import {
+  PRESET_ASSEMBLIES,
+  assessAssembly,
+  getMaterial,
+  presetByKey,
+  vergleicheVarianten,
+  type MaterialCategory,
+  type VariantenErgebnis,
+} from '@bauplaner/materials';
 
+import { escapeMarkup, fmtEur, fmtNum } from '../../format.ts';
 import type { AssemblyLayers, DocumentStore } from '../document-store.ts';
+
+/** The build-up the comparison measures every candidate against. */
+const REFERENZ_KEY = 'bestand-vollziegel-365';
+
+const RISIKO_TEXT = {
+  gering: '✓ gering',
+  mittel: '~ mittel',
+  hoch: '✗ hoch',
+} as const;
+
+const RISIKO_CSS = { gering: 'success', mittel: 'warning', hoch: 'error' } as const;
 
 const PRESET_NAMES = ['(keiner)', ...PRESET_ASSEMBLIES.map((p) => p.name)];
 
@@ -82,9 +106,10 @@ export class BauteileView extends Gtk.Box {
     const home = this.store.home!;
     const page = new Adw.PreferencesPage();
 
-    // Assembly catalogue (v2): each preset build-up as an expandable card with a
-    // layer bar (innen → außen), the layer list and the live U/Tauwasser/GEG.
-    page.add(this.buildKatalog());
+    // Ranked catalogue: each build-up as an expandable card with a layer bar
+    // (innen → außen), the layer list and what it costs, saves and emits — for
+    // this model's actual exterior wall area.
+    page.add(this.buildKatalog(deriveEnvelope(home).wallAreaM2));
 
     // Global bulk assignment.
     const globalGroup = new Adw.PreferencesGroup({
@@ -156,76 +181,155 @@ export class BauteileView extends Gtk.Box {
     entry.row.grab_focus();
   }
 
-  /** The v2 assembly catalogue: preset build-ups as expandable cards. */
-  private buildKatalog(): Adw.PreferencesGroup {
+  /**
+   * The assembly catalogue, ranked for this model: every preset build-up scored
+   * against the existing wall on moisture, energy, own share after subsidy and
+   * embodied CO₂, best first.
+   */
+  private buildKatalog(wallAreaM2: number): Adw.PreferencesGroup {
+    const referenz = presetByKey(REFERENZ_KEY);
+    const area = wallAreaM2 > 0 ? Math.round(wallAreaM2) : 100;
     const group = new Adw.PreferencesGroup({
-      title: 'Bauteil-Katalog',
+      title: 'Variantenvergleich',
       description:
-        'Schichtaufbauten innen → außen. U-Wert, Tauwasser-Screening (Glaser, ' +
-        'DIN 4108-3) und GEG-Abgleich live berechnet.',
+        `Schichtaufbauten innen → außen, bewertet für ${fmtNum(area, 0)} m² Außenwand. ` +
+        'Feuchte nach DIN 4108-3, Kosten abzüglich BEG-Förderung, Ökobilanz A1–A3 — ' +
+        'ein Screening, kein Nachweis.',
     });
-    for (const preset of PRESET_ASSEMBLIES) {
-      const a = assessAssembly(preset.layers);
-      const row = new Adw.ExpanderRow({
-        title: preset.name,
-        subtitle: `${preset.layers.length} Schichten`,
+    if (!referenz) return group;
+
+    const vergleich = vergleicheVarianten({
+      referenz,
+      varianten: PRESET_ASSEMBLIES.filter((p) => p.key !== REFERENZ_KEY),
+      areaM2: area,
+      isfpBonus: true,
+    });
+
+    group.add(this.variantRow(vergleich.referenz, true));
+    for (const v of vergleich.varianten) group.add(this.variantRow(v, false));
+    return group;
+  }
+
+  /** One build-up as an expandable card: layer bar, layers, then the four verdicts. */
+  private variantRow(v: VariantenErgebnis, istReferenz: boolean): Adw.ExpanderRow {
+    const row = new Adw.ExpanderRow({
+      title: escapeMarkup(istReferenz ? `Ausgangslage — ${v.name}` : `${v.rang}. ${v.name}`),
+      subtitle: escapeMarkup(
+        istReferenz
+          ? `${fmtEur(v.heizkostenEurA)}/a Heizkosten · ${fmtNum(v.co2KgA, 0)} kg CO₂/a`
+          : `Eigenanteil ${fmtEur(v.eigenanteil)} · spart ${fmtEur(v.ersparnisEurA)}/a`,
+      ),
+    });
+    const badge = new Gtk.Label({ label: `U ${fmtNum(v.U, 2)}`, valign: Gtk.Align.CENTER });
+    badge.add_css_class('numeric');
+    badge.add_css_class('caption-heading');
+    badge.add_css_class(istReferenz ? 'dim-label' : v.begPass ? 'success' : 'warning');
+    row.add_suffix(badge);
+
+    // Layer bar + innen/außen legend.
+    const barBox = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL,
+      spacing: 4,
+      marginTop: 10,
+      marginBottom: 8,
+      marginStart: 12,
+      marginEnd: 12,
+    });
+    const layers: AssemblyLayers = v.layers.map((l) => ({ materialKey: l.key, thicknessM: l.thicknessM }));
+    barBox.append(this.layerBar(layers));
+    const legend = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL });
+    const li = new Gtk.Label({ label: 'innen', xalign: 0, hexpand: true });
+    li.add_css_class('caption');
+    li.add_css_class('dim-label');
+    const lo = new Gtk.Label({ label: 'außen', xalign: 1 });
+    lo.add_css_class('caption');
+    lo.add_css_class('dim-label');
+    legend.append(li);
+    legend.append(lo);
+    barBox.append(legend);
+    row.add_row(this.plainRow(barBox));
+
+    // Per-layer detail.
+    for (const l of v.layers) {
+      const lr = new Adw.ActionRow({
+        title: escapeMarkup(l.bestand ? `${l.name} (Bestand)` : l.name),
+        subtitle: `${fmtNum(l.thicknessM * 100, 1)} cm · λ ${fmtNum(l.lambda, 3)} · µ ${l.mu}`,
       });
-      const badge = new Gtk.Label({ label: `U ${a.U.toFixed(2)}`, valign: Gtk.Align.CENTER });
-      badge.add_css_class('numeric');
-      badge.add_css_class('caption-heading');
-      badge.add_css_class(a.gegPass ? 'success' : 'error');
-      row.add_suffix(badge);
+      lr.add_prefix(this.colorSwatch(CATEGORY_COLOR[l.category]));
+      row.add_row(lr);
+    }
 
-      // Layer bar + innen/außen legend.
-      const barBox = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 4,
-        marginTop: 10,
-        marginBottom: 8,
-        marginStart: 12,
-        marginEnd: 12,
-      });
-      barBox.append(this.layerBar(preset.layers));
-      const legend = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL });
-      const li = new Gtk.Label({ label: 'innen', xalign: 0, hexpand: true });
-      li.add_css_class('caption');
-      li.add_css_class('dim-label');
-      const lo = new Gtk.Label({ label: 'außen', xalign: 1 });
-      lo.add_css_class('caption');
-      lo.add_css_class('dim-label');
-      legend.append(li);
-      legend.append(lo);
-      barBox.append(legend);
-      row.add_row(this.plainRow(barBox));
+    row.add_row(this.factRow('U-Wert', `${fmtNum(v.U, 3)} W/(m²·K)`, v.gegPass ? 'success' : 'error'));
 
-      // Per-layer detail.
-      for (const l of preset.layers) {
-        const m = getMaterial(l.materialKey);
-        const lr = new Adw.ActionRow({
-          title: m.name,
-          subtitle: `${(l.thicknessM * 100).toFixed(1)} cm${m.lambda != null ? ` · λ ${m.lambda}` : ''}`,
-        });
-        const swatch = this.colorSwatch(CATEGORY_COLOR[m.category]);
-        lr.add_prefix(swatch);
-        row.add_row(lr);
-      }
+    // Moisture: the mass balance, not a yes/no flag.
+    const b = v.feuchte.bilanz;
+    row.add_row(this.factRow('Feuchterisiko', RISIKO_TEXT[v.feuchte.risiko], RISIKO_CSS[v.feuchte.risiko]));
+    row.add_row(
+      this.factRow(
+        'Tauwasser · Verdunstung',
+        b.ebene
+          ? `${fmtNum(b.tauwasserKgM2, 2)} · ${fmtNum(b.verdunstungKgM2, 2)} kg/m² (max ${fmtNum(b.grenzwertKgM2, 1)})`
+          : 'keines im Screening',
+        b.unbedenklich ? 'success' : 'error',
+      ),
+    );
+    row.add_row(
+      this.factRow(
+        'Dämmung außerhalb des Mauerwerks',
+        `${Math.round(v.feuchte.daemmungAussenAnteil * 100)} %`,
+        v.feuchte.daemmungAussenAnteil >= 0.8 ? 'success' : 'warning',
+      ),
+    );
 
-      // Facts.
-      row.add_row(this.factRow('U-Wert', `${a.U.toFixed(3)} W/(m²·K)`, a.gegPass ? 'success' : 'error'));
+    if (!istReferenz) {
       row.add_row(
         this.factRow(
-          'Tauwasser (Glaser)',
-          a.tauwasser ? '⚠ Tauwasser möglich' : '✓ kein Tauwasser',
-          a.tauwasser ? 'warning' : 'success',
+          'BEG-Förderfähigkeit',
+          v.begPass ? `✓ U ≤ ${fmtNum(v.begMaxU, 2)}` : `✗ verfehlt U ≤ ${fmtNum(v.begMaxU, 2)} — keine Förderung`,
+          v.begPass ? 'success' : 'error',
         ),
       );
       row.add_row(
-        this.factRow('GEG-Abgleich', a.gegPass ? `✓ ≤ ${a.gegMaxU}` : `✗ > ${a.gegMaxU}`, a.gegPass ? 'success' : 'error'),
+        this.factRow('Investition − Förderung', `${fmtEur(v.investitionNet)} − ${fmtEur(v.foerderung)} = ${fmtEur(v.eigenanteil)}`),
       );
-      if (preset === PRESET_ASSEMBLIES[0]) row.set_expanded(true); // show the first build-up open
-      group.add(row);
+      // A layer with no price makes its variant look cheaper than it is, which
+      // would quietly bias the whole ranking. Say so rather than hide it.
+      if (v.ohnePreis.length > 0) {
+        row.add_row(
+          this.factRow('Ohne Preis — Investition zu niedrig', escapeMarkup(v.ohnePreis.join(', ')), 'error'),
+        );
+      }
+      row.add_row(
+        this.factRow(
+          'Spart pro Jahr',
+          `${fmtEur(v.ersparnisEurA)} · ${fmtNum(v.ersparnisCo2KgA, 0)} kg CO₂` +
+            (v.amortisationJahre != null ? ` · amortisiert in ${fmtNum(v.amortisationJahre, 1)} J` : ''),
+        ),
+      );
+      row.add_row(
+        this.factRow(
+          'Graues CO₂ (netto)',
+          `${fmtNum(v.oekobilanz.gwpNettoKg, 0)} kg` +
+            (v.co2AmortisationJahre === 0
+              ? ' — speichert mehr, als die Herstellung freisetzt'
+              : v.co2AmortisationJahre != null
+                ? ` — nach ${fmtNum(v.co2AmortisationJahre, 1)} J zurückgezahlt`
+                : ''),
+          v.oekobilanz.gwpNettoKg <= 0 ? 'success' : 'warning',
+        ),
+      );
+      row.add_row(this.factRow('Aufbau innen / außen', `${fmtNum(v.aufbauInnenM * 100, 0)} / ${fmtNum(v.aufbauAussenM * 100, 0)} cm`));
+      if (v.rang === 1) row.set_expanded(true); // open the winner
     }
-    return group;
+
+    for (const h of v.hinweise) {
+      const hr = new Adw.ActionRow({ title: escapeMarkup(h), useMarkup: false });
+      hr.add_css_class('dim-label');
+      hr.set_subtitle_lines(0);
+      hr.set_title_lines(0);
+      row.add_row(hr);
+    }
+    return row;
   }
 
   /** A proportional, category-coloured layer bar drawn with Cairo (innen→außen). */

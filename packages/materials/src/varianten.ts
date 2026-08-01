@@ -104,6 +104,14 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
 const round1 = (n: number): number => Math.round(n * 10) / 10;
 
 /**
+ * German decimal notation for numbers embedded in {@link FeuchteBewertung.hinweise}.
+ * The hints are German prose written here rather than in each adapter, so they
+ * carry their own formatting — "0.05 kg/m²" reads as a different number to the
+ * person the sentence is written for.
+ */
+const dez = (n: number, digits = 2): string => n.toFixed(digits).replace('.', ',');
+
+/**
  * Rate the moisture behaviour of a build-up.
  *
  * Three independent things decide it, and no single one of them is enough:
@@ -160,8 +168,8 @@ export function feuchteBewertung(assembly: AssemblyResult): FeuchteBewertung {
   } else if (!bilanz.unbedenklich && kapillaraktivInnen) {
     risiko = 'mittel';
     hinweise.push(
-      `Glaser rechnet ${round2(bilanz.tauwasserKgM2)} kg/m² Tauwasser gegen ` +
-        `${round2(bilanz.verdunstungKgM2)} kg/m² Verdunstung (Grenzwert ${bilanz.grenzwertKgM2} kg/m²) — ` +
+      `Glaser rechnet ${dez(bilanz.tauwasserKgM2)} kg/m² Tauwasser gegen ` +
+        `${dez(bilanz.verdunstungKgM2)} kg/m² Verdunstung (Grenzwert ${dez(bilanz.grenzwertKgM2, 1)} kg/m²) — ` +
         'nicht bestanden. ALLE inneren Schichten sind aber kapillaraktiv, und das Verfahren ' +
         'kennt keinen Kapillartransport. Ohne hygrothermische Simulation (WUFI) ist das ' +
         'weder freigegeben noch widerlegt.',
@@ -169,8 +177,8 @@ export function feuchteBewertung(assembly: AssemblyResult): FeuchteBewertung {
   } else if (!bilanz.unbedenklich) {
     risiko = 'hoch';
     hinweise.push(
-      `${round2(bilanz.tauwasserKgM2)} kg/m² Tauwasser, davon verdunsten nur ` +
-        `${round2(bilanz.verdunstungKgM2)} kg/m² (Grenzwert ${bilanz.grenzwertKgM2} kg/m²), ` +
+      `${dez(bilanz.tauwasserKgM2)} kg/m² Tauwasser, davon verdunsten nur ` +
+        `${dez(bilanz.verdunstungKgM2)} kg/m² (Grenzwert ${dez(bilanz.grenzwertKgM2, 1)} kg/m²), ` +
         'und nicht alle inneren Schichten sind kapillaraktiv — so nicht bauen.',
     );
   } else if (daemmungAussenAnteil < 0.5 && !kapillaraktivInnen) {
@@ -199,7 +207,7 @@ export function feuchteBewertung(assembly: AssemblyResult): FeuchteBewertung {
 
   if (tauwasser && bilanz.unbedenklich) {
     hinweise.push(
-      `Geringes Tauwasser (${round2(bilanz.tauwasserKgM2)} kg/m²), das im Sommer ` +
+      `Geringes Tauwasser (${dez(bilanz.tauwasserKgM2)} kg/m²), das im Sommer ` +
         `${Math.round(bilanz.verdunstungKgM2 / Math.max(bilanz.tauwasserKgM2, 1e-6))}× ` +
         'wieder austrocknet — nach DIN 4108-3 unbedenklich.',
     );
@@ -207,7 +215,7 @@ export function feuchteBewertung(assembly: AssemblyResult): FeuchteBewertung {
 
   if (sdVerhaeltnis < 5 && Number.isFinite(sdVerhaeltnis) && daemmIdx.length > 0) {
     hinweise.push(
-      `s_d innen : außen = ${round1(sdVerhaeltnis)} : 1 — die Faustregel diffusionsoffener ` +
+      `s_d innen : außen = ${dez(sdVerhaeltnis, 1)} : 1 — die Faustregel diffusionsoffener ` +
         'Aufbauten verlangt ≥ 5 : 1 (innen dichter als außen).',
     );
   }
