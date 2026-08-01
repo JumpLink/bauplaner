@@ -216,7 +216,7 @@ export default async () => {
       const doc = buildSanierungsplan({ name: 'H', datum: 'd', wand: wandVergleich() });
       const cards = doc.blocks.find((b) => b.kind === 'variants');
       if (!cards || cards.kind !== 'variants') throw new Error('Variantenkarten fehlen');
-      expect(cards.items[0].rank).toBe('0');
+      expect(cards.items[0].rank).toBe('—');
       expect(cards.items[0].name.startsWith('Ausgangslage')).toBe(true);
       expect(cards.items.slice(1).map((v) => v.rank).join(',')).toBe('1,2,3,4,5,6,7');
       expect(cards.items[1].best).toBe(true);
@@ -258,8 +258,10 @@ export default async () => {
   await describe('renderReportPdf', async () => {
     await it('writes a real PDF whose page count matches its own footer', async () => {
       if (!pdfExportAvailable()) {
-        // Node has no cairo; the model tests above still cover the document.
-        expect(true).toBe(true);
+        // No cairo/PangoCairo here (plain Node, or a GJS without the typelib).
+        // Say so out loud — a silent skip looks exactly like a pass.
+        console.log('  ↳ übersprungen: cairo/PangoCairo nicht verfügbar, nur das Dokumentmodell geprüft');
+        expect(pdfExportAvailable()).toBe(false);
         return;
       }
       const { readFileSync, unlinkSync } = await import('node:fs');

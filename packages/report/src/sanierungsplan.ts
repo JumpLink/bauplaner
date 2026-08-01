@@ -385,7 +385,7 @@ function variantCard(v: VariantenErgebnis, istReferenz: boolean): VariantCard {
   }
 
   return {
-    rank: istReferenz ? '0' : String(v.rang ?? '—'),
+    rank: istReferenz ? '—' : String(v.rang ?? '—'),
     name: istReferenz ? `Ausgangslage — ${v.name}` : v.name,
     headline: istReferenz
       ? `${fmtEur(v.heizkostenEurA)}/Jahr Heizkosten · ${fmtNum(v.co2KgA, 0)} kg CO₂/Jahr`

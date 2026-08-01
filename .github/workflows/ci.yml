@@ -6,22 +6,31 @@ on:
   pull_request:
 
 # Node-free gjsify toolchain (mirrors the buchhaltung CI). Everything runs on the
-# gjsify 0.16 stack: `gjsify install --immutable` (from gjsify-lock.json), the
-# bundled `gjsify tsc` type-check, `gjsify build` for the CLI + native-app
-# bundles, and the GJS test bundle under `gjs`. Node is present only to bootstrap
-# the gjsify CLI (its published bin is Node; its work targets gjs). A Fedora
-# container ships `gjs`; no GTK/GL system libs are needed because the build only
-# bundles (it never loads the gi:// typelibs) and the tests are pure TS.
+# gjsify stack pinned in cli/package.json: `gjsify install --immutable` (from
+# gjsify-lock.json), the bundled `gjsify tsc` type-check, `gjsify build` for the
+# CLI + native-app bundles, and the GJS test bundle under `gjs`. Node is present
+# only to bootstrap the gjsify CLI (its published bin is Node; its work targets
+# gjs).
+#
+# System libraries: the builds only *bundle* and never load a gi:// typelib, and
+# almost every test is pure TypeScript — so no GTK or GL is needed. The one
+# exception is the PDF renderer, which draws through cairo + PangoCairo at
+# runtime; `pango` is installed so that test actually executes here instead of
+# skipping.
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     container:
       image: fedora:44
     steps:
-      - name: Install system prerequisites (gjs)
+      # pango ships the PangoCairo typelib the PDF renderer needs. Without it the
+      # render test skips and the renderer would never run in CI at all — the
+      # build only bundles, it never loads a gi:// typelib, so nothing else would
+      # have noticed a broken export.
+      - name: Install system prerequisites (gjs + PangoCairo typelib)
         run: >
           dnf install -y --setopt=install_weak_deps=False
-          git tar xz findutils gjs
+          git tar xz findutils gjs pango
 
       - uses: actions/checkout@v4
 

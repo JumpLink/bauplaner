@@ -105,16 +105,31 @@ type Cairo = NonNullable<GjsRuntime['imports']>['cairo'];
 
 function runtime(): NonNullable<GjsRuntime['imports']> {
   const imports = (globalThis as unknown as GjsRuntime).imports;
-  if (!imports?.cairo || !imports.gi?.PangoCairo) {
-    throw new Error('PDF-Export benötigt die GJS-Laufzeit (cairo + Pango).');
+  if (!pdfExportAvailable() || !imports) {
+    throw new Error(
+      'PDF-Export benötigt cairo und PangoCairo in der GJS-Laufzeit — ' +
+        'entweder läuft das hier nicht unter GJS, oder die PangoCairo-Typelib fehlt im System.',
+    );
   }
   return imports;
 }
 
-/** Whether {@link renderReportPdf} can run here. */
+/**
+ * Whether {@link renderReportPdf} can run here.
+ *
+ * The try/catch is load-bearing, not defensive noise: reading
+ * `imports.gi.PangoCairo` **throws** when the typelib is absent (a bare `gjs`
+ * without pango's introspection data — a minimal container, for instance)
+ * rather than evaluating to undefined. A probe that crashes on exactly the
+ * system it exists to detect is no probe at all.
+ */
 export function pdfExportAvailable(): boolean {
-  const imports = (globalThis as unknown as GjsRuntime).imports;
-  return !!imports?.cairo && !!imports.gi?.PangoCairo;
+  try {
+    const imports = (globalThis as unknown as GjsRuntime).imports;
+    return !!imports?.cairo && !!imports.gi?.PangoCairo;
+  } catch {
+    return false;
+  }
 }
 
 /** `#rrggbb` → cairo's 0..1 triple. */

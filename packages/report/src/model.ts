@@ -90,7 +90,7 @@ export interface LayerSegment {
 
 /** A ranked build-up: the decision, argued on one card. */
 export interface VariantCard {
-  /** Rank badge text — a number, or e.g. "0" for the reference. */
+  /** Rank badge text — the position, or an em dash for the unranked reference. */
   rank: string;
   name: string;
   /** The one-line verdict under the name. */
