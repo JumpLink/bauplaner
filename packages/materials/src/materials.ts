@@ -276,6 +276,14 @@ export const MATERIALS: Record<string, Material> = {
     lambda: 1.0,
     mu: 20,
     diffusionsoffen: true,
+    price: {
+      // Priced because a build-up comparison with an unpriced layer silently
+      // favours whichever variant uses it — the conventional WDVS, as it happens.
+      amount: 220,
+      per: 't',
+      source: 'Richtwert 180–260 €/t (Werk-Trockenmörtel, Sackware/Silo) → Mitte ~220 €/t',
+      retrievedAt: '2026-08-01',
+    },
     source: DIN,
   },
 
