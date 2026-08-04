@@ -102,6 +102,39 @@ export function checkBeg(
 export const BEG_BASIS_SATZ = 0.15;
 /** Extra rate when the measure is part of an iSFP (individueller Sanierungsfahrplan). */
 export const BEG_ISFP_BONUS = 0.05;
+
+/**
+ * Ceiling on eligible costs for envelope/plant measures (BEG EM 5.1, 5.2, 5.4),
+ * first Wohneinheit — **per building and calendar year**. Spreading work across
+ * years is therefore not just a cash-flow choice, it multiplies the ceiling.
+ *
+ * Source: BEG EM Richtlinie 20.07.2026, Nr. 8.3 / 8.3.1 a.
+ */
+export const BEG_HOECHSTGRENZE = 30_000;
+
+/** The same ceiling once a funded iSFP exists — Nr. 8.3.1 a, second table. */
+export const BEG_HOECHSTGRENZE_ISFP = 60_000;
+
+/**
+ * Minimum eligible investment (gross) below which the iSFP bonus is not granted
+ * at all — BEG EM Nr. 8.4.2, in force since 21.07.2026.
+ */
+export const BEG_ISFP_MINDESTINVESTITION = 30_000;
+
+/**
+ * Ceiling for the heat generator (BEG EM 5.3), first Wohneinheit. Two things
+ * differ from the envelope ceiling and both matter for staging:
+ *
+ * - it counts **per building in total**, not per year, so splitting the work
+ *   across years buys nothing here;
+ * - it *shrinks* — 28 000 € until 31.01.2027, then 750 € less every six months
+ *   down to 22 000 € from 01.08.2030. Deferring the heat pump costs subsidy.
+ *
+ * The iSFP bonus does not apply to it at all: „Vom iSFP-Bonus ausgenommen
+ * bleiben […] Leistungen nach den Nummern 5.3, 5.4 Buchstabe b und 5.5"
+ * (Nr. 8.4.2).
+ */
+export const BEG_HOECHSTGRENZE_WAERMEERZEUGER = 28_000;
 /**
  * Default energy price for the amortisation, €/kWh. Aliases
  * {@link ENERGIE_DEFAULTS}.energiePreisEurKwh so the funding view and the energy
@@ -114,24 +147,64 @@ function round2(n: number): number {
 }
 
 export interface FoerderResult {
-  /** Applied subsidy rate (base + iSFP bonus). */
+  /**
+   * **Effective** rate — subsidy ÷ eligible costs. Not a headline percentage:
+   * the first {@link BEG_HOECHSTGRENZE} euros are funded at the base rate and
+   * only the part above it carries the iSFP bonus, so this lands between the
+   * two whenever both apply.
+   */
   rate: number;
-  /** Eligible net costs the rate applies to, €. */
+  /** Eligible net costs the rates were applied to, after capping. */
   foerderfaehigNet: number;
   /** Expected subsidy, €. */
   foerderung: number;
+  /**
+   * Costs that exceeded the ceiling and are funded at 0 % — reported rather
+   * than silently dropped, because they are the reason a plan's own share can
+   * be far larger than "20 % off" suggests.
+   */
+  ueberHoechstgrenzeNet: number;
+  /** Whether the iSFP bonus actually applied (it needs a minimum spend). */
+  isfpBonusWirksam: boolean;
 }
 
 /**
- * Expected BEG-EM subsidy for a given amount of eligible (Gebäudehülle) net
- * costs. `isfpBonus` adds the iSFP rate on top of the base rate.
+ * Expected BEG-EM subsidy for eligible envelope costs **in one calendar year**.
+ *
+ * Three rules the headline "15 % + 5 %" hides, all per BEG EM 20.07.2026:
+ *
+ * 1. Eligible costs are capped ({@link BEG_HOECHSTGRENZE}, or
+ *    {@link BEG_HOECHSTGRENZE_ISFP} with an iSFP) **per building and calendar
+ *    year**. Anything above is funded at nothing.
+ * 2. The iSFP bonus needs a minimum spend of
+ *    {@link BEG_ISFP_MINDESTINVESTITION} — a small measure gets the base rate
+ *    even with an iSFP in hand.
+ * 3. The bonus applies only to the costs *above* the non-iSFP ceiling
+ *    (Nr. 8.4.2), not to the whole amount.
+ *
+ * @param foerderfaehigNet Eligible costs for this building and year, €.
+ * @param opts.isfpBonus Whether a funded iSFP covers the measure.
+ * @returns The subsidy plus what was capped away; see {@link FoerderResult}.
+ *
+ * @remarks The minimum spend is defined on *gross* costs while this works in
+ * net. For anything near the threshold, check it against the gross figure.
  */
 export function computeFoerderung(foerderfaehigNet: number, opts: { isfpBonus?: boolean } = {}): FoerderResult {
-  const rate = BEG_BASIS_SATZ + (opts.isfpBonus ? BEG_ISFP_BONUS : 0);
+  const gesamt = Math.max(0, foerderfaehigNet);
+  const isfpBonusWirksam = !!opts.isfpBonus && gesamt >= BEG_ISFP_MINDESTINVESTITION;
+  const grenze = isfpBonusWirksam ? BEG_HOECHSTGRENZE_ISFP : BEG_HOECHSTGRENZE;
+
+  const anrechenbar = Math.min(gesamt, grenze);
+  const zumBasissatz = Math.min(anrechenbar, BEG_HOECHSTGRENZE);
+  const mitBonus = Math.max(0, anrechenbar - BEG_HOECHSTGRENZE);
+  const foerderung = zumBasissatz * BEG_BASIS_SATZ + mitBonus * (BEG_BASIS_SATZ + BEG_ISFP_BONUS);
+
   return {
-    rate,
-    foerderfaehigNet: round2(foerderfaehigNet),
-    foerderung: round2(foerderfaehigNet * rate),
+    rate: anrechenbar > 0 ? round2(foerderung / anrechenbar) : 0,
+    foerderfaehigNet: round2(anrechenbar),
+    foerderung: round2(foerderung),
+    ueberHoechstgrenzeNet: round2(gesamt - anrechenbar),
+    isfpBonusWirksam,
   };
 }
 
