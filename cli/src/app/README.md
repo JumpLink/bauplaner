@@ -119,8 +119,7 @@ over D-Bus via `cli/dev/dbus-shot.js` (gdbus alone can't save the `ay` bytes).
 
 ## Structure
 
-- `main.ts` — entry (Adw.Application.run)
-- `application.ts` — Adw.Application subclass (quit/about actions)
+- `main.ts` — entry: `runAdwaitaApp` (`@gjsify/adwaita-app`) — runAsync lifecycle + quit/about actions + env-gated devtools
 - `window.ts` — MainWindow: ViewStack + header ViewSwitcher
 - `views/` — programmatic Adwaita views (no Blueprint yet)
 - `constants.ts` — app id / name / version
