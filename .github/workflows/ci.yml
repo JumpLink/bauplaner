@@ -27,10 +27,14 @@ jobs:
       # render test skips and the renderer would never run in CI at all — the
       # build only bundles, it never loads a gi:// typelib, so nothing else would
       # have noticed a broken export.
-      - name: Install system prerequisites (gjs + PangoCairo typelib)
+      # libsoup3 ships the Soup-3.0 typelib: since @gjsify/cli 0.29 the CLI boots
+      # its GJS bundle (which eagerly imports gi://Soup via npm-registry) even for
+      # `gjsify tsc`, so the type-check step loads it. Without the typelib the very
+      # first `gjsify tsc` aborts with "Requiring Soup, version 3.0 … not found".
+      - name: Install system prerequisites (gjs + Soup/PangoCairo typelibs)
         run: >
           dnf install -y --setopt=install_weak_deps=False
-          git tar xz findutils gjs pango
+          git tar xz findutils gjs pango libsoup3
 
       - uses: actions/checkout@v4
 
