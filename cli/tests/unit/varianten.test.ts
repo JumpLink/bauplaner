@@ -201,10 +201,28 @@ export default async () => {
       expect((drueber?.eigenanteil ?? 0) < (knapp?.eigenanteil ?? 0)).toBe(true);
     });
 
-    await it('applies the base rate plus the iSFP bonus', async () => {
+    await it('applies the base rate — one component rarely clears the bonus threshold', async () => {
       const r = vergleich();
       const gefoerdert = r.varianten.find((v) => v.begPass);
-      expect(gefoerdert?.foerderquote).toBe(0.2);
+      // A single wall at 200 m² costs well under the 30.000 € minimum
+      // investment the iSFP bonus needs (BEG EM Nr. 8.4.2 since 21.07.2026),
+      // so it is funded at the base rate even with an iSFP in hand. The bonus
+      // only starts paying once a year's measures are bundled past 30.000 €.
+      expect(gefoerdert?.foerderquote).toBe(0.15);
+    });
+
+    await it('reaches the blended rate once a year of spend clears 30.000 €', async () => {
+      const gross = vergleicheVarianten({
+        referenz: preset('bestand-vollziegel-365'),
+        varianten: [preset('aussendaemmung-holzfaser-180')],
+        areaM2: 500,
+        isfpBonus: true,
+      });
+      const v = gross.varianten[0];
+      expect(v.investitionNet > 30000).toBe(true);
+      // Above the threshold the effective rate climbs past the 15 % base.
+      expect(v.foerderquote > 0.15).toBe(true);
+      expect(v.foerderquote <= 0.2).toBe(true);
     });
 
     await it('shows wood fibre beating EPS on carbon at the same U-value', async () => {
