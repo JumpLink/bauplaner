@@ -925,15 +925,6 @@ function drawPlan(p: Painter, x: number, y: number, w: number, h: number, page: 
     ctx.setLineWidth(0.9);
     ctx.stroke();
   }
-  for (const poly of page.polys) {
-    if (poly.label.length === 0) continue;
-    const cx = poly.pts.reduce((s, [px]) => s + px, 0) / poly.pts.length;
-    const cy = poly.pts.reduce((s, [, py]) => s + py, 0) / poly.pts.length;
-    poly.label.forEach((line, i) => {
-      const lw = p.width(line, { size: TYPE.micro });
-      p.text(tx(cx) - lw / 2, ty(cy) - 8 + i * 8, line, { size: TYPE.micro, color: PLAN.label });
-    });
-  }
   for (const d of page.dims) {
     const vx = d.x2 - d.x1;
     const vy = d.y2 - d.y1;
@@ -973,6 +964,20 @@ function drawPlan(p: Painter, x: number, y: number, w: number, h: number, page: 
     const my = ty((a[1] + b[1]) / 2 + ny * side * (14 / scale));
     p.fillRect(mx - lw / 2 - 2, my - 5, lw + 4, 10, COLOR.white);
     p.text(mx - lw / 2, my - 4, label, { size: TYPE.micro, color: PLAN.dim });
+  }
+
+  // room labels last, on a white backing - dimension chains must not obscure them
+  for (const poly of page.polys) {
+    if (poly.label.length === 0) continue;
+    const cx = poly.pts.reduce((s, [px]) => s + px, 0) / poly.pts.length;
+    const cy = poly.pts.reduce((s, [, py]) => s + py, 0) / poly.pts.length;
+    const widths = poly.label.map((line) => p.width(line, { size: TYPE.micro }));
+    const boxW = Math.max(...widths) + 6;
+    const boxH = poly.label.length * 8 + 4;
+    p.fillRect(tx(cx) - boxW / 2, ty(cy) - 10, boxW, boxH, COLOR.white);
+    poly.label.forEach((line, i) => {
+      p.text(tx(cx) - widths[i]! / 2, ty(cy) - 8 + i * 8, line, { size: TYPE.micro, color: PLAN.label });
+    });
   }
 
   // north arrow — compass angle is clockwise from plan-up
