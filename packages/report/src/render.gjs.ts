@@ -28,8 +28,9 @@ export * from './model.ts';
 export * from './theme.ts';
 export * from './format.ts';
 export * from './sanierungsplan.ts';
+export * from './grundriss.ts';
 
-import type { Block, Cell, Column, RenderResult, ReportDoc, VariantCard } from './model.ts';
+import type { Block, Cell, Column, PlanPage, RenderResult, ReportDoc, VariantCard } from './model.ts';
 import {
   COLOR,
   CONTENT_W,
@@ -816,6 +817,183 @@ function proseGroup(p: Painter, block: Extract<Block, { kind: 'prose' }>): Group
   };
 }
 
+
+// ── The floor-plan page ──────────────────────────────────────────────────────
+
+const PLAN = {
+  heated: '#d6e8f8',
+  unheated: '#e4e4e4',
+  roomLine: '#96a9be',
+  wall: '#2d2d2d',
+  door: '#be781e',
+  window: '#1e6ebe',
+  dim: '#b42828',
+  grid: '#f2f2f2',
+  label: '#3c3c78',
+} as const;
+
+/** One storey drawn to fill the whole content area of its page. */
+function drawPlan(p: Painter, x: number, y: number, w: number, h: number, page: PlanPage): void {
+  const { ctx } = p;
+  p.text(x, y, page.title, { size: TYPE.lead, bold: true });
+
+  // legend, right-aligned on the title line (north arrow goes above the plan)
+  let lx = x + w - 8;
+  for (const [label, fill] of [['unbeheizt', PLAN.unheated], ['beheizte Zone', PLAN.heated]] as const) {
+    lx -= p.width(label, { size: TYPE.caption }) + 4;
+    p.text(lx, y + 3, label, { size: TYPE.caption, color: COLOR.dim });
+    lx -= 14;
+    p.fillRect(lx, y + 4, 10, 8, fill);
+    p.setColor(PLAN.roomLine);
+    ctx.setLineWidth(0.5);
+    ctx.rectangle(lx, y + 4, 10, 8);
+    ctx.stroke();
+    lx -= 14;
+  }
+
+  const noteH = 9 * page.notes.length;
+  const top = y + 24;
+  const drawH = h - 24 - noteH - 6;
+  const scale = Math.min(w / (page.maxX - page.minX), drawH / (page.maxY - page.minY));
+  const tx = (mx: number): number => x + (mx - page.minX) * scale;
+  const ty = (my: number): number => top + (my - page.minY) * scale;
+
+  // 1 m grid
+  p.setColor(PLAN.grid);
+  ctx.setLineWidth(0.4);
+  for (let g = Math.ceil(page.minX / 100) * 100; g <= page.maxX; g += 100) {
+    ctx.newPath();
+    ctx.moveTo(tx(g), ty(page.minY));
+    ctx.lineTo(tx(g), ty(page.maxY));
+    ctx.stroke();
+  }
+  for (let g = Math.ceil(page.minY / 100) * 100; g <= page.maxY; g += 100) {
+    ctx.newPath();
+    ctx.moveTo(tx(page.minX), ty(g));
+    ctx.lineTo(tx(page.maxX), ty(g));
+    ctx.stroke();
+  }
+
+  const path = (pts: [number, number][]): void => {
+    ctx.newPath();
+    pts.forEach(([px, py], i) => (i === 0 ? ctx.moveTo(tx(px), ty(py)) : ctx.lineTo(tx(px), ty(py))));
+    ctx.closePath();
+  };
+
+  for (const poly of page.polys) {
+    path(poly.pts);
+    p.setColor(poly.heated ? PLAN.heated : PLAN.unheated);
+    ctx.fillPreserve();
+    p.setColor(PLAN.roomLine);
+    ctx.setLineWidth(0.6);
+    ctx.stroke();
+  }
+  for (const wall of page.walls) {
+    p.setColor(PLAN.wall);
+    ctx.setLineWidth(Math.max(1, wall.t * scale));
+    ctx.newPath();
+    ctx.moveTo(tx(wall.x1), ty(wall.y1));
+    ctx.lineTo(tx(wall.x2), ty(wall.y2));
+    ctx.stroke();
+  }
+  for (const o of page.openings) {
+    path(o.pts);
+    p.setColor(COLOR.white);
+    ctx.fillPreserve();
+    p.setColor(o.door ? PLAN.door : PLAN.window);
+    ctx.setLineWidth(0.9);
+    ctx.stroke();
+  }
+  for (const poly of page.polys) {
+    if (poly.label.length === 0) continue;
+    const cx = poly.pts.reduce((s, [px]) => s + px, 0) / poly.pts.length;
+    const cy = poly.pts.reduce((s, [, py]) => s + py, 0) / poly.pts.length;
+    poly.label.forEach((line, i) => {
+      const lw = p.width(line, { size: TYPE.micro });
+      p.text(tx(cx) - lw / 2, ty(cy) - 8 + i * 8, line, { size: TYPE.micro, color: PLAN.label });
+    });
+  }
+  for (const d of page.dims) {
+    const vx = d.x2 - d.x1;
+    const vy = d.y2 - d.y1;
+    const len = Math.hypot(vx, vy);
+    if (len === 0) continue;
+    const ux = vx / len;
+    const uy = vy / len;
+    const nx = uy;
+    const ny = -ux;
+    const a: [number, number] = [d.x1 + nx * d.offset, d.y1 + ny * d.offset];
+    const b: [number, number] = [d.x2 + nx * d.offset, d.y2 + ny * d.offset];
+    p.setColor(PLAN.dim);
+    ctx.setLineWidth(0.8);
+    ctx.newPath();
+    ctx.moveTo(tx(a[0]), ty(a[1]));
+    ctx.lineTo(tx(b[0]), ty(b[1]));
+    ctx.stroke();
+    // 45-deg ticks plus SHORT extension stubs towards the measured points -
+    // a hand-placed chain far from its wall must not smear a line across the plan
+    const tick = 6 / scale;
+    const stub = Math.min(Math.abs(d.offset), 14 / scale);
+    const back = d.offset >= 0 ? -1 : 1;
+    for (const [ex, ey] of [a, b]) {
+      ctx.newPath();
+      ctx.moveTo(tx(ex - ux * tick + nx * tick), ty(ey - uy * tick + ny * tick));
+      ctx.lineTo(tx(ex + ux * tick - nx * tick), ty(ey + uy * tick - ny * tick));
+      ctx.stroke();
+      ctx.newPath();
+      ctx.moveTo(tx(ex), ty(ey));
+      ctx.lineTo(tx(ex + nx * back * stub), ty(ey + ny * back * stub));
+      ctx.stroke();
+    }
+    const label = d.label;
+    const lw = p.width(label, { size: TYPE.micro });
+    const side = d.offset >= 0 ? 1 : -1;
+    const mx = tx((a[0] + b[0]) / 2 + nx * side * (14 / scale));
+    const my = ty((a[1] + b[1]) / 2 + ny * side * (14 / scale));
+    p.fillRect(mx - lw / 2 - 2, my - 5, lw + 4, 10, COLOR.white);
+    p.text(mx - lw / 2, my - 4, label, { size: TYPE.micro, color: PLAN.dim });
+  }
+
+  // north arrow — compass angle is clockwise from plan-up
+  const nx0 = x + w - 22;
+  const ny0 = top + 30;
+  const dirX = Math.sin(page.northAngle);
+  const dirY = -Math.cos(page.northAngle);
+  p.setColor(PLAN.dim);
+  ctx.setLineWidth(1.4);
+  ctx.newPath();
+  ctx.moveTo(nx0 - dirX * 14, ny0 - dirY * 14);
+  ctx.lineTo(nx0 + dirX * 14, ny0 + dirY * 14);
+  ctx.stroke();
+  ctx.newPath();
+  ctx.moveTo(nx0 + dirX * 20, ny0 + dirY * 20);
+  ctx.lineTo(nx0 + dirX * 10 - dirY * 5, ny0 + dirY * 10 + dirX * 5);
+  ctx.lineTo(nx0 + dirX * 10 + dirY * 5, ny0 + dirY * 10 - dirX * 5);
+  ctx.closePath();
+  ctx.fill();
+  p.text(nx0 + dirX * 20 + 4, ny0 + dirY * 20 - 4, 'N', { size: TYPE.caption, bold: true, color: PLAN.dim });
+
+  let noteY = top + drawH + 4;
+  for (const note of page.notes) {
+    p.text(x, noteY, note, { size: TYPE.micro, color: COLOR.faint });
+    noteY += 9;
+  }
+}
+
+/** A plan page is one indivisible full-page piece on a fresh page. */
+function planGroup(block: Extract<Block, { kind: 'plan' }>): Group {
+  const h = BOTTOM_LIMIT - PAGE.marginTop - 4;
+  return {
+    ...GROUP_DEFAULTS,
+    card: false,
+    padX: 0,
+    padY: 0,
+    breakBefore: true,
+    spaceAfter: 0,
+    pieces: [{ h, draw: (pt, x, y, w) => drawPlan(pt, x, y, w, h, block.page) }],
+  };
+}
+
 function blockToGroup(p: Painter, block: Block): Group | null {
   switch (block.kind) {
     case 'kpis':
@@ -834,6 +1012,8 @@ function blockToGroup(p: Painter, block: Block): Group | null {
       return calloutGroup(p, block);
     case 'prose':
       return proseGroup(p, block);
+    case 'plan':
+      return planGroup(block);
     case 'pagebreak':
       return null;
   }

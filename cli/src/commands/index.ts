@@ -9,3 +9,4 @@ export { wandCommand } from './wand.ts';
 export { wandSetCommand } from './wand-set.ts';
 export { bauplanCommand } from './bauplan.ts';
 export { reportCommand } from './report.ts';
+export { floorplanCommand } from './floorplan.ts';

@@ -82,6 +82,8 @@ export interface Furniture {
 /** A dimension line. Coordinates in cm; `length` is converted to meters. */
 export interface Dimension {
   id: string;
+  /** Owning level id (empty string if the model has no explicit levels). */
+  level: string;
   xStart: number;
   yStart: number;
   xEnd: number;

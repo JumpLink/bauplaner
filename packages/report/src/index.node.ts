@@ -12,6 +12,7 @@ export * from './model.ts';
 export * from './theme.ts';
 export * from './format.ts';
 export * from './sanierungsplan.ts';
+export * from './grundriss.ts';
 
 import type { RenderResult, ReportDoc } from './model.ts';
 

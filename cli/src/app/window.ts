@@ -21,7 +21,7 @@ import { renderReportPdf } from '@bauplaner/report';
 
 import { APP_NAME } from './constants.ts';
 import { DocumentStore } from './document-store.ts';
-import { buildPlanForStore, exportPlanDialog } from './export-dialog.ts';
+import { buildGrundrissForStore, buildPlanForStore, exportGrundrissDialog, exportPlanDialog } from './export-dialog.ts';
 import { openDocumentDialog } from './open-dialog.ts';
 import { BauteileView } from './views/bauteile-view.ts';
 import { DokumentationView } from './views/dokumentation-view.ts';
@@ -146,6 +146,17 @@ export class MainWindow extends Adw.ApplicationWindow {
     });
     this.add_action(exportAction);
 
+    // Grundriss export — the floor-plan PDF from the same kernel as the CLI.
+    const grundrissAction = new Gio.SimpleAction({ name: 'export-grundriss' });
+    grundrissAction.set_enabled(false);
+    this.store.subscribe(() => grundrissAction.set_enabled(this.store.hasDocument));
+    grundrissAction.connect('activate', () => {
+      exportGrundrissDialog(this, this.store, (message) => {
+        this.toastOverlay.add_toast(new Adw.Toast({ title: message }));
+      });
+    });
+    this.add_action(grundrissAction);
+
     // Jump from the 3D inspector to a specific wall: switch to the target view
     // (Bauteile / Feuchte) and focus that wall. Param = "<view>:<wall-id>".
     const editWall = new Gio.SimpleAction({ name: 'edit-wall', parameterType: GLib.VariantType.new('s') });
@@ -253,6 +264,23 @@ export class MainWindow extends Adw.ApplicationWindow {
       });
     }
 
+    // Dev hook: export the Grundriss to BP_APP_EXPORT_GRUNDRISS=<path> — the real
+    // export path minus the file chooser, so a headless run verifies the button.
+    const grundrissHook = globalThis.process?.env?.BP_APP_EXPORT_GRUNDRISS;
+    if (grundrissHook) {
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        try {
+          const doc = buildGrundrissForStore(this.store);
+          if (!doc) throw new Error('kein Dokument geladen');
+          const { pages } = renderReportPdf(doc, grundrissHook);
+          console.error(`[BP_APP_EXPORT_GRUNDRISS] ${grundrissHook} (${pages} Seiten)`);
+        } catch (error) {
+          console.error(`[BP_APP_EXPORT_GRUNDRISS] fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return GLib.SOURCE_REMOVE;
+      });
+    }
+
     // Dev hook: trigger the inspector edit-jump (BP_APP_EDITWALL=<view>:<wall-id>).
     // Deferred to idle so it runs after the window is presented (focus/scroll
     // need a mapped window); activates the action directly (map-independent).
@@ -338,6 +366,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     menu.append('Projekt speichern', 'win.save-project');
     menu.append('Vom Datenträger neu laden', 'win.reload-project');
     menu.append('Sanierungsplan als PDF …', 'win.export-pdf');
+    menu.append('Grundriss als PDF …', 'win.export-grundriss');
     menu.append(`Über ${APP_NAME}`, 'app.about');
     menu.append('Beenden', 'app.quit');
     header.pack_end(new Gtk.MenuButton({ iconName: 'open-menu-symbolic', primary: true, menuModel: menu }));
