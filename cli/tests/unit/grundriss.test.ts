@@ -25,8 +25,8 @@ const HOME_XML =
   '<wall id="w2" level="AN" xStart="0" yStart="0" xEnd="0" yEnd="600" height="240" thickness="30"/>' +
   '<wall id="w3" level="SO" xStart="0" yStart="0" xEnd="800" yEnd="0" height="50" thickness="36"/>' +
   '<wall id="w4" level="OG" xStart="0" yStart="0" xEnd="800" yEnd="0" height="250" thickness="36"/>' +
-  '<doorOrWindow id="d1" level="EG" name="Tür" x="100" y="0" angle="0" width="90" depth="10" height="200" model="m"/>' +
-  '<doorOrWindow id="f1" level="EG" name="Fenster" x="300" y="0" angle="0" width="120" depth="10" height="140" model="m"/>' +
+  '<doorOrWindow id="doorOrWindow-d1" level="EG" name="Tür" x="100" y="0" angle="0" width="90" depth="10" height="200" model="m"/>' +
+  '<doorOrWindow id="doorOrWindow-f1" level="EG" name="Fenster" x="300" y="0" angle="0" width="120" depth="10" height="140" model="m"/>' +
   '<room id="r1" level="EG" name="Küche"><point x="0" y="0"/><point x="400" y="0"/><point x="400" y="300"/><point x="0" y="300"/></room>' +
   '<room id="r2" level="AN" name="Werkstatt (unbeheizt)"><point x="0" y="300"/><point x="400" y="300"/><point x="400" y="600"/><point x="0" y="600"/></room>' +
   '<room id="r3" level="OG" name="Bad"><point x="0" y="0"/><point x="400" y="0"/><point x="400" y="300"/><point x="0" y="300"/></room>' +
@@ -83,6 +83,7 @@ export default async () => {
     });
 
     await it('carries the compass and the door/window split', async () => {
+      // ids all start with "doorOrWindow-" - a window must not classify as door
       expect(pages[0]?.northAngle).toBeCloseTo(0.7854, 4);
       const eg = pages[0];
       expect(eg?.openings.filter((o) => o.door).length).toBe(1);

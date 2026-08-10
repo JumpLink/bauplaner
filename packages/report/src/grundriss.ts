@@ -80,9 +80,13 @@ function footprint(f: Furniture): [number, number][] {
   );
 }
 
-/** Doors carry "Tür"/"Tor" in their catalog names; everything else glazes. */
+/**
+ * Doors carry "Tür"/"Tor" in their catalog names; everything else glazes.
+ * Only the NAME is tested — every element id starts with "doorOrWindow-",
+ * so an id test on "door" would turn every window into a door.
+ */
 function isDoor(f: Furniture): boolean {
-  return /t(ü|u)r|tor\b|door/i.test(f.name) || /t(ü|u)r|eingang|door/i.test(f.id);
+  return /t(ü|u)r|tor\b|door\b|porte/i.test(f.name);
 }
 
 /** `1234.5` cm → `12,35 m` (comma decimals, two places). */
