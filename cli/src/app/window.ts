@@ -96,6 +96,12 @@ export class MainWindow extends Adw.ApplicationWindow {
   private readonly toastOverlay = new Adw.ToastOverlay();
   private readonly undoButton = new Gtk.Button({ iconName: 'edit-undo-symbolic', tooltipText: 'Rückgängig (Strg+Z)' });
   private readonly redoButton = new Gtk.Button({ iconName: 'edit-redo-symbolic', tooltipText: 'Wiederholen (Strg+Y)' });
+  /** Watches the opened file on disk (live reload on external edits). */
+  private fileMonitor: Gio.FileMonitor | null = null;
+  private watchedPath: string | null = null;
+  private reloadTimeoutId = 0;
+  /** Monotonic time of the last in-app save — its own write event is no "external" change. */
+  private lastSaveUs = 0;
 
   constructor(app: Adw.Application) {
     super({ application: app, title: APP_NAME, defaultWidth: 1000, defaultHeight: 680 });
@@ -121,6 +127,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     // Nav-badge pill styling needs a display; install it once the window realizes.
     this.connect('realize', () => this.installNavCss());
     saveAction.connect('activate', () => {
+      this.lastSaveUs = GLib.get_monotonic_time();
       const written = this.store.save();
       this.toastOverlay.add_toast(
         new Adw.Toast({ title: written ? `Projekt gespeichert: ${written}` : 'Kein Dokument geöffnet' }),
@@ -173,6 +180,23 @@ export class MainWindow extends Adw.ApplicationWindow {
     const app2 = this.get_application();
     app2?.set_accels_for_action('win.undo', ['<Control>z']);
     app2?.set_accels_for_action('win.redo', ['<Control>y', '<Control><Shift>z']);
+
+    // Live reload — the opened file is watched on disk; when another program
+    // rewrites it (Sweet Home 3D, a script, an agent editing the model), the
+    // document reloads in place and every view follows. Unsaved in-app edits
+    // are never clobbered silently: a toast offers the reload instead.
+    const reloadAction = new Gio.SimpleAction({ name: 'reload-project' });
+    reloadAction.set_enabled(false);
+    reloadAction.connect('activate', () => {
+      const p = this.store.path;
+      if (p) this.store.load(p);
+    });
+    this.add_action(reloadAction);
+    app2?.set_accels_for_action('win.reload-project', ['<Control>r']);
+    this.store.subscribe(() => {
+      reloadAction.set_enabled(this.store.path !== null);
+      this.armFileMonitor();
+    });
 
     // Navigate to a view by name (used by the Übersicht dashboard shortcuts).
     const showView = new Gio.SimpleAction({
@@ -241,6 +265,57 @@ export class MainWindow extends Adw.ApplicationWindow {
     }
   }
 
+  /**
+   * (Re-)arm the file monitor on the currently opened path. Watches the path
+   * the user opened (for a `.bauplan` that IS the bundle; the temp extraction
+   * is internal) and also a path whose last load failed — so a corrected file
+   * heals the error without reopening.
+   */
+  private armFileMonitor(): void {
+    const p = this.store.path;
+    if (p === this.watchedPath) return;
+    this.fileMonitor?.cancel();
+    this.fileMonitor = null;
+    this.watchedPath = p;
+    if (!p) return;
+    this.fileMonitor = Gio.File.new_for_path(p).monitor_file(Gio.FileMonitorFlags.NONE, null);
+    this.fileMonitor.connect('changed', (_monitor, _file, _other, event) => {
+      if (
+        event !== Gio.FileMonitorEvent.CHANGES_DONE_HINT &&
+        event !== Gio.FileMonitorEvent.CHANGED &&
+        event !== Gio.FileMonitorEvent.CREATED
+      )
+        return;
+      // A rewrite fires a burst of events — coalesce, then react once.
+      if (this.reloadTimeoutId) GLib.source_remove(this.reloadTimeoutId);
+      this.reloadTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+        this.reloadTimeoutId = 0;
+        this.onExternalFileChange();
+        return GLib.SOURCE_REMOVE;
+      });
+    });
+  }
+
+  /** React to the opened file changing on disk (debounced). */
+  private onExternalFileChange(): void {
+    const p = this.store.path;
+    if (!p) return;
+    // Our own save also touches the file — that is no external change.
+    if (GLib.get_monotonic_time() - this.lastSaveUs < 2_000_000) return;
+    if (this.store.geometryDirty || this.store.canUndo) {
+      const toast = new Adw.Toast({
+        title: 'Datei auf der Platte geändert — ungespeicherte Änderungen offen',
+        buttonLabel: 'Neu laden',
+        timeout: 0, // stays until answered; auto-hiding would silently drop the choice
+      });
+      toast.connect('button-clicked', () => this.store.load(p));
+      this.toastOverlay.add_toast(toast);
+      return;
+    }
+    this.store.load(p);
+    this.toastOverlay.add_toast(new Adw.Toast({ title: 'Extern geändert — neu geladen' }));
+  }
+
   private buildSidebar(): Adw.NavigationPage {
     const header = new Adw.HeaderBar();
     header.set_title_widget(new Adw.WindowTitle({ title: APP_NAME, subtitle: 'Nativer Bauplaner' }));
@@ -261,6 +336,7 @@ export class MainWindow extends Adw.ApplicationWindow {
 
     const menu = new Gio.Menu();
     menu.append('Projekt speichern', 'win.save-project');
+    menu.append('Vom Datenträger neu laden', 'win.reload-project');
     menu.append('Sanierungsplan als PDF …', 'win.export-pdf');
     menu.append(`Über ${APP_NAME}`, 'app.about');
     menu.append('Beenden', 'app.quit');
