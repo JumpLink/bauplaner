@@ -16,8 +16,12 @@ import type { Furniture, HomeData, Level } from '@bauplaner/core';
 
 import type { Block, PlanDim, PlanOpening, PlanPage, PlanPoly, PlanWall, ReportDoc } from './model.ts';
 
-/** Levels whose floors are within this vertical gap form one storey page. */
-const STOREY_GAP_CM = 150;
+/**
+ * Levels whose floors are within this vertical gap form one storey page.
+ * 1.2 m: a split ground floor (Sockel/annex offsets, tens of cm) stays one
+ * page, while even a shallow crawl cellar 1.4 m down becomes its own storey.
+ */
+const STOREY_GAP_CM = 120;
 
 /** Padding around the drawing content, in cm of model space. */
 const BOUNDS_PAD_CM = 90;
