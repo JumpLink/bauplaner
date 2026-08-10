@@ -155,6 +155,10 @@ export interface PlanPage {
   northAngle: number;
   /** Small print under the drawing (level elevations, wall heights, caveats). */
   notes: string[];
+  /** Title block (Plankopf) fields, when the caller provides them. */
+  object?: string;
+  datum?: string;
+  author?: string;
 }
 
 export type Block =

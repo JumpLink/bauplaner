@@ -839,24 +839,45 @@ function drawPlan(p: Painter, x: number, y: number, w: number, h: number, page: 
 
   // legend, right-aligned on the title line (north arrow goes above the plan)
   let lx = x + w - 8;
-  for (const [label, fill] of [['unbeheizt', PLAN.unheated], ['beheizte Zone', PLAN.heated]] as const) {
+  const legend: [string, string, boolean][] = [
+    ['Tür', PLAN.door, false],
+    ['Fenster', PLAN.window, false],
+    ['unbeheizt', PLAN.unheated, true],
+    ['beheizte Zone', PLAN.heated, true],
+  ];
+  for (const [label, colr, filled] of legend) {
     lx -= p.width(label, { size: TYPE.caption }) + 4;
     p.text(lx, y + 3, label, { size: TYPE.caption, color: COLOR.dim });
     lx -= 14;
-    p.fillRect(lx, y + 4, 10, 8, fill);
-    p.setColor(PLAN.roomLine);
-    ctx.setLineWidth(0.5);
+    if (filled) {
+      p.fillRect(lx, y + 4, 10, 8, colr);
+      p.setColor(PLAN.roomLine);
+    } else {
+      p.setColor(colr);
+    }
+    ctx.setLineWidth(0.8);
     ctx.rectangle(lx, y + 4, 10, 8);
     ctx.stroke();
     lx -= 14;
   }
 
+  // bottom strip: notes on the left, title block on the right
   const noteH = 9 * page.notes.length;
+  const titleBlockH = 62;
+  const stripH = Math.max(noteH + 24, titleBlockH) + 8;
   const top = y + 24;
-  const drawH = h - 24 - noteH - 6;
-  const scale = Math.min(w / (page.maxX - page.minX), drawH / (page.maxY - page.minY));
-  const tx = (mx: number): number => x + (mx - page.minX) * scale;
-  const ty = (my: number): number => top + (my - page.minY) * scale;
+  const drawH = h - 24 - stripH;
+
+  // snap to the next standard architectural scale (1 cm real = 28.346 pt at 1:1)
+  const PT_PER_CM = 28.346;
+  const STANDARD_SCALES = [50, 75, 100, 125, 150, 200, 250, 300, 400, 500];
+  const fit = Math.min(w / (page.maxX - page.minX), drawH / (page.maxY - page.minY));
+  const ratio = STANDARD_SCALES.find((r) => PT_PER_CM / r <= fit) ?? STANDARD_SCALES[STANDARD_SCALES.length - 1]!;
+  const scale = PT_PER_CM / ratio;
+  const padX = (w - (page.maxX - page.minX) * scale) / 2;
+  const padY = (drawH - (page.maxY - page.minY) * scale) / 2;
+  const tx = (mx: number): number => x + padX + (mx - page.minX) * scale;
+  const ty = (my: number): number => top + padY + (my - page.minY) * scale;
 
   // 1 m grid
   p.setColor(PLAN.grid);
@@ -973,11 +994,47 @@ function drawPlan(p: Painter, x: number, y: number, w: number, h: number, page: 
   ctx.fill();
   p.text(nx0 + dirX * 20 + 4, ny0 + dirY * 20 - 4, 'N', { size: TYPE.caption, bold: true, color: PLAN.dim });
 
-  let noteY = top + drawH + 4;
+  const stripTop = top + drawH + 8;
+
+  // scale bar: alternating 1 m segments, 5 m total (2 m at very large scales)
+  const barMeters = 100 * scale > 56 ? 2 : 5;
+  const seg = 100 * scale;
+  p.setColor(COLOR.text);
+  ctx.setLineWidth(0.8);
+  for (let i = 0; i < barMeters; i++) {
+    if (i % 2 === 0) p.fillRect(x + i * seg, stripTop, seg, 4, COLOR.text);
+    ctx.rectangle(x + i * seg, stripTop, seg, 4);
+    ctx.stroke();
+  }
+  p.text(x, stripTop + 6, '0', { size: TYPE.micro, color: COLOR.faint });
+  p.text(x + barMeters * seg - 4, stripTop + 6, `${barMeters} m`, { size: TYPE.micro, color: COLOR.faint });
+
+  let noteY = stripTop + 18;
   for (const note of page.notes) {
     p.text(x, noteY, note, { size: TYPE.micro, color: COLOR.faint });
     noteY += 9;
   }
+
+  // title block (Plankopf), bottom right
+  const tbW = 190;
+  const tbX = x + w - tbW;
+  const tbY = stripTop;
+  p.setColor(COLOR.line);
+  ctx.setLineWidth(0.8);
+  ctx.rectangle(tbX, tbY, tbW, titleBlockH);
+  ctx.stroke();
+  const rows: [string, string][] = [
+    ['Objekt', page.object ?? '—'],
+    ['Geschoss', page.title],
+    ['Maßstab', `1:${ratio}`],
+    ['Datum', page.datum ?? '—'],
+    ['Verfasser', page.author ?? '—'],
+  ];
+  rows.forEach(([label, value], i) => {
+    const ry = tbY + 4 + i * 11;
+    p.text(tbX + 6, ry, label.toUpperCase(), { size: TYPE.micro, color: COLOR.faint });
+    p.text(tbX + 58, ry, value, { size: TYPE.micro, width: tbW - 64, ellipsize: true });
+  });
 }
 
 /** A plan page is one indivisible full-page piece on a fresh page. */

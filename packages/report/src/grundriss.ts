@@ -149,9 +149,12 @@ export function buildGrundrissDoc(home: HomeData, opts: GrundrissOptions = {}): 
   for (const r of home.rooms) occupied.add(r.level);
   const clusters = clusterStoreys(home.levels, (id) => occupied.has(id));
 
-  const pages = clusters.map((cluster, i) =>
-    buildPage(cluster, home, storeyTitle(cluster, i, clusters), opts.notes ?? []),
-  );
+  const pages = clusters.map((cluster, i) => ({
+    ...buildPage(cluster, home, storeyTitle(cluster, i, clusters), opts.notes ?? []),
+    ...(opts.object ? { object: opts.object } : {}),
+    ...(opts.datum ? { datum: opts.datum } : {}),
+    ...(opts.verfasser ? { author: opts.verfasser } : {}),
+  }));
   const heated = home.rooms
     .filter((r) => isHeatedRoomName(r.name))
     .reduce((s, r) => s + r.area, 0);
