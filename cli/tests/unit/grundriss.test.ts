@@ -98,12 +98,15 @@ export default async () => {
   });
 
   await describe('clusterStoreys', async () => {
-    await it('starts a new storey at a gap larger than 1.5 m', async () => {
+    await it('starts a new storey at a gap larger than 1.2 m', async () => {
       const mk = (id: string, elevation: number) =>
         ({ id, name: id, elevation, height: 250, floorThickness: 12, visible: true });
       const clusters = clusterStoreys([mk('a', 0), mk('b', 100), mk('c', 300)], () => true);
       expect(clusters.length).toBe(2);
       expect(clusters[0]?.length).toBe(2);
+      // a shallow crawl cellar 1.4 m below ground is its own storey
+      const withCellar = clusterStoreys([mk('k', -140), mk('a', 0)], () => true);
+      expect(withCellar.length).toBe(2);
     });
   });
 };
