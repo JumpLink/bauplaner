@@ -92,6 +92,8 @@ function bodyOf(block: Block): string {
       return block.items.map((b) => `${b.label}|${b.value}`).join(' ');
     case 'scale':
       return block.markers.map((m) => m.label).join(' ');
+    case 'plan':
+      return `${block.page.title} ${block.page.notes.join(' ')}`;
     case 'pagebreak':
       return '';
   }

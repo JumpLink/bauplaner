@@ -13,7 +13,7 @@ import Gtk from '@girs/gtk-4.0';
 
 import { deriveEnvelope } from '@bauplaner/core';
 import { PRESET_ASSEMBLIES, presetByKey, vergleicheVarianten } from '@bauplaner/materials';
-import { buildSanierungsplan, renderReportPdf, type GebaeudeTeil } from '@bauplaner/report';
+import { buildGrundrissDoc, buildSanierungsplan, renderReportPdf, type GebaeudeTeil } from '@bauplaner/report';
 
 import type { DocumentStore } from './document-store.ts';
 import { buildEnergyScreenings } from '../energy.ts';
@@ -137,6 +137,61 @@ export function exportPlanDialog(
       }
       const { pages } = renderReportPdf(plan, target);
       onDone(`Sanierungsplan exportiert (${pages} Seiten): ${target}`);
+    } catch (error) {
+      onDone(`Export fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  });
+}
+
+/**
+ * Build the Grundriss document for the currently open model — same kernel as
+ * the CLI's `grundriss` command, so both exports draw the same plan.
+ */
+export function buildGrundrissForStore(store: DocumentStore): ReturnType<typeof buildGrundrissDoc> | null {
+  const home = store.home;
+  if (!home) return null;
+  const source = store.projectPath ?? store.sh3dPath ?? store.path;
+  return buildGrundrissDoc(home, {
+    object: store.project?.meta?.name || (source ? baseName(source) : 'Objekt'),
+    datum: heute(),
+  });
+}
+
+/** Ask for a destination and write the Grundriss PDF there. */
+export function exportGrundrissDialog(
+  window: Gtk.Window,
+  store: DocumentStore,
+  onDone: (message: string) => void,
+): void {
+  if (!store.hasDocument) {
+    onDone('Kein Dokument geöffnet');
+    return;
+  }
+  const filter = new Gtk.FileFilter({ name: 'PDF-Dokument (*.pdf)' });
+  filter.add_pattern('*.pdf');
+  const filters = Gio.ListStore.new(Gtk.FileFilter.$gtype);
+  filters.append(filter);
+  const dialog = new Gtk.FileDialog({ title: 'Grundriss als PDF exportieren' });
+  dialog.set_filters(filters);
+  dialog.set_default_filter(filter);
+  dialog.set_initial_name(suggestedName(store).replace(/-sanierungsplan\.pdf$/, '-grundriss.pdf'));
+  dialog.save(window, null, (_source, result) => {
+    let path: string | null = null;
+    try {
+      path = dialog.save_finish(result)?.get_path() ?? null;
+    } catch {
+      return; // cancelled — say nothing
+    }
+    if (!path) return;
+    const target = /\.pdf$/i.test(path) ? path : `${path}.pdf`;
+    try {
+      const doc = buildGrundrissForStore(store);
+      if (!doc) {
+        onDone('Kein Dokument geöffnet');
+        return;
+      }
+      const { pages } = renderReportPdf(doc, target);
+      onDone(`Grundriss exportiert (${pages} Seiten): ${target}`);
     } catch (error) {
       onDone(`Export fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
     }

@@ -192,6 +192,7 @@ export function parseSh3dBytes(bytes: Uint8Array): HomeData {
     const lengthCm = Math.hypot(xEnd - xStart, yEnd - yStart);
     return {
       id: str(d.id).replace(/^dimensionLine-/, ''),
+      level: str(d.level),
       xStart,
       yStart,
       xEnd,

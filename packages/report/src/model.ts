@@ -105,6 +105,58 @@ export interface VariantCard {
   notes: string[];
 }
 
+/** A room polygon on a plan page. Coordinates in cm (model space). */
+export interface PlanPoly {
+  pts: [number, number][];
+  /** Inside the heated envelope — drives the fill colour. */
+  heated: boolean;
+  /** Centred label lines (name, area), possibly empty. */
+  label: string[];
+}
+
+/** A wall segment on a plan page; `t` is the thickness in cm. */
+export interface PlanWall {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  t: number;
+}
+
+/** A door or window, as its oriented footprint rectangle. */
+export interface PlanOpening {
+  pts: [number, number][];
+  door: boolean;
+}
+
+/** A dimension chain: the measured line, its perpendicular offset, a label. */
+export interface PlanDim {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  offset: number;
+  label: string;
+}
+
+/** One storey of the floor plan, ready to be scaled into a page. */
+export interface PlanPage {
+  title: string;
+  /** Content bounds in cm — the renderer fits these into the page. */
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  polys: PlanPoly[];
+  walls: PlanWall[];
+  openings: PlanOpening[];
+  dims: PlanDim[];
+  /** Compass north, clockwise from plan-up, in radians. */
+  northAngle: number;
+  /** Small print under the drawing (level elevations, wall heights, caveats). */
+  notes: string[];
+}
+
 export type Block =
   | { kind: 'kpis'; title?: string; description?: string; items: Kpi[] }
   | { kind: 'scale'; title: string; description?: string; bands: ScaleBand[]; markers: ScaleMarker[] }
@@ -122,6 +174,7 @@ export type Block =
   | { kind: 'variants'; title?: string; description?: string; items: VariantCard[] }
   | { kind: 'callout'; tone: Tone; title: string; text: string }
   | { kind: 'prose'; title?: string; description?: string; paragraphs: string[] }
+  | { kind: 'plan'; page: PlanPage }
   | { kind: 'pagebreak' };
 
 /** What a render produced. */

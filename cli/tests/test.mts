@@ -31,6 +31,7 @@ import works from './unit/works.test.ts';
 import oekobilanz from './unit/oekobilanz.test.ts';
 import varianten from './unit/varianten.test.ts';
 import report from './unit/report.test.ts';
+import grundriss from './unit/grundriss.test.ts';
 
 run({
   bauphysik,
@@ -61,4 +62,5 @@ run({
   oekobilanz,
   varianten,
   report,
+  grundriss,
 });
