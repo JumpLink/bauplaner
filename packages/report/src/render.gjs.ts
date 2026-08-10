@@ -1009,14 +1009,15 @@ function drawPlan(p: Painter, x: number, y: number, w: number, h: number, page: 
   p.text(x, stripTop + 6, '0', { size: TYPE.micro, color: COLOR.faint });
   p.text(x + barMeters * seg - 4, stripTop + 6, `${barMeters} m`, { size: TYPE.micro, color: COLOR.faint });
 
+  const tbW = 190;
   let noteY = stripTop + 18;
   for (const note of page.notes) {
-    p.text(x, noteY, note, { size: TYPE.micro, color: COLOR.faint });
+    // stay clear of the title block on the right
+    p.text(x, noteY, note, { size: TYPE.micro, color: COLOR.faint, width: w - tbW - 16, ellipsize: true });
     noteY += 9;
   }
 
   // title block (Plankopf), bottom right
-  const tbW = 190;
   const tbX = x + w - tbW;
   const tbY = stripTop;
   p.setColor(COLOR.line);
