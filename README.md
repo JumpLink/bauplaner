@@ -33,7 +33,10 @@ materials** — and *calculating* the real retrofit, not just drawing it.
   Finanzberater, and explicit about what it is not.
 
 Also usable headless via the CLI (`@bauplaner/cli`: `inspect`, `wand`,
-`lehmgraben`, `bauteil`, `feuchte`, `materials`, `varianten`, `report`).
+`envelope`, `lehmgraben`, `bauteil`, `feuchte`, `materials`, `varianten`,
+`report`). `envelope` is the Aufmaß of the heated envelope — exterior wall area
+net of its openings, the window/door split, and the ceiling/floor area against
+unheated space or the ground, each pro-rated from the model geometry.
 
 Status: **early** — a read-only diagnostic surface today (Sweet Home 3D stays the
 geometry editor; a project sidecar adds the retrofit layer). See the

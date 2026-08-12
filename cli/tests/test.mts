@@ -32,6 +32,7 @@ import oekobilanz from './unit/oekobilanz.test.ts';
 import varianten from './unit/varianten.test.ts';
 import report from './unit/report.test.ts';
 import grundriss from './unit/grundriss.test.ts';
+import aufmass from './unit/aufmass.test.ts';
 
 run({
   bauphysik,
@@ -63,4 +64,5 @@ run({
   varianten,
   report,
   grundriss,
+  aufmass,
 });

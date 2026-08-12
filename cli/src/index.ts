@@ -18,6 +18,7 @@ import {
   variantenCommand,
   feuchteCommand,
   wandCommand,
+  envelopeCommand,
   wandSetCommand,
   bauplanCommand,
   reportCommand,
@@ -42,6 +43,7 @@ async function main(): Promise<void> {
     .command(variantenCommand)
     .command(feuchteCommand)
     .command(wandCommand)
+    .command(envelopeCommand)
     .command(wandSetCommand)
     .command(bauplanCommand)
     .command(reportCommand)
