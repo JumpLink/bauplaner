@@ -30,6 +30,7 @@ export {
 export * from './geometry.ts';
 export * from './scene.ts';
 export * from './envelope.ts';
+export * from './aufmass.ts';
 export * from './commands.ts';
 export * from './tga.ts';
 export * from './doc.ts';

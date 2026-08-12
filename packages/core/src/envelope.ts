@@ -10,7 +10,7 @@
  * to rank losses and estimate demand, not a DIN V 18599 balance.
  */
 
-import { footprint, wallAreaM2, wallLengthM } from './geometry.ts';
+import { footprint, pointInPolygon, wallAreaM2, wallLengthM } from './geometry.ts';
 import { computeOpenings } from './scene.ts';
 import type { HomeData, Room, Wall } from './sh3d/types.ts';
 
@@ -40,18 +40,6 @@ export interface Envelope {
   heatedFloorAreaM2: number;
   /** Heated air volume, m³. */
   heatedVolumeM3: number;
-}
-
-/** Ray-casting point-in-polygon; polygon vertices as [x, y] pairs. */
-function inPolygon(x: number, y: number, verts: [number, number][]): boolean {
-  let inside = false;
-  for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
-    const [xi, yi] = verts[i];
-    const [xj, yj] = verts[j];
-    const crosses = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
-    if (crosses) inside = !inside;
-  }
-  return inside;
 }
 
 function round(n: number, digits = 2): number {
@@ -97,8 +85,8 @@ export function deriveEnvelope(home: HomeData): Envelope {
       const ny = -dx / len;
       const off = w.thickness / 2 + SIDE_PROBE_CM;
       const rooms = roomsFor(w.level);
-      const a = rooms.some((r) => inPolygon(mx + nx * off, my + ny * off, r.vertices));
-      const b = rooms.some((r) => inPolygon(mx - nx * off, my - ny * off, r.vertices));
+      const a = rooms.some((r) => pointInPolygon(mx + nx * off, my + ny * off, r.vertices));
+      const b = rooms.some((r) => pointInPolygon(mx - nx * off, my - ny * off, r.vertices));
       exterior = a !== b; // exactly one side inside a room
     }
     if (!exterior) continue;

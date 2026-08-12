@@ -97,6 +97,26 @@ export function polygonCentroid(points: readonly (readonly [number, number])[]):
   return [cx / (3 * twiceArea), cy / (3 * twiceArea)];
 }
 
+/**
+ * Ray-casting point-in-polygon test over `[x, y]` tuples (any unit, any
+ * winding). Points exactly on an edge are undefined — every caller probes a
+ * point deliberately offset from the geometry, so that never decides an area.
+ */
+export function pointInPolygon(
+  x: number,
+  y: number,
+  verts: readonly (readonly [number, number])[],
+): boolean {
+  let inside = false;
+  for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+    const [xi, yi] = verts[i];
+    const [xj, yj] = verts[j];
+    const crosses = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
 export interface Footprint {
   widthM: number;
   depthM: number;

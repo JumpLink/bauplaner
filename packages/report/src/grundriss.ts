@@ -4,24 +4,20 @@
  *
  * Storeys are found by clustering levels on elevation (Sockel, annex and main
  * ground floor all live within one band), the heated envelope is read from the
- * room names — a room named "… (unbeheizt)" is outside it. That convention
- * survives a round-trip through Sweet Home 3D, where a project sidecar with a
- * per-room flag would not.
+ * room names — a room named "… (unbeheizt)" is outside it. Both are model
+ * conventions rather than drawing details, so both live in the kernel
+ * (`clusterStoreys` / `isHeatedRoomName` in `@bauplaner/core`) and are shared
+ * with the Aufmaß; a second copy here is how a plan and its takeoff would end
+ * up disagreeing about which rooms are heated.
  *
  * Pure of cairo (and of any clock), so clustering, classification and paging
  * can be asserted on without a GJS runtime.
  */
 
+import { clusterStoreys, isHeatedRoomName } from '@bauplaner/core';
 import type { Furniture, HomeData, Level } from '@bauplaner/core';
 
 import type { Block, PlanDim, PlanOpening, PlanPage, PlanPoly, PlanWall, ReportDoc } from './model.ts';
-
-/**
- * Levels whose floors are within this vertical gap form one storey page.
- * 1.2 m: a split ground floor (Sockel/annex offsets, tens of cm) stays one
- * page, while even a shallow crawl cellar 1.4 m down becomes its own storey.
- */
-const STOREY_GAP_CM = 120;
 
 /** Padding around the drawing content, in cm of model space. */
 const BOUNDS_PAD_CM = 90;
@@ -34,30 +30,6 @@ export interface GrundrissOptions {
   verfasser?: string;
   /** Extra small print appended to every page (measured heights, caveats). */
   notes?: string[];
-}
-
-/** A room counts as heated unless its name marks it "(unbeheizt)". */
-export function isHeatedRoomName(name: string): boolean {
-  return !/unbeheizt/i.test(name);
-}
-
-/**
- * Group the occupied levels into storeys by floor elevation: a gap larger
- * than {@link STOREY_GAP_CM} starts the next storey. Returns the clusters
- * bottom-up.
- */
-export function clusterStoreys(levels: Level[], occupied: (levelId: string) => boolean): Level[][] {
-  const used = levels.filter((l) => occupied(l.id)).sort((a, b) => a.elevation - b.elevation);
-  const clusters: Level[][] = [];
-  for (const level of used) {
-    const current = clusters[clusters.length - 1];
-    if (current && level.elevation - current[current.length - 1].elevation <= STOREY_GAP_CM) {
-      current.push(level);
-    } else {
-      clusters.push([level]);
-    }
-  }
-  return clusters;
 }
 
 /** Untergeschoss / Erdgeschoss / 1.–n. Obergeschoss, by position and elevation. */

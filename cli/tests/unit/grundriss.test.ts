@@ -1,13 +1,9 @@
 import { describe, it, expect } from '@gjsify/unit';
 
 import { parseSh3dBytes } from '@bauplaner/core';
-import {
-  buildGrundrissDoc,
-  clusterStoreys,
-  isHeatedRoomName,
-  type Block,
-  type PlanPage,
-} from '@bauplaner/report';
+import { buildGrundrissDoc, type Block, type PlanPage } from '@bauplaner/report';
+// isHeatedRoomName / clusterStoreys moved into @bauplaner/core (shared with the
+// Aufmaß) and are covered by aufmass.test.ts.
 import { zipSync, strToU8 } from 'fflate';
 
 // A two-storey house whose ground floor is spread over three levels (Sockel,
@@ -42,15 +38,6 @@ const planPages = (blocks: Block[]): PlanPage[] =>
   blocks.filter((b): b is Extract<Block, { kind: 'plan' }> => b.kind === 'plan').map((b) => b.page);
 
 export default async () => {
-  await describe('isHeatedRoomName', async () => {
-    await it('reads the "(unbeheizt)" convention, case-insensitively', async () => {
-      expect(isHeatedRoomName('Küche')).toBe(true);
-      expect(isHeatedRoomName('Werkstatt (unbeheizt)')).toBe(false);
-      expect(isHeatedRoomName('Garage (UNBEHEIZT, Ausbau geplant)')).toBe(false);
-      expect(isHeatedRoomName('')).toBe(true);
-    });
-  });
-
   await describe('buildGrundrissDoc', async () => {
     const doc = buildGrundrissDoc(home(), { object: 'Teststraße 1', datum: '1. August 2026' });
     const pages = planPages(doc.blocks);
@@ -95,19 +82,6 @@ export default async () => {
       const text = prose?.kind === 'prose' ? prose.paragraphs.join(' ') : '';
       // Küche 12 m² + Bad 12 m²; the unheated Werkstatt stays out
       expect(text.includes('24 m²')).toBe(true);
-    });
-  });
-
-  await describe('clusterStoreys', async () => {
-    await it('starts a new storey at a gap larger than 1.2 m', async () => {
-      const mk = (id: string, elevation: number) =>
-        ({ id, name: id, elevation, height: 250, floorThickness: 12, visible: true });
-      const clusters = clusterStoreys([mk('a', 0), mk('b', 100), mk('c', 300)], () => true);
-      expect(clusters.length).toBe(2);
-      expect(clusters[0]?.length).toBe(2);
-      // a shallow crawl cellar 1.4 m below ground is its own storey
-      const withCellar = clusterStoreys([mk('k', -140), mk('a', 0)], () => true);
-      expect(withCellar.length).toBe(2);
     });
   });
 };
