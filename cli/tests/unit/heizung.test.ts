@@ -7,6 +7,7 @@ import {
   computeKostenDesWartens,
   einkommensBonusPunkte,
   formatDatum,
+  HEIZUNG_ZEITREIHEN,
   heizungsHoechstbetragAm,
   istIsoDatum,
   klimageschwindigkeitsBonusPunkteAm,
@@ -337,6 +338,24 @@ export default async () => {
       expect(w.stichtage[1].aenderungen.length).toBe(2);
     });
 
+    await it('leaves out an envelope rule the heating figure cannot follow', async () => {
+      // The WPB bonus (Nr. 5.1 a) changes on 01.01.2027 and is in the full
+      // registry, but it moves no euro in this table — so it must not appear
+      // next to one.
+      const w = computeKostenDesWartens(vorhaben({ antragsdatum: '2026-12-01' }), '2027-01-31');
+      expect(w.stichtage[0].aenderungen.some((a) => a.reihe === 'wpb-bonus')).toBe(false);
+      expect(BEG_ZEITREIHEN.some((e) => e.id === 'wpb-bonus')).toBe(true); // still registered
+      expect(HEIZUNG_ZEITREIHEN.some((e) => e.id === 'wpb-bonus')).toBe(false);
+    });
+
+    await it('reports the date each amount was really computed for', async () => {
+      // 2020 is before the Richtlinie; the subsidy is the one for 21.07.2026,
+      // so that is the date the row must carry.
+      const w = computeKostenDesWartens(vorhaben({ antragsdatum: '2020-01-01' }), '2027-06-01');
+      expect(w.vonDatum).toBe('2026-07-21');
+      expect(w.foerderungVonEur).toBe(6000); // 30 % — the 2026 rate, as labelled
+    });
+
     await it('shows waiting paying off when the old plant comes of age', async () => {
       // A gas heating from 2007 turns 20 on 31.12.2027 (an unknown month reads
       // as the year's last day), which unlocks 8 further points.
@@ -351,6 +370,66 @@ export default async () => {
       expect(w.stichtage.length).toBe(1);
       expect(w.stichtage[0].datum).toBe('2027-12-31');
       expect(w.stichtage[0].aenderungen[0].reihe).toBe('altanlage-mindestalter');
+    });
+
+    await it('stays quiet about a plant that comes of age after the bonus died', async () => {
+      // Commissioned 2009 → 20 years on 31.12.2029, by which time the
+      // Klimageschwindigkeits-Bonus has been gone since 01.08.2028. Announcing
+      // it as reachable would put "ab hier erreichbar" on a row that costs money.
+      const w = computeKostenDesWartens(
+        vorhaben({
+          antragsdatum: '2029-06-01',
+          altanlage: { typ: 'gas', funktionstuechtig: true, inbetriebnahme: '2009' },
+        }),
+        '2030-06-01',
+      );
+      expect(w.stichtage.some((s) => s.aenderungen.some((a) => a.reihe === 'altanlage-mindestalter'))).toBe(false);
+    });
+  });
+
+  await describe('eingabepruefung', async () => {
+    /** Runs `fn` and returns its error message, or '' when it did not throw. */
+    function fehler(fn: () => unknown): string {
+      try {
+        fn();
+        return '';
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e);
+      }
+    }
+
+    await it('refuses a cost that is not a number instead of reporting NaN €', async () => {
+      expect(fehler(() => computeHeizungsfoerderung(vorhaben({ fachunternehmenEur: Number.NaN }))).length > 0).toBe(true);
+      expect(fehler(() => computeHeizungsfoerderung(vorhaben({ fachunternehmenEur: -5000 }))).includes('negativ')).toBe(true);
+    });
+
+    await it('refuses a negative income rather than paying the top bonus for it', async () => {
+      // Clamping -35.000 € to 0 would answer a typo with 40 bonus points and
+      // the 80 % ceiling — the most generous result the Richtlinie has.
+      expect(fehler(() => computeHeizungsfoerderung(vorhaben({ haushaltsEinkommenEur: -35_000 }))).includes('negativ')).toBe(true);
+    });
+
+    await it('refuses a malformed application date before comparing it', async () => {
+      // 'abc' > '2030-12-31' as strings, so an unchecked date would silently
+      // take the after-expiry branch.
+      expect(fehler(() => computeHeizungsfoerderung(vorhaben({ antragsdatum: 'abc' }))).includes('antragsdatum')).toBe(true);
+    });
+
+    await it('refuses to leave four-digit years, which string order depends on', async () => {
+      // '10019-12-31' < '2026-08-13' as strings — a plant from the year 9999
+      // would otherwise pass the 20-year test.
+      expect(fehler(() => plusJahre('9999-12-31', 20)).includes('9999')).toBe(true);
+      expect(plusJahre('1979-12-31', 20)).toBe('1999-12-31');
+    });
+
+    await it('reports a broken series instead of dying on it', async () => {
+      // pruefeZeitreihe exists to catch malformed dates; it must not throw on one.
+      const kaputt = [
+        { gueltigAb: '2026-01-01', gueltigBis: '2026-13-31', wert: 1, quelle: 'x', abgerufenAm: '2026-08-13' },
+        { gueltigAb: '2027-01-01', wert: 2, quelle: 'x', abgerufenAm: '2026-08-13' },
+      ];
+      const probleme = pruefeZeitreihe(kaputt);
+      expect(probleme.some((p) => p.includes('gueltigBis'))).toBe(true);
     });
   });
 };

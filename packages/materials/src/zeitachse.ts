@@ -179,10 +179,18 @@ export function tageZwischen(von: string, bis: string): number {
  * Shift a date by whole years, clamping the day to the target month (29.02 +
  * 1 year → 28.02). Used for age thresholds such as the 20 years a gas heating
  * must have run before its replacement earns the Klimageschwindigkeits-Bonus.
+ *
+ * Refuses to leave four digits, because everything here compares dates as
+ * **strings**: `'10019-12-31' < '2026-08-13'` is true, so a five-digit year
+ * would not merely look odd, it would silently invert every comparison it takes
+ * part in — an age threshold in the year 10019 would read as already passed.
  */
 export function plusJahre(datum: string, jahre: number): string {
   const [j, m, t] = parseIso(datum);
   const zielJahr = j + jahre;
+  if (!Number.isInteger(zielJahr) || zielJahr < 0 || zielJahr > 9999) {
+    throw new Error(`Jahr ${zielJahr} liegt außerhalb des darstellbaren Bereichs 0000–9999 (aus ${datum} + ${jahre}).`);
+  }
   return iso(zielJahr, m, Math.min(t, tageImMonat(zielJahr, m)));
 }
 
@@ -231,7 +239,11 @@ export function pruefeZeitreihe<T>(reihe: Zeitreihe<T>): string[] {
       const vor = reihe[i - 1];
       if (s.gueltigAb <= vor.gueltigAb) probleme.push(`Spanne ${i}: nicht chronologisch sortiert`);
       if (vor.gueltigBis === undefined) probleme.push(`Spanne ${i - 1}: offenes Ende, aber es folgt eine Spanne`);
-      else if (tageZwischen(vor.gueltigBis, s.gueltigAb) !== 1) {
+      // Only measure the join when both ends parse. `tageZwischen` throws on a
+      // malformed date, and a malformed date is the very thing this function
+      // was called to report — it must not die on its own subject matter and
+      // take the rest of the problem list with it.
+      else if (istIsoDatum(vor.gueltigBis) && istIsoDatum(s.gueltigAb) && tageZwischen(vor.gueltigBis, s.gueltigAb) !== 1) {
         probleme.push(`Spanne ${i}: Lücke oder Überlappung zu Spanne ${i - 1}`);
       }
     }

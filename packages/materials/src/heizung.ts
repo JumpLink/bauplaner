@@ -32,6 +32,7 @@ import {
   formatEuro,
   formatProzent,
   formatPunkte,
+  istIsoDatum,
   plusJahre,
   stichtageAus,
   wertAm,
@@ -252,8 +253,42 @@ const KLIMA_MIT_ALTERSGRENZE: readonly AltanlageTyp[] = ['gas', 'biomasse'];
 /** Minimum age of a gas/biomass plant at the application date, in years. */
 export const KLIMA_MINDESTALTER_JAHRE = 20;
 
+/**
+ * First date the Klimageschwindigkeits-Bonus is worth nothing, read out of the
+ * series rather than repeated as a literal. A date written twice is a date that
+ * gets amended once.
+ */
+export const KLIMA_BONUS_ENDE: string = (() => {
+  const ohne = KLIMAGESCHWINDIGKEITS_BONUS_PUNKTE.find((s) => s.wert === 0);
+  if (!ohne) throw new Error('KLIMAGESCHWINDIGKEITS_BONUS_PUNKTE hat keine Null-Spanne.');
+  return ohne.gueltigAb;
+})();
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Reject an amount that is not a non-negative, finite number.
+ *
+ * Both failure modes reach here from real input and both are silent otherwise:
+ * `Math.max(0, NaN)` is `NaN`, so a mistyped cost would flow all the way into
+ * `foerderungEur` and render as `NaN €`; and clamping a negative income to zero
+ * would answer a typo like `-35 000 €` with the *most generous* result the
+ * Richtlinie has — 40 bonus points and the 80 % ceiling. A wrong number must not
+ * be quietly turned into a confident one.
+ */
+function pruefeBetrag(wert: number | undefined, name: string): number {
+  if (wert === undefined) return 0;
+  if (!Number.isFinite(wert)) throw new Error(`${name} muss eine Zahl sein (war: ${wert}).`);
+  if (wert < 0) throw new Error(`${name} darf nicht negativ sein (war: ${wert}).`);
+  return wert;
+}
+
+/** Reject a date that is not ISO `YYYY-MM-DD`, naming the field that carried it. */
+function pruefeDatum(datum: string, name: string): string {
+  if (!istIsoDatum(datum)) throw new Error(`${name} muss ISO YYYY-MM-DD sein (war: "${datum}").`);
+  return datum;
 }
 
 function reiheWert(reihe: Zeitreihe<number>, datum: string, was: string): number {
@@ -423,7 +458,13 @@ export interface BonusPosten {
 }
 
 export interface HeizungsfoerderungResult {
-  /** The application date the rules were read at (clamped into the modelled range). */
+  /**
+   * The application date the rules were actually read at. Equal to the input,
+   * except for a date before the Richtlinie came into force, which is pulled
+   * forward to that day (with a Hinweis). A date past the end of the
+   * Geltungsdauer is left alone — the last spans are open, so it needs no
+   * moving, only the warning it gets.
+   */
   antragsdatum: string;
   /** False when Nr. 5.3 excludes the plant outright — then everything below is 0. */
   foerderfaehig: boolean;
@@ -500,14 +541,16 @@ function imGeltungsbereich(datum: string): { datum: string; hinweise: string[] }
  * @returns The subsidy plus every condition it rests on — see {@link HeizungsfoerderungResult}.
  */
 export function computeHeizungsfoerderung(input: HeizungsfoerderungInput): HeizungsfoerderungResult {
-  const bereich = imGeltungsbereich(input.antragsdatum);
+  // Validate before comparing: `imGeltungsbereich` decides on string order, and
+  // "abc" > "2030-12-31" would quietly route a typo into the after-expiry branch.
+  const bereich = imGeltungsbereich(pruefeDatum(input.antragsdatum, 'antragsdatum'));
   const datum = bereich.datum;
   const hinweise = [...bereich.hinweise];
 
   const massnahme = input.massnahme ?? WAERMEPUMPE;
   const ausfuehrung = input.ausfuehrung ?? 'fachunternehmen';
-  const fachEur = Math.max(0, input.fachunternehmenEur ?? 0);
-  const materialEur = Math.max(0, input.materialEigenleistungEur ?? 0);
+  const fachEur = pruefeBetrag(input.fachunternehmenEur, 'fachunternehmenEur');
+  const materialEur = pruefeBetrag(input.materialEigenleistungEur, 'materialEigenleistungEur');
   const gesamtkosten = round2(fachEur + materialEur);
   const hoechstbetrag = heizungsHoechstbetragAm(datum);
 
@@ -607,18 +650,18 @@ export function computeHeizungsfoerderung(input: HeizungsfoerderungInput): Heizu
       hinweis: !klimaPruefung.erfuellt
         ? klimaPruefung.grund
         : klimaSatz === 0
-          ? `Die Voraussetzungen sind erfüllt, aber der Bonus entfällt für Anträge ab ${formatDatum('2028-08-01')} (Nr. 8.4.4).`
+          ? `Die Voraussetzungen sind erfüllt, aber der Bonus entfällt für Anträge ab ${formatDatum(KLIMA_BONUS_ENDE)} (Nr. 8.4.4).`
           : 'Setzt die fachgerechte Demontage und Entsorgung der Altanlage voraus (Nr. 8.4.4) — mit dem Verwendungsnachweis belegen.',
     },
   ];
 
   // Einkommens-Bonus (Nr. 8.4.5) — selbstnutzend, und nur mit bekanntem zvE.
   const selbstnutzend = input.selbstnutzend ?? true;
-  const kinder = Math.max(0, Math.trunc(input.kinderUnter18 ?? 0));
+  const kinder = Math.trunc(pruefeBetrag(input.kinderUnter18, 'kinderUnter18'));
   const massgeblich =
     input.haushaltsEinkommenEur === undefined
       ? undefined
-      : massgeblichesEinkommen(Math.max(0, input.haushaltsEinkommenEur), kinder);
+      : massgeblichesEinkommen(pruefeBetrag(input.haushaltsEinkommenEur, 'haushaltsEinkommenEur'), kinder);
   const einkommensPunkte = selbstnutzend && massgeblich !== undefined ? einkommensBonusPunkte(massgeblich) : 0;
   boni.push({
     id: 'einkommen',
@@ -734,6 +777,18 @@ export const BEG_ZEITREIHEN: readonly ZeitreiheEintrag[] = [
 ];
 
 /**
+ * The subset of {@link BEG_ZEITREIHEN} that can move a Nr. 5.3 result.
+ *
+ * The WPB bonus is deliberately not in it. Showing „WPB-Bonus Dämmung: 0 → 5
+ * %-Punkte" in a table whose euro column is computed by
+ * {@link computeHeizungsfoerderung} would put a reason that sounds like money
+ * next to a figure that cannot move with it — a heating deadline list must only
+ * contain rules the heating number actually responds to. The full registry stays
+ * complete for the envelope side and for the structural checks.
+ */
+export const HEIZUNG_ZEITREIHEN: readonly ZeitreiheEintrag[] = BEG_ZEITREIHEN.filter((e) => e.id !== 'wpb-bonus');
+
+/**
  * The date this project's own gas/biomass plant reaches the 20-year mark, when
  * that falls inside the window.
  *
@@ -747,10 +802,14 @@ function altanlagenStichtag(input: HeizungsfoerderungInput, nach: string, bis: s
   if (!alt || !alt.inbetriebnahme || !KLIMA_MIT_ALTERSGRENZE.includes(alt.typ)) return [];
   const reifAb = plusJahre(inbetriebnahmeDatum(alt.inbetriebnahme), KLIMA_MINDESTALTER_JAHRE);
   if (reifAb <= nach || reifAb > bis) return [];
-  // Age is only the last missing condition when the others hold. A defective
-  // plant turning 20 changes nothing, and listing that date as a deadline would
-  // put a euro difference of zero next to a reason that sounds like money.
+  // Age is only the last missing condition when the others hold *and* the bonus
+  // is still worth something on that date. A defective plant turning 20 changes
+  // nothing, and a plant that comes of age after the bonus expired on
+  // KLIMA_BONUS_ENDE changes nothing either — announcing "ab hier erreichbar"
+  // there would put a reason that sounds like money next to a euro difference
+  // that is zero at best and negative at worst.
   if (!pruefeKlimageschwindigkeitsBonus(alt, reifAb).erfuellt) return [];
+  if (klimageschwindigkeitsBonusPunkteAm(reifAb) === 0) return [];
   const aenderung: Aenderung = {
     reihe: 'altanlage-mindestalter',
     name: 'Altanlage erreicht das Mindestalter',
@@ -795,7 +854,7 @@ export interface WartekostenResult {
 
 /** Every Stichtag in `(nach, bis]` that changes what this project gets. */
 export function stichtageFuerVorhaben(input: HeizungsfoerderungInput, nach: string, bis: string): Stichtag[] {
-  return vereine(stichtageAus(BEG_ZEITREIHEN, nach, bis), altanlagenStichtag(input, nach, bis));
+  return vereine(stichtageAus(HEIZUNG_ZEITREIHEN, nach, bis), altanlagenStichtag(input, nach, bis));
 }
 
 /**
@@ -810,21 +869,25 @@ export function stichtageFuerVorhaben(input: HeizungsfoerderungInput, nach: stri
  * @param bisDatum The later application date to compare against.
  */
 export function computeKostenDesWartens(input: HeizungsfoerderungInput, bisDatum: string): WartekostenResult {
-  const vonDatum = input.antragsdatum;
-  const foerderungVon = computeHeizungsfoerderung(input).foerderungEur;
-  const foerderungBis = computeHeizungsfoerderung({ ...input, antragsdatum: bisDatum }).foerderungEur;
+  const von = computeHeizungsfoerderung(input);
+  const bis = computeHeizungsfoerderung({ ...input, antragsdatum: pruefeDatum(bisDatum, 'bisDatum') });
+  // Report the dates the two amounts were actually computed for, not the ones
+  // that were asked for: a date before the Richtlinie came into force is pulled
+  // to its entry into force, and labelling that euro figure with the raw date
+  // would put a 2020 row next to a 2026 answer.
+  const vonDatum = von.antragsdatum;
 
-  const stichtage = stichtageFuerVorhaben(input, vonDatum, bisDatum).map((s): StichtagWirkung => {
+  const stichtage = stichtageFuerVorhaben(input, vonDatum, bis.antragsdatum).map((s): StichtagWirkung => {
     const foerderung = computeHeizungsfoerderung({ ...input, antragsdatum: s.datum }).foerderungEur;
-    return { ...s, foerderungEur: foerderung, kostenDesWartensEur: round2(foerderungVon - foerderung) };
+    return { ...s, foerderungEur: foerderung, kostenDesWartensEur: round2(von.foerderungEur - foerderung) };
   });
 
   return {
     vonDatum,
-    bisDatum,
-    foerderungVonEur: foerderungVon,
-    foerderungBisEur: foerderungBis,
-    kostenDesWartensEur: round2(foerderungVon - foerderungBis),
+    bisDatum: bis.antragsdatum,
+    foerderungVonEur: von.foerderungEur,
+    foerderungBisEur: bis.foerderungEur,
+    kostenDesWartensEur: round2(von.foerderungEur - bis.foerderungEur),
     stichtage,
   };
 }
