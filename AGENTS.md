@@ -40,11 +40,14 @@ gjsify run check      # type-check (cli + every package) + markup scan
 gjsify run test       # test suite under gjs
 ```
 
-`check` runs `gjsify tsc` over `cli/`, then `check:packages` over each
-`packages/*/tsconfig.json`, then `check:markup`. The second step is not
-redundant: `cli`'s tsc resolves `@bauplaner/*` through the **node** export
-condition, so a GJS-only entrypoint (`*.gjs.ts`, e.g. the PDF renderer) is never
-reached from there and would otherwise ship unchecked.
+`check` runs `gjsify tsc` over `cli/`, then `check:packages`, then
+`check:markup`. The second step is not redundant: `cli`'s tsc resolves
+`@bauplaner/*` through the **node** export condition, so a GJS-only entrypoint
+(`*.gjs.ts`, e.g. the PDF renderer) is never reached from there and would
+otherwise ship unchecked. It is `gjsify foreach … check`, so each package's own
+`check` script is the single definition and a failure names the workspace — the
+`for d in ../packages/*/` loop it replaced restated the command and reported a
+bare relative path.
 
 Root scripts delegate into the `cli` workspace; `cd cli && gjsify run <script>`
 works too. (`gjsify run -w cli <script>` does **not** chdir into the workspace

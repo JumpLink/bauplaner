@@ -24,7 +24,7 @@
         "test": "gjsify run build:test:gjs && gjsify run test:gjs",
         "test:gjs": "gjsify run dist/test.gjs.mjs",
         "test:node": "gjsify run build:test:node && node dist/test.node.mjs",
-        "check:packages": "for d in ../packages/*/; do tsc --noEmit --project \"$d/tsconfig.json\" || exit 1; done"
+        "check:packages": "gjsify foreach --include '@bauplaner/*' --exclude '@bauplaner/cli' --parallel check"
     },
     "dependencies": {
         "@bauplaner/core": "*",
