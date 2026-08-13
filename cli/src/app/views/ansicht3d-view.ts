@@ -15,7 +15,7 @@ import { WebGLBridge } from '@gjsify/webgl';
 import { buildScene, deriveTgaScene, type TgaTrade } from '@bauplaner/core';
 
 import type { DocumentStore } from '../document-store.ts';
-import { buildLegend, buildLevelControl, buildModeControls, ensureLegendCss } from '../model-overlays.ts';
+import { buildLegend, buildLevelControl, buildModeControls } from '../model-overlays.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
 import { TRADE_META } from '../tga.ts';
 import { startBuildingView, type BuildingView } from '../three/building-scene.ts';
@@ -168,7 +168,6 @@ export class Ansicht3dView extends Gtk.Box {
 
     // Float the mode switcher (top-start) and colour legend (bottom-start) over
     // the canvas. Changing the mode re-tints the walls in place — no rebuild.
-    ensureLegendCss(this.get_display());
     const overlay = new Gtk.Overlay();
     overlay.set_child(glArea);
 

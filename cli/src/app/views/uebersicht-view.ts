@@ -39,8 +39,6 @@ function plural(n: number, one: string, many: string): string {
   return n === 1 ? one : many;
 }
 
-let effCssInstalled = false;
-
 export class UebersichtView extends Gtk.Box {
   static {
     GObject.registerClass({ GTypeName: 'BauplanerUebersichtView' }, this);
@@ -55,7 +53,6 @@ export class UebersichtView extends Gtk.Box {
     this.window = window;
     this.store = store;
     store.subscribe(() => this.render());
-    this.connect('realize', () => this.installEffCss());
     this.render();
   }
 
@@ -71,21 +68,6 @@ export class UebersichtView extends Gtk.Box {
 
   private goView(view: string): void {
     this.window.activate_action('show-view', GLib.Variant.new_string(view));
-  }
-
-  /** Per-class background pills for the energy-class badge (installed once). */
-  private installEffCss(): void {
-    if (effCssInstalled) return;
-    const display = this.get_display();
-    if (!display) return;
-    let css = '.eff-badge { color: #fff; font-weight: bold; padding: 1px 9px; border-radius: 7px; }';
-    EFF_COLORS.forEach((c, i) => {
-      css += ` .eff-${i} { background-color: ${c}; }`;
-    });
-    const provider = new Gtk.CssProvider();
-    provider.load_from_string(css);
-    Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
-    effCssInstalled = true;
   }
 
   private render(): void {

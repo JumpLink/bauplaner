@@ -13,10 +13,9 @@ import { assessRoomClimate, deriveRoomClimate, type ClimateStatus, type RoomClim
 
 import type { DocumentStore } from '../document-store.ts';
 import { refreshFromHomeAssistant } from '../ha-adapter.ts';
+import { escapeMarkup } from '../../format.ts';
 
 const STATUS_LABEL: Record<ClimateStatus, string> = { good: 'gut', warn: 'Warnung', bad: 'Alarm' };
-
-let climateCssInstalled = false;
 
 export class RaumklimaView extends Gtk.Box {
   static {
@@ -30,7 +29,6 @@ export class RaumklimaView extends Gtk.Box {
     super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
     this.store = store;
     store.subscribe(() => this.render());
-    this.connect('realize', () => this.installClimateCss());
     this.render();
   }
 
@@ -38,22 +36,6 @@ export class RaumklimaView extends Gtk.Box {
     if (this.child) this.remove(this.child);
     this.child = widget;
     this.append(widget);
-  }
-
-  /** Status-pill colours (good green / warn amber / bad red), installed once. */
-  private installClimateCss(): void {
-    if (climateCssInstalled) return;
-    const display = this.get_display();
-    if (!display) return;
-    const provider = new Gtk.CssProvider();
-    provider.load_from_string(
-      '.climate-badge { color: #fff; font-weight: bold; padding: 1px 9px; border-radius: 7px; }' +
-        ' .climate-good { background-color: #26a269; }' +
-        ' .climate-warn { background-color: #e5a50a; }' +
-        ' .climate-bad { background-color: #c01c28; }',
-    );
-    Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
-    climateCssInstalled = true;
   }
 
   private render(): void {
@@ -154,9 +136,4 @@ export class RaumklimaView extends Gtk.Box {
 /** German decimal comma for a numeric reading. */
 function fmt(v: number): string {
   return String(v).replace('.', ',');
-}
-
-/** Escape Pango markup chars in dynamic Adw row titles/subtitles. */
-function escapeMarkup(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
