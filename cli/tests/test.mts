@@ -22,6 +22,7 @@ import project from './unit/project.test.ts';
 import assemblies from './unit/assemblies.test.ts';
 import energie from './unit/energie.test.ts';
 import foerderung from './unit/foerderung.test.ts';
+import heizung from './unit/heizung.test.ts';
 import fahrplan from './unit/fahrplan.test.ts';
 import tga from './unit/tga.test.ts';
 import commands from './unit/commands.test.ts';
@@ -54,6 +55,7 @@ run({
   assemblies,
   energie,
   foerderung,
+  heizung,
   fahrplan,
   tga,
   commands,

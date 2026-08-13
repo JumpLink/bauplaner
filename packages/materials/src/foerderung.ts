@@ -1,15 +1,22 @@
 /**
- * Subsidy (BEG Einzelmaßnahmen) and amortisation SCREENING for the retrofit
- * planning. Like the energy screening, these are quick, transparent estimates —
- * clearly labelled, easy to check — not a binding funding calculation.
+ * Subsidy (BEG Einzelmaßnahmen) for the **Gebäudehülle** and amortisation
+ * SCREENING for the retrofit planning. Like the energy screening, these are
+ * quick, transparent estimates — clearly labelled, easy to check — not a binding
+ * funding calculation.
  *
- * BEG-EM funds envelope measures (Gebäudehülle) at a base rate, plus an iSFP
- * bonus when the measure follows an individueller Sanierungsfahrplan. The
- * amortisation compares the current vs. target final-energy demand at an energy
- * price and divides the own share by the yearly saving.
+ * BEG-EM funds envelope measures at a base rate, plus an iSFP bonus when the
+ * measure follows an individueller Sanierungsfahrplan and, from Q1 2027, a WPB
+ * bonus for insulating the worst buildings. The amortisation compares the
+ * current vs. target final-energy demand at an energy price and divides the own
+ * share by the yearly saving.
+ *
+ * The heat generator (Nr. 5.3) plays by a different rule set — own base rate,
+ * own bonus stack, a ceiling that counts once per building for good — and lives
+ * in `heizung.ts`.
  */
 
-import { ENERGIE_DEFAULTS } from './energie.ts';
+import { ENERGIE_DEFAULTS, type Energieklasse } from './energie.ts';
+import { BEG_REGELSTAND, wertAm, type Zeitreihe } from './zeitachse.ts';
 
 /** Cost categories that BEG-EM funds as Gebäudehülle measures (keys, not typed to core). */
 export const BEG_FOERDERFAEHIG = ['daemmung', 'fassade', 'abdichtung'];
@@ -108,7 +115,10 @@ export const BEG_ISFP_BONUS = 0.05;
  * first Wohneinheit — **per building and calendar year**. Spreading work across
  * years is therefore not just a cash-flow choice, it multiplies the ceiling.
  *
- * Source: BEG EM Richtlinie 20.07.2026, Nr. 8.3 / 8.3.1 a.
+ * The heat generator does *not* work this way; see
+ * {@link BEG_HOECHSTGRENZE_WAERMEERZEUGER}.
+ *
+ * Source: BEG EM Richtlinie 17.07.2026, Nr. 8.3 / 8.3.1 a.
  */
 export const BEG_HOECHSTGRENZE = 30_000;
 
@@ -133,8 +143,98 @@ export const BEG_ISFP_MINDESTINVESTITION = 30_000;
  * The iSFP bonus does not apply to it at all: „Vom iSFP-Bonus ausgenommen
  * bleiben […] Leistungen nach den Nummern 5.3, 5.4 Buchstabe b und 5.5"
  * (Nr. 8.4.2).
+ *
+ * @remarks This constant is only the value at the Richtlinie's entry into force.
+ * Because the amount is a step function of the **application date**, anything
+ * that knows the date should read it through `heizungsHoechstbetragAm(datum)`
+ * (`heizung.ts`); a bare constant answers every date after 31.01.2027 too
+ * generously. The Fahrplan still uses it because a roadmap has no application
+ * date yet.
  */
 export const BEG_HOECHSTGRENZE_WAERMEERZEUGER = 28_000;
+
+/**
+ * Which envelope measure is being funded. The distinction exists for the WPB
+ * bonus: it reaches Nr. 5.1 Buchstabe **a** (Dämmung) only. Windows and doors
+ * are Nr. 5.1 b and never earn it, however bad the building is.
+ */
+export type HuellenMassnahme = '5.1a' | '5.1b';
+
+/**
+ * WPB-Bonus in Prozentpunkten — Nr. 8.4.3, „ab Quartal 1 2027", i.e. for
+ * applications received from 01.01.2027.
+ *
+ * Unlike the iSFP bonus it carries **no minimum investment**: a 12 000-€
+ * insulation job on a Worst Performing Building earns it, where the iSFP bonus
+ * would not (Nr. 8.4.2 needs {@link BEG_ISFP_MINDESTINVESTITION}). It does
+ * require the measure to belong to an iSFP, and it is granted for at most
+ * {@link WPB_MAX_ANTRAEGE} applications per building.
+ */
+export const WPB_BONUS_PUNKTE: Zeitreihe<number> = [
+  {
+    gueltigAb: BEG_REGELSTAND.inKraftAb,
+    gueltigBis: '2026-12-31',
+    wert: 0,
+    quelle: 'BEG EM Richtlinie 17.07.2026, Nr. 8.4.3 — vor Q1 2027 nicht vorgesehen',
+    abgerufenAm: BEG_REGELSTAND.eingepflegtAm,
+  },
+  {
+    gueltigAb: '2027-01-01',
+    wert: 5,
+    quelle: 'BEG EM Richtlinie 17.07.2026, Nr. 8.4.3',
+    abgerufenAm: BEG_REGELSTAND.eingepflegtAm,
+  },
+];
+
+/** WPB-Bonus am Antragstag, Prozentpunkte (0 vor Q1 2027). */
+export function wpbBonusPunkteAm(datum: string): number {
+  return wertAm(WPB_BONUS_PUNKTE, datum) ?? 0;
+}
+
+/** „für maximal drei Anträge" je Gebäude — Nr. 8.4.3. */
+export const WPB_MAX_ANTRAEGE = 3;
+
+/** Jahres-Endenergiebedarf ab dem ein Gebäude als WPB gilt, kWh/(m²·a). */
+export const WPB_ENDENERGIE_SCHWELLE_KWH_M2A = 300;
+
+/**
+ * Energy classes that make a building a WPB. **H only** — F and G do not
+ * qualify, which is the single most commonly mis-remembered part of the
+ * definition and the reason it is a list here rather than a comparison.
+ */
+export const WPB_KLASSEN: readonly Energieklasse[] = ['H'];
+
+/**
+ * The evidence a building is a Worst Performing Building — from the
+ * Energiebedarfsausweis, not from this tool's own screening.
+ */
+export interface WpbNachweis {
+  /** Jahres-Endenergiebedarf laut Energiebedarfsausweis, kWh/(m²·a). */
+  endenergiebedarfKwhM2a?: number;
+  /** Energieeffizienzklasse laut Energiebedarfsausweis. */
+  energieklasse?: Energieklasse;
+}
+
+/**
+ * Whether a stated Nachweis meets the WPB definition — Jahres-Endenergiebedarf
+ * ≥ 300 kWh/(m²·a) **oder** Energiebedarfsausweis der Klasse H (KfW-Infoblatt
+ * förderfähige Maßnahmen v10.1, 07/2026, Nr. 1.6).
+ *
+ * It takes the **Ausweis**, never the model. `energie.ts` can put a class on a
+ * building from its own U-values, and that number is a screening — good enough
+ * to plan with, not a document the KfW accepts. Deriving WPB status from it
+ * would turn an estimate into a claimed entitlement somewhere down the call
+ * chain, which is why the status is an input here and the derivation is not
+ * offered at all.
+ */
+export function istWorstPerformingBuilding(nachweis: WpbNachweis): boolean {
+  const ueberSchwelle =
+    nachweis.endenergiebedarfKwhM2a !== undefined &&
+    nachweis.endenergiebedarfKwhM2a >= WPB_ENDENERGIE_SCHWELLE_KWH_M2A;
+  const klasseH = nachweis.energieklasse !== undefined && WPB_KLASSEN.includes(nachweis.energieklasse);
+  return ueberSchwelle || klasseH;
+}
+
 /**
  * Default energy price for the amortisation, €/kWh. Aliases
  * {@link ENERGIE_DEFAULTS}.energiePreisEurKwh so the funding view and the energy
@@ -166,12 +266,34 @@ export interface FoerderResult {
   ueberHoechstgrenzeNet: number;
   /** Whether the iSFP bonus actually applied (it needs a minimum spend). */
   isfpBonusWirksam: boolean;
+  /** Whether the WPB bonus applied — every one of its conditions held. */
+  wpbBonusWirksam: boolean;
+  /** Conditions and everything a bonus failed on; empty when nothing was claimed. */
+  hinweise: string[];
+}
+
+/** Everything beyond the eligible amount that changes what an envelope measure gets. */
+export interface FoerderOptions {
+  /** Whether a funded iSFP covers the measure. */
+  isfpBonus?: boolean;
+  /**
+   * Which envelope measure this is. Only Nr. 5.1 a can earn the WPB bonus, so
+   * leaving it unset means "not claimed" and the bonus stays at zero — lumped
+   * Hülle costs must not collect a bonus that windows never earn.
+   */
+  massnahme?: HuellenMassnahme;
+  /** Antragseingang, ISO `YYYY-MM-DD` — the WPB bonus only exists from Q1 2027. */
+  antragsdatum?: string;
+  /** Stated WPB evidence; see {@link istWorstPerformingBuilding}. */
+  wpbNachweis?: WpbNachweis;
+  /** WPB-bonus applications already granted for this building (max three). */
+  wpbAntraegeBisher?: number;
 }
 
 /**
  * Expected BEG-EM subsidy for eligible envelope costs **in one calendar year**.
  *
- * Three rules the headline "15 % + 5 %" hides, all per BEG EM 20.07.2026:
+ * Four rules the headline "15 % + 5 %" hides, all per BEG EM 17.07.2026:
  *
  * 1. Eligible costs are capped ({@link BEG_HOECHSTGRENZE}, or
  *    {@link BEG_HOECHSTGRENZE_ISFP} with an iSFP) **per building and calendar
@@ -181,15 +303,18 @@ export interface FoerderResult {
  *    even with an iSFP in hand.
  * 3. The bonus applies only to the costs *above* the non-iSFP ceiling
  *    (Nr. 8.4.2), not to the whole amount.
+ * 4. From Q1 2027 a Worst Performing Building earns 5 further points on
+ *    insulation (Nr. 8.4.3) — with an iSFP but *without* that minimum spend,
+ *    and for at most {@link WPB_MAX_ANTRAEGE} applications.
  *
  * @param foerderfaehigNet Eligible costs for this building and year, €.
- * @param opts.isfpBonus Whether a funded iSFP covers the measure.
+ * @param opts iSFP, measure, application date and WPB evidence; see {@link FoerderOptions}.
  * @returns The subsidy plus what was capped away; see {@link FoerderResult}.
  *
  * @remarks The minimum spend is defined on *gross* costs while this works in
  * net. For anything near the threshold, check it against the gross figure.
  */
-export function computeFoerderung(foerderfaehigNet: number, opts: { isfpBonus?: boolean } = {}): FoerderResult {
+export function computeFoerderung(foerderfaehigNet: number, opts: FoerderOptions = {}): FoerderResult {
   const gesamt = Math.max(0, foerderfaehigNet);
   const isfpBonusWirksam = !!opts.isfpBonus && gesamt >= BEG_ISFP_MINDESTINVESTITION;
   const grenze = isfpBonusWirksam ? BEG_HOECHSTGRENZE_ISFP : BEG_HOECHSTGRENZE;
@@ -197,7 +322,13 @@ export function computeFoerderung(foerderfaehigNet: number, opts: { isfpBonus?: 
   const anrechenbar = Math.min(gesamt, grenze);
   const zumBasissatz = Math.min(anrechenbar, BEG_HOECHSTGRENZE);
   const mitBonus = Math.max(0, anrechenbar - BEG_HOECHSTGRENZE);
-  const foerderung = zumBasissatz * BEG_BASIS_SATZ + mitBonus * (BEG_BASIS_SATZ + BEG_ISFP_BONUS);
+
+  const wpb = pruefeWpbBonus(opts);
+  // The WPB bonus has no split of its own in Nr. 8.4.3, so it is applied to the
+  // whole eligible amount — unlike the iSFP bonus, whose 5 points reach only the
+  // part above the base ceiling.
+  const foerderung =
+    zumBasissatz * BEG_BASIS_SATZ + mitBonus * (BEG_BASIS_SATZ + BEG_ISFP_BONUS) + (anrechenbar * wpb.punkte) / 100;
 
   return {
     rate: anrechenbar > 0 ? round2(foerderung / anrechenbar) : 0,
@@ -205,6 +336,65 @@ export function computeFoerderung(foerderfaehigNet: number, opts: { isfpBonus?: 
     foerderung: round2(foerderung),
     ueberHoechstgrenzeNet: round2(gesamt - anrechenbar),
     isfpBonusWirksam,
+    wpbBonusWirksam: wpb.punkte > 0,
+    hinweise: wpb.hinweise,
+  };
+}
+
+/**
+ * The WPB bonus for an envelope measure — Nr. 8.4.3, four conditions, all
+ * necessary.
+ *
+ * Silent unless the caller actually claimed it (`wpbNachweis` set): every
+ * existing envelope call would otherwise collect a paragraph of notes about a
+ * bonus it never asked for.
+ *
+ * The iSFP condition reads `opts.isfpBonus`, not `isfpBonusWirksam` — belonging
+ * to an iSFP is what Nr. 8.4.3 requires, and it explicitly does not carry the
+ * 30 000-€ minimum investment that Nr. 8.4.2 puts on the iSFP bonus itself. A
+ * small insulation job on the worst building in the street is precisely the case
+ * this bonus was written for.
+ */
+function pruefeWpbBonus(opts: FoerderOptions): { punkte: number; hinweise: string[] } {
+  if (!opts.wpbNachweis) return { punkte: 0, hinweise: [] };
+  const antragsdatum = opts.antragsdatum;
+  const hinweise: string[] = [];
+
+  if (opts.massnahme !== '5.1a') {
+    hinweise.push(
+      'WPB-Bonus (Nr. 8.4.3) nicht angesetzt: Er gilt nur für Dämmmaßnahmen nach Nr. 5.1 a. ' +
+        'Fenster und Türen sind Nr. 5.1 b und bleiben ausgenommen.',
+    );
+  }
+  if (!antragsdatum) {
+    hinweise.push('WPB-Bonus (Nr. 8.4.3) nicht angesetzt: ohne Antragsdatum lässt sich der Start ab Quartal 1 2027 nicht prüfen.');
+  } else if (antragsdatum < BEG_REGELSTAND.inKraftAb || wpbBonusPunkteAm(antragsdatum) === 0) {
+    hinweise.push('WPB-Bonus (Nr. 8.4.3) nicht angesetzt: erst für Anträge ab Quartal 1 2027 vorgesehen.');
+  }
+  if (!opts.isfpBonus) {
+    hinweise.push(
+      'WPB-Bonus (Nr. 8.4.3) nicht angesetzt: Die Maßnahme muss zu einem iSFP gehören — ein ' +
+        'Mindestinvestitionsvolumen verlangt er im Gegensatz zum iSFP-Bonus aber nicht.',
+    );
+  }
+  if (!istWorstPerformingBuilding(opts.wpbNachweis)) {
+    hinweise.push(
+      `WPB-Bonus (Nr. 8.4.3) nicht angesetzt: Der Nachweis erfüllt die WPB-Definition nicht — nötig ` +
+        `sind ≥ ${WPB_ENDENERGIE_SCHWELLE_KWH_M2A} kWh/(m²·a) oder Energiebedarfsausweis der Klasse H. ` +
+        'Die Klassen F und G qualifizieren nicht.',
+    );
+  }
+  if ((opts.wpbAntraegeBisher ?? 0) >= WPB_MAX_ANTRAEGE) {
+    hinweise.push(`WPB-Bonus (Nr. 8.4.3) nicht angesetzt: für höchstens ${WPB_MAX_ANTRAEGE} Anträge je Gebäude.`);
+  }
+
+  if (hinweise.length > 0 || !antragsdatum) return { punkte: 0, hinweise };
+  return {
+    punkte: wpbBonusPunkteAm(antragsdatum),
+    hinweise: [
+      'WPB-Bonus (Nr. 8.4.3) angesetzt: Der WPB-Status stammt aus dem Energiebedarfsausweis, ' +
+        'nicht aus dem Screening dieses Werkzeugs.',
+    ],
   };
 }
 

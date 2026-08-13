@@ -47,7 +47,7 @@ export const ISFP_PAKETE: PaketDef[] = [
  * > Sanierungsmaßnahme verbundenen Ausgaben für Material gefördert, wenn ein
  * > Energieeffizienz-Experte oder ein Fachunternehmer die fachgerechte
  * > Durchführung und die korrekte Angabe der Ausgaben für Material mit dem
- * > Verwendungsnachweis bestätigt." — BEG EM 20.07.2026, Nr. 8.2
+ * > Verwendungsnachweis bestätigt." — BEG EM 17.07.2026, Nr. 8.2
  *
  * So doing the work yourself shrinks the *basis*, it does not forfeit the
  * subsidy. The expert confirmation is the condition, which is why an

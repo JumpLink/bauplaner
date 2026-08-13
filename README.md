@@ -26,6 +26,10 @@ materials** — and *calculating* the real retrofit, not just drawing it.
 - **Vorhaben** — own earthworks (e.g. a *Lehmgraben* clay-sealed trench) with
   material quantities.
 - **Materialien** — the ecological material stock (ρ, λ, µ).
+- **Förderung** — the BEG-EM subsidy for the heat generator (Nr. 5.3 / KfW 458)
+  with its bonus stack, ceilings and cut-off dates. The rules that move over time
+  are modelled as dated validity spans, so the tool can also answer the question
+  that actually decides the schedule: *what does waiting cost?*
 - **Sanierungsplan als PDF** — export the whole assessment as a laid-out A4
   document in the app's own visual language: Kennzahlen, the A+…H energy scale,
   the iSFP measure roadmap with subsidy and own share, and the ranked wall
@@ -33,10 +37,18 @@ materials** — and *calculating* the real retrofit, not just drawing it.
   Finanzberater, and explicit about what it is not.
 
 Also usable headless via the CLI (`@bauplaner/cli`: `inspect`, `wand`,
-`envelope`, `lehmgraben`, `bauteil`, `feuchte`, `materials`, `varianten`,
-`report`). `envelope` is the Aufmaß of the heated envelope — exterior wall area
-net of its openings, the window/door split, and the ceiling/floor area against
-unheated space or the ground, each pro-rated from the model geometry.
+`envelope`, `lehmgraben`, `bauteil`, `feuchte`, `funding`, `materials`,
+`varianten`, `report`). `envelope` is the Aufmaß of the heated envelope —
+exterior wall area net of its openings, the window/door split, and the
+ceiling/floor area against unheated space or the ground, each pro-rated from the
+model geometry. `funding` computes the heating subsidy for a given application
+date and, with `--deadlines`, lists the coming Stichtage with the euro
+difference:
+
+```bash
+bauplaner funding --kosten 32000 --altanlage oel --einkommen 38000 --kinder 1
+bauplaner funding --kosten 32000 --altanlage oel --deadlines
+```
 
 Status: **early** — a read-only diagnostic surface today (Sweet Home 3D stays the
 geometry editor; a project sidecar adds the retrofit layer). See the
