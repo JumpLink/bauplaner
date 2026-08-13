@@ -2,7 +2,7 @@ import { describe, it, expect } from '@gjsify/unit';
 
 import { deriveEnvelope, parseSh3dBytes, type HomeData } from '@bauplaner/core';
 import {
-  PRESET_ASSEMBLIES,
+  presetsFor,
   computeRoadmap,
   presetByKey,
   vergleicheVarianten,
@@ -41,6 +41,13 @@ const gebaeude = (h: HomeData): GebaeudeTeil => {
   return { envelope: e.envelope, start: e.start, heute: e.heute, ziel: e.ziel, isfpBonus: true };
 };
 
+/**
+ * The build-ups that belong to an exterior wall. Everything here compares or
+ * assigns *wall* build-ups; `PRESET_ASSEMBLIES` also carries the ceiling and
+ * floor ones, which share neither a threshold nor an area with a façade.
+ */
+const WAND_PRESETS = presetsFor('aussenwand');
+
 const preset = (key: string): WandVariante => {
   const p = presetByKey(key);
   if (!p) throw new Error(`Preset ${key} fehlt`);
@@ -50,7 +57,7 @@ const preset = (key: string): WandVariante => {
 const wandVergleich = (areaM2 = 200): VergleichErgebnis =>
   vergleicheVarianten({
     referenz: preset('bestand-vollziegel-365'),
-    varianten: PRESET_ASSEMBLIES.filter((p) => p.key !== 'bestand-vollziegel-365'),
+    varianten: WAND_PRESETS.filter((p) => p.key !== 'bestand-vollziegel-365'),
     areaM2,
     isfpBonus: true,
   });

@@ -16,7 +16,7 @@ import {
   type WartekostenResult,
 } from '@bauplaner/materials';
 
-import { fmtEur } from '../format.ts';
+import { absatz, fmtEur, heute, zahl } from '../format.ts';
 
 const AUSFUEHRUNGEN = ['fachunternehmen', 'teilvergabe', 'eigenleistung'] as const;
 const ALTANLAGEN = ['keine', 'oel', 'kohle', 'gas-etage', 'nachtstromspeicher', 'gas', 'biomasse'] as const;
@@ -46,49 +46,8 @@ interface FundingArgs {
 
 const RULE = '----------------------------------------------------------------------';
 
-/**
- * Today, ISO. **The only clock in this feature.** The kernel takes every date as
- * an argument so its results are reproducible; the adapter is where "now" is
- * allowed to enter, and it enters exactly here.
- */
-function heute(): string {
-  const d = new Date();
-  const zwei = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${zwei(d.getMonth() + 1)}-${zwei(d.getDate())}`;
-}
-
-/**
- * A non-negative number, or an error that names the option the user typed.
- *
- * yargs turns `--kosten abc` into `NaN` without complaint. The kernel rejects it
- * too, but by the name of its own field — and someone who wrote `--kosten` should
- * not have to map that back from `fachunternehmenEur`.
- */
-function zahl(wert: number, option: string): number {
-  if (!Number.isFinite(wert)) throw new Error(`${option} muss eine Zahl sein.`);
-  if (wert < 0) throw new Error(`${option} darf nicht negativ sein (war: ${wert}).`);
-  return wert;
-}
-
 function zeile(label: string, wert: string, note = ''): void {
   console.log(`${label.slice(0, 38).padEnd(38)}${wert.padStart(16)}${note ? `  ${note}` : ''}`);
-}
-
-/** Break a long note into terminal-width lines, continuation lines indented. */
-function absatz(text: string, praefix: string, einzug: string, breite = 70): void {
-  const worte = text.split(/\s+/);
-  const zeilen: string[] = [];
-  let aktuell = '';
-  for (const wort of worte) {
-    if (aktuell === '') aktuell = wort;
-    else if (`${aktuell} ${wort}`.length + einzug.length <= breite) aktuell += ` ${wort}`;
-    else {
-      zeilen.push(aktuell);
-      aktuell = wort;
-    }
-  }
-  if (aktuell !== '') zeilen.push(aktuell);
-  zeilen.forEach((z, i) => console.log(`${i === 0 ? praefix : einzug}${z}`));
 }
 
 function printFoerderung(r: HeizungsfoerderungResult, input: HeizungsfoerderungInput): void {

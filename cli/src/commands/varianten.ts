@@ -3,7 +3,7 @@ import type { CommandModule } from 'yargs';
 import {
   dimensioniereDaemmung,
   parsePriceOverride,
-  PRESET_ASSEMBLIES,
+  presetsFor,
   presetByKey,
   vergleicheVarianten,
   type BausubstanzStatus,
@@ -29,6 +29,13 @@ interface VariantenArgs {
   json: boolean;
 }
 
+/**
+ * The build-ups that belong to an exterior wall. Everything here compares or
+ * assigns *wall* build-ups; `PRESET_ASSEMBLIES` also carries the ceiling and
+ * floor ones, which share neither a threshold nor an area with a façade.
+ */
+const WAND_PRESETS = presetsFor('aussenwand');
+
 const RISIKO_SYMBOL = { gering: '✓ gering', mittel: '~ mittel', hoch: '✗ hoch' } as const;
 
 /** Parse `kosten=0.4,oekologie=0.3` into a partial weighting. */
@@ -52,7 +59,7 @@ function variante(key: string): WandVariante {
   const p = presetByKey(key);
   if (!p) {
     throw new Error(
-      `Unbekanntes Preset "${key}". Bekannt: ${PRESET_ASSEMBLIES.map((a) => a.key).join(', ')}`,
+      `Unbekanntes Preset "${key}". Bekannt: ${WAND_PRESETS.map((a) => a.key).join(', ')}`,
     );
   }
   return p;
@@ -196,7 +203,7 @@ export const variantenCommand: CommandModule<object, VariantenArgs> = {
         demandOption: true,
       })
       .option('preset', {
-        describe: `Variante, mehrfach. Ohne Angabe alle. Bekannt: ${PRESET_ASSEMBLIES.map((a) => a.key).join(', ')}`,
+        describe: `Variante, mehrfach. Ohne Angabe alle. Bekannt: ${WAND_PRESETS.map((a) => a.key).join(', ')}`,
         type: 'string',
         array: true,
       })
@@ -241,7 +248,7 @@ export const variantenCommand: CommandModule<object, VariantenArgs> = {
       ),
   handler: (args) => {
     const referenz = variante(args.referenz);
-    const keys = args.preset ?? PRESET_ASSEMBLIES.map((a) => a.key);
+    const keys = args.preset ?? WAND_PRESETS.map((a) => a.key);
     const kandidaten = keys
       .filter((k) => k !== args.referenz)
       .map(variante)

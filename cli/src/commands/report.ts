@@ -19,7 +19,7 @@ import type { CommandModule } from 'yargs';
 
 import { deriveEnvelope, loadDocumentFile } from '@bauplaner/core';
 import {
-  PRESET_ASSEMBLIES,
+  presetsFor,
   parsePriceOverride,
   presetByKey,
   vergleicheVarianten,
@@ -60,11 +60,18 @@ function heute(): string {
   return `${d.getDate()}. ${monate[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+/**
+ * The build-ups that belong to an exterior wall. Everything here compares or
+ * assigns *wall* build-ups; `PRESET_ASSEMBLIES` also carries the ceiling and
+ * floor ones, which share neither a threshold nor an area with a façade.
+ */
+const WAND_PRESETS = presetsFor('aussenwand');
+
 function variante(key: string): WandVariante {
   const p = presetByKey(key);
   if (!p) {
     throw new Error(
-      `Unbekanntes Preset "${key}". Bekannt: ${PRESET_ASSEMBLIES.map((a) => a.key).join(', ')}`,
+      `Unbekanntes Preset "${key}". Bekannt: ${WAND_PRESETS.map((a) => a.key).join(', ')}`,
     );
   }
   return p;
@@ -72,7 +79,7 @@ function variante(key: string): WandVariante {
 
 /** The wall comparison, dimensioned for `areaM2`. */
 function wandVergleich(args: ReportArgs, areaM2: number): VergleichErgebnis {
-  const keys = args.preset ?? PRESET_ASSEMBLIES.map((a) => a.key);
+  const keys = args.preset ?? WAND_PRESETS.map((a) => a.key);
   const kandidaten = keys
     .filter((k) => k !== args.referenz)
     .map(variante)
@@ -125,7 +132,7 @@ export const reportCommand: CommandModule<object, ReportArgs> = {
         default: 'bestand-vollziegel-365',
       })
       .option('preset', {
-        describe: `Variante, mehrfach. Ohne Angabe alle. Bekannt: ${PRESET_ASSEMBLIES.map((a) => a.key).join(', ')}`,
+        describe: `Variante, mehrfach. Ohne Angabe alle. Bekannt: ${WAND_PRESETS.map((a) => a.key).join(', ')}`,
         type: 'string',
         array: true,
       })

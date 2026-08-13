@@ -34,6 +34,7 @@ import varianten from './unit/varianten.test.ts';
 import report from './unit/report.test.ts';
 import grundriss from './unit/grundriss.test.ts';
 import aufmass from './unit/aufmass.test.ts';
+import budget from './unit/budget.test.ts';
 
 run({
   bauphysik,
@@ -67,4 +68,5 @@ run({
   report,
   grundriss,
   aufmass,
+  budget,
 });

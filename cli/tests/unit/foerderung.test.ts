@@ -52,6 +52,36 @@ export default async () => {
     });
   });
 
+  await describe('die Höchstgrenze gilt pro Gebäude und Kalenderjahr', async () => {
+    await it('leaves only the rest of the ceiling for a second measure', async () => {
+      // 20.000 € sind im selben Jahr schon verbraucht: von den nächsten 20.000 €
+      // sind nur 10.000 € anrechenbar, der Rest wird mit 0 % gefördert.
+      const r = computeFoerderung(20000, { bereitsAusgeschoepftNet: 20000 });
+      expect(r.foerderfaehigNet).toBe(10000);
+      expect(r.foerderung).toBe(1500);
+      expect(r.ueberHoechstgrenzeNet).toBe(10000);
+      expect(r.hinweise.some((h) => h.includes('Kalenderjahr'))).toBe(true);
+    });
+
+    await it('splits a year the same way whether it is costed in one call or two', async () => {
+      const zusammen = computeFoerderung(45000, { isfpBonus: true }).foerderung;
+      const ersteHaelfte = computeFoerderung(20000, { isfpBonus: true, bereitsAusgeschoepftNet: 0 });
+      const zweiteHaelfte = computeFoerderung(25000, { isfpBonus: true, bereitsAusgeschoepftNet: 20000 });
+      expect(ersteHaelfte.foerderung + zweiteHaelfte.foerderung).toBe(zusammen);
+      // Der iSFP-Bonus hängt am Jahresvolumen, nicht an der einzelnen Maßnahme:
+      // die erste Hälfte allein bliebe unter dem Mindestinvestitionsvolumen.
+      expect(zweiteHaelfte.isfpBonusWirksam).toBe(true);
+    });
+
+    await it('grants nothing once the year is spent', async () => {
+      const r = computeFoerderung(10000, { bereitsAusgeschoepftNet: 30000 });
+      expect(r.foerderfaehigNet).toBe(0);
+      expect(r.foerderung).toBe(0);
+      expect(r.rate).toBe(0);
+      expect(r.ueberHoechstgrenzeNet).toBe(10000);
+    });
+  });
+
   await describe('WPB-Bonus (Nr. 8.4.3)', async () => {
     /** A claim that meets every condition — each test spoils exactly one. */
     const anspruch: FoerderOptions = {

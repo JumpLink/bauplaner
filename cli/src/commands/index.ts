@@ -7,6 +7,7 @@ export { variantenCommand } from './varianten.ts';
 export { feuchteCommand } from './feuchte.ts';
 export { wandCommand } from './wand.ts';
 export { envelopeCommand } from './envelope.ts';
+export { budgetCommand } from './budget.ts';
 export { fundingCommand } from './funding.ts';
 export { wandSetCommand } from './wand-set.ts';
 export { bauplanCommand } from './bauplan.ts';
