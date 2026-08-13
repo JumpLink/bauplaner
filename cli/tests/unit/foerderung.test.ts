@@ -5,6 +5,9 @@ import {
   BEG_HOECHSTGRENZE_ISFP,
   computeAmortisation,
   computeFoerderung,
+  istWorstPerformingBuilding,
+  wpbBonusPunkteAm,
+  type FoerderOptions,
 } from '@bauplaner/materials';
 
 export default async () => {
@@ -46,6 +49,77 @@ export default async () => {
       expect(r.foerderfaehigNet).toBe(BEG_HOECHSTGRENZE);
       expect(r.foerderung).toBe(4500);
       expect(r.ueberHoechstgrenzeNet).toBe(50000);
+    });
+  });
+
+  await describe('WPB-Bonus (Nr. 8.4.3)', async () => {
+    /** A claim that meets every condition — each test spoils exactly one. */
+    const anspruch: FoerderOptions = {
+      isfpBonus: true,
+      massnahme: '5.1a',
+      antragsdatum: '2027-01-01',
+      wpbNachweis: { energieklasse: 'H' },
+    };
+
+    await it('reads the WPB definition from the Ausweis: H yes, G no', async () => {
+      expect(istWorstPerformingBuilding({ energieklasse: 'H' })).toBe(true);
+      expect(istWorstPerformingBuilding({ energieklasse: 'G' })).toBe(false);
+      expect(istWorstPerformingBuilding({ energieklasse: 'F' })).toBe(false);
+      // The demand threshold is the second, independent route in.
+      expect(istWorstPerformingBuilding({ endenergiebedarfKwhM2a: 300 })).toBe(true);
+      expect(istWorstPerformingBuilding({ endenergiebedarfKwhM2a: 299.9 })).toBe(false);
+      expect(istWorstPerformingBuilding({ energieklasse: 'C', endenergiebedarfKwhM2a: 310 })).toBe(true);
+      expect(istWorstPerformingBuilding({})).toBe(false);
+    });
+
+    await it('pays 5 points without any minimum investment', async () => {
+      // 20.000 € is under the 30.000 € the iSFP bonus needs, so the base rate
+      // stays at 15 % — and the WPB bonus lands on top of it anyway.
+      const r = computeFoerderung(20000, anspruch);
+      expect(r.isfpBonusWirksam).toBe(false);
+      expect(r.wpbBonusWirksam).toBe(true);
+      expect(r.foerderung).toBe(4000); // 20.000 × (15 % + 5 %)
+      expect(r.rate).toBe(0.2);
+    });
+
+    await it('applies to the whole eligible amount, unlike the iSFP bonus', async () => {
+      // 30.000 × 15 % + 15.000 × 20 % + 45.000 × 5 %.
+      const r = computeFoerderung(45000, anspruch);
+      expect(r.isfpBonusWirksam).toBe(true);
+      expect(r.foerderung).toBe(9750);
+    });
+
+    await it('never reaches windows — they are Nr. 5.1 b', async () => {
+      const r = computeFoerderung(20000, { ...anspruch, massnahme: '5.1b' });
+      expect(r.wpbBonusWirksam).toBe(false);
+      expect(r.foerderung).toBe(3000);
+      expect(r.hinweise.some((h) => h.includes('5.1 b'))).toBe(true);
+    });
+
+    await it('does not exist before Quartal 1 2027', async () => {
+      expect(wpbBonusPunkteAm('2026-12-31')).toBe(0);
+      expect(wpbBonusPunkteAm('2027-01-01')).toBe(5);
+      const r = computeFoerderung(20000, { ...anspruch, antragsdatum: '2026-12-31' });
+      expect(r.wpbBonusWirksam).toBe(false);
+      expect(r.foerderung).toBe(3000);
+    });
+
+    await it('withholds it for a building that is merely bad, not worst', async () => {
+      const r = computeFoerderung(20000, { ...anspruch, wpbNachweis: { energieklasse: 'G' } });
+      expect(r.wpbBonusWirksam).toBe(false);
+      expect(r.hinweise.some((h) => h.includes('Klassen F und G'))).toBe(true);
+    });
+
+    await it('stops after three applications, and needs an iSFP', async () => {
+      expect(computeFoerderung(20000, { ...anspruch, wpbAntraegeBisher: 2 }).wpbBonusWirksam).toBe(true);
+      expect(computeFoerderung(20000, { ...anspruch, wpbAntraegeBisher: 3 }).wpbBonusWirksam).toBe(false);
+      expect(computeFoerderung(20000, { ...anspruch, isfpBonus: false }).wpbBonusWirksam).toBe(false);
+    });
+
+    await it('stays silent when nobody claimed it', async () => {
+      const r = computeFoerderung(20000, { isfpBonus: true });
+      expect(r.wpbBonusWirksam).toBe(false);
+      expect(r.hinweise.length).toBe(0);
     });
   });
 
