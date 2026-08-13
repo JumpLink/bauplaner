@@ -8,12 +8,18 @@
  * from cannot disagree about a single figure.
  */
 
-import Gio from '@girs/gio-2.0';
-import Gtk from '@girs/gtk-4.0';
+import type Gtk from '@girs/gtk-4.0';
+import { saveFile, type FileFilterSpec } from '@gjsify/adwaita-app';
 
 import { deriveEnvelope } from '@bauplaner/core';
 import { presetByKey, presetsFor, vergleicheVarianten } from '@bauplaner/materials';
-import { buildGrundrissDoc, buildSanierungsplan, renderReportPdf, type GebaeudeTeil } from '@bauplaner/report';
+import {
+  buildGrundrissDoc,
+  buildSanierungsplan,
+  renderReportPdf,
+  type GebaeudeTeil,
+  type ReportDoc,
+} from '@bauplaner/report';
 
 import type { DocumentStore } from './document-store.ts';
 import { buildEnergyScreenings } from '../energy.ts';
@@ -100,6 +106,53 @@ export function buildPlanForStore(store: DocumentStore): ReturnType<typeof build
   });
 }
 
+/** The only file type either export writes. */
+const PDF_FILTERS: FileFilterSpec[] = [{ name: 'PDF-Dokument (*.pdf)', patterns: ['*.pdf'] }];
+
+/**
+ * Ask for a destination and render `build()`'s document there.
+ *
+ * The two exports differ only in their title, their suggested file name and
+ * which kernel document they assemble — the dialog, the `.pdf` suffix and the
+ * outcome message are one path, so the two buttons cannot drift apart.
+ *
+ * Returns `void` rather than the promise: a GTK `clicked` handler's return
+ * value is read as the signal's, and neither `build()` nor `renderReportPdf`
+ * escapes the try/catch below.
+ */
+function exportPdfDialog(options: {
+  window: Gtk.Window;
+  store: DocumentStore;
+  title: string;
+  initialName: string;
+  /** Names the artefact in the success toast, e.g. `Sanierungsplan`. */
+  label: string;
+  build: () => ReportDoc | null;
+  onDone: (message: string) => void;
+}): void {
+  const { window, store, title, initialName, label, build, onDone } = options;
+  if (!store.hasDocument) {
+    onDone('Kein Dokument geöffnet');
+    return;
+  }
+
+  void saveFile(window, { title, filters: PDF_FILTERS, initialName }).then((path) => {
+    if (!path) return; // cancelled — say nothing
+    const target = /\.pdf$/i.test(path) ? path : `${path}.pdf`;
+    try {
+      const doc = build();
+      if (!doc) {
+        onDone('Kein Dokument geöffnet');
+        return;
+      }
+      const { pages } = renderReportPdf(doc, target);
+      onDone(`${label} exportiert (${pages} Seiten): ${target}`);
+    } catch (error) {
+      onDone(`Export fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  });
+}
+
 /**
  * Ask for a destination and write the Sanierungsplan there.
  *
@@ -112,41 +165,14 @@ export function exportPlanDialog(
   store: DocumentStore,
   onDone: (message: string) => void,
 ): void {
-  if (!store.hasDocument) {
-    onDone('Kein Dokument geöffnet');
-    return;
-  }
-
-  const filter = new Gtk.FileFilter({ name: 'PDF-Dokument (*.pdf)' });
-  filter.add_pattern('*.pdf');
-  const filters = Gio.ListStore.new(Gtk.FileFilter.$gtype);
-  filters.append(filter);
-
-  const dialog = new Gtk.FileDialog({ title: 'Sanierungsplan als PDF exportieren' });
-  dialog.set_filters(filters);
-  dialog.set_default_filter(filter);
-  dialog.set_initial_name(suggestedName(store));
-
-  dialog.save(window, null, (_source, result) => {
-    let path: string | null = null;
-    try {
-      path = dialog.save_finish(result)?.get_path() ?? null;
-    } catch {
-      return; // cancelled — say nothing
-    }
-    if (!path) return;
-    const target = /\.pdf$/i.test(path) ? path : `${path}.pdf`;
-    try {
-      const plan = buildPlanForStore(store);
-      if (!plan) {
-        onDone('Kein Dokument geöffnet');
-        return;
-      }
-      const { pages } = renderReportPdf(plan, target);
-      onDone(`Sanierungsplan exportiert (${pages} Seiten): ${target}`);
-    } catch (error) {
-      onDone(`Export fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
-    }
+  exportPdfDialog({
+    window,
+    store,
+    title: 'Sanierungsplan als PDF exportieren',
+    initialName: suggestedName(store),
+    label: 'Sanierungsplan',
+    build: () => buildPlanForStore(store),
+    onDone,
   });
 }
 
@@ -170,37 +196,13 @@ export function exportGrundrissDialog(
   store: DocumentStore,
   onDone: (message: string) => void,
 ): void {
-  if (!store.hasDocument) {
-    onDone('Kein Dokument geöffnet');
-    return;
-  }
-  const filter = new Gtk.FileFilter({ name: 'PDF-Dokument (*.pdf)' });
-  filter.add_pattern('*.pdf');
-  const filters = Gio.ListStore.new(Gtk.FileFilter.$gtype);
-  filters.append(filter);
-  const dialog = new Gtk.FileDialog({ title: 'Grundriss als PDF exportieren' });
-  dialog.set_filters(filters);
-  dialog.set_default_filter(filter);
-  dialog.set_initial_name(suggestedName(store).replace(/-sanierungsplan\.pdf$/, '-grundriss.pdf'));
-  dialog.save(window, null, (_source, result) => {
-    let path: string | null = null;
-    try {
-      path = dialog.save_finish(result)?.get_path() ?? null;
-    } catch {
-      return; // cancelled — say nothing
-    }
-    if (!path) return;
-    const target = /\.pdf$/i.test(path) ? path : `${path}.pdf`;
-    try {
-      const doc = buildGrundrissForStore(store);
-      if (!doc) {
-        onDone('Kein Dokument geöffnet');
-        return;
-      }
-      const { pages } = renderReportPdf(doc, target);
-      onDone(`Grundriss exportiert (${pages} Seiten): ${target}`);
-    } catch (error) {
-      onDone(`Export fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
-    }
+  exportPdfDialog({
+    window,
+    store,
+    title: 'Grundriss als PDF exportieren',
+    initialName: suggestedName(store).replace(/-sanierungsplan\.pdf$/, '-grundriss.pdf'),
+    label: 'Grundriss',
+    build: () => buildGrundrissForStore(store),
+    onDone,
   });
 }
