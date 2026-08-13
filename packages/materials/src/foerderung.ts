@@ -16,7 +16,7 @@
  */
 
 import { ENERGIE_DEFAULTS, type Energieklasse } from './energie.ts';
-import { BEG_REGELSTAND, wertAm, type Zeitreihe } from './zeitachse.ts';
+import { BEG_REGELSTAND, istIsoDatum, wertAm, type Zeitreihe } from './zeitachse.ts';
 
 /** Cost categories that BEG-EM funds as Gebäudehülle measures (keys, not typed to core). */
 export const BEG_FOERDERFAEHIG = ['daemmung', 'fassade', 'abdichtung'];
@@ -366,8 +366,14 @@ function pruefeWpbBonus(opts: FoerderOptions): { punkte: number; hinweise: strin
         'Fenster und Türen sind Nr. 5.1 b und bleiben ausgenommen.',
     );
   }
-  if (!antragsdatum) {
-    hinweise.push('WPB-Bonus (Nr. 8.4.3) nicht angesetzt: ohne Antragsdatum lässt sich der Start ab Quartal 1 2027 nicht prüfen.');
+  // `istIsoDatum` before anything reads the date: `wpbBonusPunkteAm` parses and
+  // would throw, and this function's contract is to collect reasons, not to
+  // fail — a malformed date is one more reason the bonus is not granted.
+  if (!antragsdatum || !istIsoDatum(antragsdatum)) {
+    hinweise.push(
+      'WPB-Bonus (Nr. 8.4.3) nicht angesetzt: ohne gültiges Antragsdatum (ISO YYYY-MM-DD) lässt sich ' +
+        'der Start ab Quartal 1 2027 nicht prüfen.',
+    );
   } else if (antragsdatum < BEG_REGELSTAND.inKraftAb || wpbBonusPunkteAm(antragsdatum) === 0) {
     hinweise.push('WPB-Bonus (Nr. 8.4.3) nicht angesetzt: erst für Anträge ab Quartal 1 2027 vorgesehen.');
   }
@@ -388,7 +394,7 @@ function pruefeWpbBonus(opts: FoerderOptions): { punkte: number; hinweise: strin
     hinweise.push(`WPB-Bonus (Nr. 8.4.3) nicht angesetzt: für höchstens ${WPB_MAX_ANTRAEGE} Anträge je Gebäude.`);
   }
 
-  if (hinweise.length > 0 || !antragsdatum) return { punkte: 0, hinweise };
+  if (hinweise.length > 0 || !antragsdatum || !istIsoDatum(antragsdatum)) return { punkte: 0, hinweise };
   return {
     punkte: wpbBonusPunkteAm(antragsdatum),
     hinweise: [

@@ -57,6 +57,19 @@ function heute(): string {
   return `${d.getFullYear()}-${zwei(d.getMonth() + 1)}-${zwei(d.getDate())}`;
 }
 
+/**
+ * A non-negative number, or an error that names the option the user typed.
+ *
+ * yargs turns `--kosten abc` into `NaN` without complaint. The kernel rejects it
+ * too, but by the name of its own field — and someone who wrote `--kosten` should
+ * not have to map that back from `fachunternehmenEur`.
+ */
+function zahl(wert: number, option: string): number {
+  if (!Number.isFinite(wert)) throw new Error(`${option} muss eine Zahl sein.`);
+  if (wert < 0) throw new Error(`${option} darf nicht negativ sein (war: ${wert}).`);
+  return wert;
+}
+
 function zeile(label: string, wert: string, note = ''): void {
   console.log(`${label.slice(0, 38).padEnd(38)}${wert.padStart(16)}${note ? `  ${note}` : ''}`);
 }
@@ -86,9 +99,14 @@ function printFoerderung(r: HeizungsfoerderungResult, input: HeizungsfoerderungI
   zeile('Fachunternehmen (Rechnung)', fmtEur(input.fachunternehmenEur ?? 0));
   zeile('Material Eigenleistung', fmtEur(input.materialEigenleistungEur ?? 0));
   zeile('Gesamtkosten', fmtEur(r.gesamtkostenEur));
-  zeile('Förderhöchstbetrag (erste WE)', fmtEur(r.hoechstbetragEur), 'Nr. 8.3.1 a');
-  zeile('Bemessungsgrundlage', fmtEur(r.bemessungsgrundlageEur));
-  if (r.ueberHoechstbetragEur > 0) zeile('davon über Höchstbetrag (0 %)', fmtEur(r.ueberHoechstbetragEur));
+  // Nothing below the total applies to an excluded plant — printing a ceiling
+  // next to a Bemessungsgrundlage of zero reads like a near miss rather than a
+  // measure that is out of the programme entirely.
+  if (r.foerderfaehig) {
+    zeile('Förderhöchstbetrag (erste WE)', fmtEur(r.hoechstbetragEur), 'Nr. 8.3.1 a');
+    zeile('Bemessungsgrundlage', fmtEur(r.bemessungsgrundlageEur));
+    if (r.ueberHoechstbetragEur > 0) zeile('davon über Höchstbetrag (0 %)', fmtEur(r.ueberHoechstbetragEur));
+  }
 
   if (r.foerderfaehig) {
     console.log(RULE);
@@ -238,6 +256,20 @@ export const fundingCommand: CommandModule<object, FundingArgs> = {
     // *earlier* as "waiting pays off". Refuse the malformed question instead.
     if (bis < datum) throw new Error(`--bis (${bis}) muss auf --datum (${datum}) folgen.`);
 
+    const jahr = args['altanlage-jahr'];
+    if (jahr !== undefined) {
+      // Checked here rather than left to the kernel so the message names the
+      // option. An implausible year is not a curiosity: the whole module orders
+      // dates as strings, so a five-digit one would invert the 20-year test.
+      const nurJahr = /^\d{4}$/.test(jahr);
+      if (!nurJahr && !istIsoDatum(jahr)) {
+        throw new Error(`--altanlage-jahr muss YYYY oder YYYY-MM-DD sein (war: "${jahr}")`);
+      }
+      if (jahr.slice(0, 4) > datum.slice(0, 4)) {
+        throw new Error(`--altanlage-jahr (${jahr}) liegt nach dem Antragsdatum (${datum}).`);
+      }
+    }
+
     const altanlage: Altanlage | undefined =
       args.altanlage === 'keine'
         ? undefined
@@ -252,11 +284,11 @@ export const fundingCommand: CommandModule<object, FundingArgs> = {
       antragsdatum: datum,
       massnahme: `5.3${args.massnahme}` as HeizungMassnahme,
       ausfuehrung: args.ausfuehrung,
-      fachunternehmenEur: args.kosten,
-      materialEigenleistungEur: args.material,
+      fachunternehmenEur: zahl(args.kosten, '--kosten'),
+      materialEigenleistungEur: zahl(args.material, '--material'),
       selbstnutzend: !args.vermietet,
-      haushaltsEinkommenEur: args.einkommen,
-      kinderUnter18: args.kinder,
+      haushaltsEinkommenEur: args.einkommen === undefined ? undefined : zahl(args.einkommen, '--einkommen'),
+      kinderUnter18: zahl(args.kinder, '--kinder'),
       altanlage,
       eigenbau: args.eigenbau,
       gebraucht: args.gebraucht,
