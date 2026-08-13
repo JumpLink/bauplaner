@@ -10,8 +10,9 @@
  * The shell is @gjsify/adwaita-app's runAdwaitaApp(): it owns the runAsync
  * lifecycle (NEVER the sync run() — a blocking run() starves the promise-job
  * queue, so a synchronous view load hangs forever on the spinner), the
- * app.quit (<primary>q) + app.about actions and the env-gated @gjsify/devtools
- * control plane. The window itself — the rich sidebar (project card, nav
+ * app.quit (<primary>q) + app.about actions, the app stylesheet (see css.ts)
+ * and the env-gated @gjsify/devtools control plane. The window itself — the
+ * rich sidebar (project card, nav
  * badges, undo/redo) — stays app-specific in MainWindow; adwaita-app is
  * composition-first and never hides Adw/GTK.
  */
@@ -20,6 +21,7 @@ import Gtk from '@girs/gtk-4.0';
 import { runAdwaitaApp } from '@gjsify/adwaita-app';
 
 import { APP_ID, APP_NAME, APP_VERSION } from './constants.ts';
+import { APP_CSS } from './css.ts';
 import { MainWindow } from './window.ts';
 
 // Pin GTK 4 before libadwaita pulls it in; keep the import referenced.
@@ -27,6 +29,7 @@ void Gtk;
 
 const status = await runAdwaitaApp({
   applicationId: APP_ID,
+  css: APP_CSS,
   about: {
     applicationName: APP_NAME,
     applicationIcon: APP_ID,

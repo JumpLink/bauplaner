@@ -76,8 +76,6 @@ const NAV_ITEMS: NavItem[] = [
   { view: 'dokumentation', icon: 'folder-documents-symbolic', label: 'Dokumentation', subtitle: 'Fotos, PDFs & Messwerte' },
 ];
 
-let navCssInstalled = false;
-
 export class MainWindow extends Adw.ApplicationWindow {
   static {
     GObject.registerClass({ GTypeName: 'BauplanerWindow' }, this);
@@ -124,8 +122,6 @@ export class MainWindow extends Adw.ApplicationWindow {
     this.store.subscribe(() => saveAction.set_enabled(this.store.hasDocument));
     this.store.subscribe(() => this.refreshProjectHeader());
     this.store.subscribe(() => this.refreshBadges());
-    // Nav-badge pill styling needs a display; install it once the window realizes.
-    this.connect('realize', () => this.installNavCss());
     saveAction.connect('activate', () => {
       this.lastSaveUs = GLib.get_monotonic_time();
       const written = this.store.save();
@@ -528,21 +524,6 @@ export class MainWindow extends Adw.ApplicationWindow {
       badge.set_label(String(n));
       badge.set_visible(n > 0);
     }
-  }
-
-  /** Accent pill styling for the nav-row count badges (installed once). */
-  private installNavCss(): void {
-    if (navCssInstalled) return;
-    const display = this.get_display();
-    if (!display) return;
-    const provider = new Gtk.CssProvider();
-    provider.load_from_string(
-      '.nav-badge { min-width: 1.1em; padding: 0 6px; border-radius: 9px;' +
-        ' background-color: alpha(@accent_bg_color, 0.85); color: @accent_fg_color;' +
-        ' font-size: 0.8em; font-weight: bold; }',
-    );
-    Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
-    navCssInstalled = true;
   }
 
   private buildContent(): Adw.NavigationPage {

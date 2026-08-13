@@ -18,6 +18,12 @@ VIEW="${1:?usage: screenshot.sh <view> <out.png> [sh3d]}"
 OUT="${2:?usage: screenshot.sh <view> <out.png> [sh3d]}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 CLI="$(cd "$HERE/.." && pwd)"
+# The WORKSPACE gjsify, never whatever is on PATH. A global CLI of a different
+# version does not fail loudly — it runs the wrong bundler/loader against these
+# pins and the command quietly does nothing useful. Falls back to PATH only when
+# the project has not been installed yet, where there is nothing else to use.
+GJSIFY="$CLI/../node_modules/.bin/gjsify"
+[ -x "$GJSIFY" ] || GJSIFY="$(command -v gjsify)"
 # Default to the demo project sidecar (has costs/assemblies/diagnoses so the
 # data-driven views render content); fall back to the bare .sh3d.
 DEMO="$CLI/demo/beispielhaus.ecoretrofit.json"
@@ -38,7 +44,7 @@ export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}" DISPLAY="${DISPLAY:-:0}"
 # whole tree (subshell → gjsify → gjs); killing the bare subshell PID would
 # orphan the gjs child, which then lingers and blocks future single-instance runs.
 setsid env GJSIFY_DEVTOOLS=1 BP_APP_ID="$APP_ID" BP_APP_FILE="$SH3D" BP_APP_VIEW="$VIEW" \
-    bash -c "cd \"$CLI\" && exec gjsify run start:app" >/tmp/bauplaner-shot.log 2>&1 &
+    bash -c "cd \"$CLI\" && exec \"$GJSIFY\" run start:app" >/tmp/bauplaner-shot.log 2>&1 &
 APP_PID=$!
 trap 'kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true' EXIT
 

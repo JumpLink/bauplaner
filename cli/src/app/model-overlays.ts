@@ -9,18 +9,12 @@
  * return an OSD-styled widget; the caller owns the state.
  */
 
-import type Gdk from '@girs/gdk-4.0';
 import Gtk from '@girs/gtk-4.0';
 
 import type { HomeData } from '@bauplaner/core';
-import { GEG_MAX_U, U_VALUE_SCALE, uValueColor } from '@bauplaner/materials';
+import { GEG_MAX_U, U_VALUE_SCALE } from '@bauplaner/materials';
 
-import { COLORING_MODES, FEUCHTE_WALL_COLOR, type ColoringMode } from './wall-coloring.ts';
-
-/** `0xRRGGBB` → a CSS `#rrggbb` string. */
-export function cssHex(color: number): string {
-  return `#${(color & 0xffffff).toString(16).padStart(6, '0')}`;
-}
+import { COLORING_MODES, type ColoringMode } from './wall-coloring.ts';
 
 /** Format a U-value with a German decimal comma (e.g. 0.24 → "0,24"). */
 export function fmtU(u: number): string {
@@ -105,24 +99,3 @@ export function buildLegend(mode: ColoringMode): Gtk.Widget | null {
   return card;
 }
 
-let legendCssInstalled = false;
-
-/**
- * Add the legend's swatch/gradient CSS to the display once (idempotent). The
- * gradient stops and the teal swatch are derived from the same colour functions
- * the renderers use, so the legend always matches the walls.
- */
-export function ensureLegendCss(display: Gdk.Display | null): void {
-  if (legendCssInstalled || !display) return;
-  const mid = (U_VALUE_SCALE.min + U_VALUE_SCALE.max) / 2;
-  const css =
-    `.er-uvalue-gradient { min-width: 180px; min-height: 12px; border-radius: 4px;` +
-    ` background: linear-gradient(to right, ${cssHex(uValueColor(U_VALUE_SCALE.min))} 0%,` +
-    ` ${cssHex(uValueColor(mid))} 50%, ${cssHex(uValueColor(U_VALUE_SCALE.max))} 100%); }` +
-    `\n.er-swatch-feuchte { min-width: 18px; min-height: 14px; border-radius: 4px;` +
-    ` background-color: ${cssHex(FEUCHTE_WALL_COLOR)}; }`;
-  const provider = new Gtk.CssProvider();
-  provider.load_from_string(css);
-  Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
-  legendCssInstalled = true;
-}

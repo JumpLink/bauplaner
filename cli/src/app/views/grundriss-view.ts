@@ -40,7 +40,7 @@ import {
 } from '@bauplaner/core';
 
 import type { DocumentStore } from '../document-store.ts';
-import { buildLegend, buildLevelControl, buildModeControls, ensureLegendCss } from '../model-overlays.ts';
+import { buildLegend, buildLevelControl, buildModeControls } from '../model-overlays.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
 import { KINDS_BY_TRADE, KIND_LABELS, TRADE_META } from '../tga.ts';
 import { renderInspector } from '../wall-inspector-card.ts';
@@ -299,7 +299,6 @@ export class GrundrissView extends Gtk.Box {
 
     // Float the shared mode switcher / level filter / legend over the plan, and
     // the shared wall inspector (populated on click) top-end.
-    ensureLegendCss(this.get_display());
     const overlay = new Gtk.Overlay();
     overlay.set_child(area);
 

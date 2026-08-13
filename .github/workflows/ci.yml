@@ -27,8 +27,8 @@ jobs:
       # render test skips and the renderer would never run in CI at all — the
       # build only bundles, it never loads a gi:// typelib, so nothing else would
       # have noticed a broken export.
-      # Extra libs the gjsify 0.29 toolchain loads at build time (0.26 built under
-      # Node and needed neither):
+      # Extra libs the gjsify toolchain loads at build time (0.26 built under
+      # Node and needed neither; required since 0.29):
       #   - libsoup3: the CLI boots its GJS bundle (eager gi://Soup import) even
       #     for `gjsify tsc`, so the type-check step needs the Soup-3.0 typelib.
       #   - json-glib: `gjsify build --app gjs` runs the bundler under GJS via the

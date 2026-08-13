@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@gjsify/unit';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
@@ -162,6 +162,29 @@ export default async () => {
       const doc3 = loadDocumentFile(saved);
       expect(doc3.sh3dChanged).toBe(true);
       expect(doc3.home.walls.length).toBe(2);
+    });
+
+    // gjsify 0.32.0 rebuilt writeFileSync fd-first (#1039): it opens with a
+    // flag/mode instead of calling GLib.file_set_contents, so the file is no
+    // longer replaced wholesale — the shortening depends on the platform's
+    // O_TRUNC. Nothing else in this suite ever writes a SHORTER project over a
+    // longer one, and a surviving tail would not fail the save; it fails much
+    // later, when someone opens a project file that is no longer JSON.
+    await it('shrinks a sidecar instead of leaving the old tail', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'ecoproj-trunc-'));
+      const sh3dPath = join(dir, 'plan.sh3d');
+      writeFileSync(sh3dPath, sh3dBytes(WALL1));
+
+      const doc = loadDocumentFile(sh3dPath);
+      doc.project.meta = { name: 'L'.repeat(4096) };
+      const longPath = saveProjectFile(doc.project, doc.sh3dPath);
+      const longSize = statSync(longPath).size;
+
+      doc.project.meta = { name: 'kurz' };
+      const shortPath = saveProjectFile(doc.project, doc.sh3dPath);
+      expect(shortPath).toBe(longPath);
+      expect(statSync(shortPath).size < longSize).toBe(true);
+      expect(loadDocumentFile(shortPath).project.meta?.name).toBe('kurz');
     });
   });
 };

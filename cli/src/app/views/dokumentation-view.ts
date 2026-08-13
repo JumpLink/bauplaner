@@ -10,6 +10,7 @@ import Adw from '@girs/adw-1';
 import Gio from '@girs/gio-2.0';
 import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
+import { pickFile } from '@gjsify/adwaita-app';
 
 import { DOC_KIND_ORDER, docCountByKind, type DocAnchor, type DocEntry, type DocKind, type DocTargetType } from '@bauplaner/core';
 
@@ -182,18 +183,10 @@ export class DokumentationView extends Gtk.Box {
     let pendingFile: string | undefined;
     const pick = new Gtk.Button({ label: 'Wählen …', valign: Gtk.Align.CENTER });
     pick.connect('clicked', () => {
-      const fd = new Gtk.FileDialog({ title: 'Foto / PDF wählen' });
-      fd.open(dlg, null, (_s, res) => {
-        try {
-          const file = fd.open_finish(res);
-          const path = file?.get_path();
-          if (path) {
-            pendingFile = path;
-            fileRow.set_subtitle(basename(path) || path);
-          }
-        } catch {
-          // dismissed
-        }
+      void pickFile(dlg, { title: 'Foto / PDF wählen' }).then((path) => {
+        if (!path) return; // dismissed
+        pendingFile = path;
+        fileRow.set_subtitle(basename(path) || path);
       });
     });
     fileRow.add_suffix(pick);
