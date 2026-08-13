@@ -37,9 +37,9 @@ materials** — and *calculating* the real retrofit, not just drawing it.
   Finanzberater, and explicit about what it is not.
 
 Also usable headless via the CLI (`@bauplaner/cli`: `inspect`, `wand`,
-`envelope`, `lehmgraben`, `bauteil`, `feuchte`, `funding`, `materials`,
-`varianten`, `report`). `envelope` is the Aufmaß of the heated envelope —
-exterior wall area net of its openings, the window/door split, and the
+`envelope`, `budget`, `lehmgraben`, `bauteil`, `feuchte`, `funding`,
+`materials`, `varianten`, `report`). `envelope` is the Aufmaß of the heated
+envelope — exterior wall area net of its openings, the window/door split, and the
 ceiling/floor area against unheated space or the ground, each pro-rated from the
 model geometry. `funding` computes the heating subsidy for a given application
 date and, with `--deadlines`, lists the coming Stichtage with the euro
@@ -49,6 +49,25 @@ difference:
 bauplaner funding --kosten 32000 --altanlage oel --einkommen 38000 --kinder 1
 bauplaner funding --kosten 32000 --altanlage oel --deadlines
 ```
+
+`budget` closes the chain between them — **Modell → Mengen → Material → Kosten →
+Förderung → Eigenanteil** in one call. Quantities come out of the `envelope`
+takeoff, prices out of the material stock, the subsidy out of the BEG rules; the
+envelope goes through Nr. 5.1 with its **per-calendar-year** ceiling, the heat
+generator through Nr. 5.3 with its own. Nobody retypes an area, so a corrected
+model corrects the budget — and the oldest price date used is printed, so it is
+visible how old the calculation is:
+
+```bash
+bauplaner budget haus.sh3d --wand aussendaemmung-holzfaser-180 \
+  --decke geschossdecke-holzfaserflex-300 --fenster 650 --isfp
+bauplaner budget haus.sh3d --wand aussendaemmung-holzfaser-180 --ausfuehrung eigenleistung
+bauplaner budget haus.sh3d --plan vorhaben.json --json
+```
+
+For a staged retrofit — a different Ausführung and a different calendar year per
+measure — pass a Vorhabensdatei with `--plan`; the flags cover the common case of
+one build-up per component in one year.
 
 Status: **early** — a read-only diagnostic surface today (Sweet Home 3D stays the
 geometry editor; a project sidecar adds the retrofit layer). See the

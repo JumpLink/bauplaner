@@ -16,7 +16,7 @@
  */
 
 import { ENERGIE_DEFAULTS, type Energieklasse } from './energie.ts';
-import { BEG_REGELSTAND, istIsoDatum, wertAm, type Zeitreihe } from './zeitachse.ts';
+import { BEG_REGELSTAND, formatEuro, istIsoDatum, wertAm, type Zeitreihe } from './zeitachse.ts';
 
 /** Cost categories that BEG-EM funds as Gebäudehülle measures (keys, not typed to core). */
 export const BEG_FOERDERFAEHIG = ['daemmung', 'fassade', 'abdichtung'];
@@ -288,6 +288,25 @@ export interface FoerderOptions {
   wpbNachweis?: WpbNachweis;
   /** WPB-bonus applications already granted for this building (max three). */
   wpbAntraegeBisher?: number;
+  /**
+   * Eligible costs **already booked for this building in the same calendar
+   * year**, € — the measures costed before this one.
+   *
+   * The ceiling of Nr. 8.3.1 a is per building *and year*, not per measure, so a
+   * second measure in the same year does not get a fresh 30 000 €: it gets what
+   * is left. Without this, costing four envelope measures meant four calls each
+   * believing it had the whole ceiling to itself — four times the subsidy the
+   * KfW will pay. Defaults to 0, which is the single-measure case and leaves
+   * every existing call unchanged.
+   *
+   * Pass the **uncapped** running sum of the year's eligible costs. It decides
+   * two things at once: how much ceiling is left, and — because the iSFP
+   * minimum investment is a per-year figure too — whether the bonus applies at
+   * all. Splitting a year's costs across calls therefore yields the same total
+   * as one call for their sum, whatever the order (only which row carries the
+   * bonus moves).
+   */
+  bereitsAusgeschoepftNet?: number;
 }
 
 /**
@@ -307,8 +326,9 @@ export interface FoerderOptions {
  *    insulation (Nr. 8.4.3) — with an iSFP but *without* that minimum spend,
  *    and for at most {@link WPB_MAX_ANTRAEGE} applications.
  *
- * @param foerderfaehigNet Eligible costs for this building and year, €.
- * @param opts iSFP, measure, application date and WPB evidence; see {@link FoerderOptions}.
+ * @param foerderfaehigNet Eligible costs of THIS measure, €.
+ * @param opts iSFP, measure, application date, WPB evidence and what the same
+ * calendar year has already used up; see {@link FoerderOptions}.
  * @returns The subsidy plus what was capped away; see {@link FoerderResult}.
  *
  * @remarks The minimum spend is defined on *gross* costs while this works in
@@ -316,12 +336,23 @@ export interface FoerderOptions {
  */
 export function computeFoerderung(foerderfaehigNet: number, opts: FoerderOptions = {}): FoerderResult {
   const gesamt = Math.max(0, foerderfaehigNet);
-  const isfpBonusWirksam = !!opts.isfpBonus && gesamt >= BEG_ISFP_MINDESTINVESTITION;
+  const vorher = Math.max(0, opts.bereitsAusgeschoepftNet ?? 0);
+  // The ceiling and the minimum investment both attach to the building-year, so
+  // both are decided on the year's running sum *including* this measure.
+  const jahresSumme = vorher + gesamt;
+  const isfpBonusWirksam = !!opts.isfpBonus && jahresSumme >= BEG_ISFP_MINDESTINVESTITION;
   const grenze = isfpBonusWirksam ? BEG_HOECHSTGRENZE_ISFP : BEG_HOECHSTGRENZE;
 
-  const anrechenbar = Math.min(gesamt, grenze);
-  const zumBasissatz = Math.min(anrechenbar, BEG_HOECHSTGRENZE);
-  const mitBonus = Math.max(0, anrechenbar - BEG_HOECHSTGRENZE);
+  const anrechenbar = Math.min(gesamt, Math.max(0, grenze - vorher));
+  // Which *slice of the year* this measure occupies is what decides its rate:
+  // the year's first BEG_HOECHSTGRENZE euros carry the base rate, everything
+  // above it carries base + iSFP bonus. With `vorher` at 0 this is the plain
+  // `min(anrechenbar, BEG_HOECHSTGRENZE)` of the single-measure case.
+  const zumBasissatz = Math.max(
+    0,
+    Math.min(vorher + anrechenbar, BEG_HOECHSTGRENZE) - Math.min(vorher, BEG_HOECHSTGRENZE),
+  );
+  const mitBonus = anrechenbar - zumBasissatz;
 
   const wpb = pruefeWpbBonus(opts);
   // The WPB bonus has no split of its own in Nr. 8.4.3, so it is applied to the
@@ -330,6 +361,16 @@ export function computeFoerderung(foerderfaehigNet: number, opts: FoerderOptions
   const foerderung =
     zumBasissatz * BEG_BASIS_SATZ + mitBonus * (BEG_BASIS_SATZ + BEG_ISFP_BONUS) + (anrechenbar * wpb.punkte) / 100;
 
+  const hinweise = [...wpb.hinweise];
+  if (vorher > 0 && gesamt > anrechenbar) {
+    hinweise.push(
+      `Förderhöchstgrenze ${formatEuro(grenze)} (Nr. 8.3.1 a) für dieses Gebäude und Kalenderjahr: ` +
+        `${formatEuro(vorher)} sind bereits durch frühere Maßnahmen desselben Jahres belegt, ` +
+        `${formatEuro(round2(gesamt - anrechenbar))} bleiben unberücksichtigt. Eine Maßnahme im ` +
+        'Folgejahr hebt die Grenze neu an.',
+    );
+  }
+
   return {
     rate: anrechenbar > 0 ? round2(foerderung / anrechenbar) : 0,
     foerderfaehigNet: round2(anrechenbar),
@@ -337,7 +378,7 @@ export function computeFoerderung(foerderfaehigNet: number, opts: FoerderOptions
     ueberHoechstgrenzeNet: round2(gesamt - anrechenbar),
     isfpBonusWirksam,
     wpbBonusWirksam: wpb.punkte > 0,
-    hinweise: wpb.hinweise,
+    hinweise,
   };
 }
 

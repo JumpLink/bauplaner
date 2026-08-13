@@ -7,6 +7,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "dependencies": {
+    "@bauplaner/core": "*"
+  },
   "scripts": {
     "check": "tsc --noEmit --project tsconfig.json"
   },

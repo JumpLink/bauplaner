@@ -15,7 +15,7 @@ import Gtk from '@girs/gtk-4.0';
 import { deriveEnvelope, wallLengthM, type Wall } from '@bauplaner/core';
 import {
   KATEGORIE_FARBE,
-  PRESET_ASSEMBLIES,
+  presetsFor,
   assessAssembly,
   getMaterial,
   presetByKey,
@@ -38,7 +38,14 @@ const RISIKO_TEXT = {
 
 const RISIKO_CSS = { gering: 'success', mittel: 'warning', hoch: 'error' } as const;
 
-const PRESET_NAMES = ['(keiner)', ...PRESET_ASSEMBLIES.map((p) => p.name)];
+/**
+ * The build-ups that belong to an exterior wall. Everything here compares or
+ * assigns *wall* build-ups; `PRESET_ASSEMBLIES` also carries the ceiling and
+ * floor ones, which share neither a threshold nor an area with a façade.
+ */
+const WAND_PRESETS = presetsFor('aussenwand');
+
+const PRESET_NAMES = ['(keiner)', ...WAND_PRESETS.map((p) => p.name)];
 
 export class BauteileView extends Gtk.Box {
   static {
@@ -67,12 +74,12 @@ export class BauteileView extends Gtk.Box {
   private indexForLayers(layers?: AssemblyLayers): number {
     if (!layers || layers.length === 0) return 0;
     const json = JSON.stringify(layers);
-    const idx = PRESET_ASSEMBLIES.findIndex((p) => JSON.stringify(p.layers) === json);
+    const idx = WAND_PRESETS.findIndex((p) => JSON.stringify(p.layers) === json);
     return idx >= 0 ? idx + 1 : 0;
   }
 
   private layersForIndex(idx: number): AssemblyLayers {
-    return idx === 0 ? [] : PRESET_ASSEMBLIES[idx - 1].layers;
+    return idx === 0 ? [] : WAND_PRESETS[idx - 1].layers;
   }
 
   private render(): void {
@@ -189,7 +196,7 @@ export class BauteileView extends Gtk.Box {
 
     const vergleich = vergleicheVarianten({
       referenz,
-      varianten: PRESET_ASSEMBLIES.filter((p) => p.key !== REFERENZ_KEY),
+      varianten: WAND_PRESETS.filter((p) => p.key !== REFERENZ_KEY),
       areaM2: area,
       isfpBonus: true,
     });

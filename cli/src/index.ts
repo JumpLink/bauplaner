@@ -20,6 +20,7 @@ import {
   wandCommand,
   envelopeCommand,
   fundingCommand,
+  budgetCommand,
   wandSetCommand,
   bauplanCommand,
   reportCommand,
@@ -46,6 +47,7 @@ async function main(): Promise<void> {
     .command(wandCommand)
     .command(envelopeCommand)
     .command(fundingCommand)
+    .command(budgetCommand)
     .command(wandSetCommand)
     .command(bauplanCommand)
     .command(reportCommand)

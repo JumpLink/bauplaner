@@ -1,16 +1,41 @@
 /**
- * Preset wall build-ups (natural, diffusion-open), a one-call assessment
- * (U-value + Tauwasser + GEG) over {@link computeAssembly}, and a U-value → color
- * scale for the 3D model. Lets the app assign an assembly to walls and colour
- * them by thermal quality.
+ * Preset build-ups (natural, diffusion-open) for the components of the heated
+ * envelope, a one-call assessment (U-value + Tauwasser + GEG) over
+ * {@link computeAssembly}, and a U-value → color scale for the 3D model. Lets the
+ * app assign an assembly to walls and colour them by thermal quality, and lets a
+ * budget price a component from the material stock.
  */
 
 import { computeAssembly, type BauteilArt, type LayerSpec } from './bauphysik.ts';
+import type { BegBauteil } from './foerderung.ts';
 import { checkGeg } from './geg.ts';
+
+/**
+ * Heat-flow direction per component — the surface resistances differ, so the
+ * same layers give a different U-value on a wall and on a ceiling.
+ *
+ * Derived here rather than stored on each preset: two fields that must agree are
+ * two fields that eventually do not. Windows and doors are bought as products
+ * and have no layer stack; they map to `wall` only so the type is total.
+ */
+export const BAUTEIL_ART: Record<BegBauteil, BauteilArt> = {
+  aussenwand: 'wall',
+  dach: 'roof',
+  'oberste-geschossdecke': 'roof',
+  kellerdecke: 'floor',
+  fenster: 'wall',
+  haustuer: 'wall',
+};
 
 export interface AssemblyPreset {
   key: string;
   name: string;
+  /**
+   * Which component the build-up is dimensioned for. It decides the heat-flow
+   * direction ({@link BAUTEIL_ART}) and the BEG threshold the U-value is held
+   * against — and it is what keeps a ceiling build-up out of a wall picker.
+   */
+  bauteil: BegBauteil;
   /** Layers inside → outside. */
   layers: LayerSpec[];
   /**
@@ -47,8 +72,12 @@ const BESTAND_AUSSENPUTZ: LayerSpec = {
 };
 
 /**
- * Build-ups for a solid-brick exterior wall of ~1900, spanning the real decision
- * space: do nothing, insulate inside, insulate outside, or combine both.
+ * Build-ups per component, keyed by {@link AssemblyPreset.bauteil}. Read the ones
+ * for a component with {@link presetsFor} — the bare array mixes components and
+ * is only meant for "everything the tool knows".
+ *
+ * For a solid-brick exterior wall of ~1900 they span the real decision space: do
+ * nothing, insulate inside, insulate outside, or combine both.
  *
  * The `-eps-` and `-mineralwolle-` entries are **benchmarks, not
  * recommendations**: they are dimensioned to the same U-value as the wood-fibre
@@ -62,6 +91,7 @@ const BESTAND_AUSSENPUTZ: LayerSpec = {
 export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
   {
     key: 'bestand-vollziegel-365',
+    bauteil: 'aussenwand',
     name: 'Bestand: Vollziegel 36,5 cm',
     layers: [
       { materialKey: 'kalkputz', thicknessM: 0.015, bestand: true },
@@ -71,6 +101,7 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
   },
   {
     key: 'innendaemmung-holzfaser-60',
+    bauteil: 'aussenwand',
     name: 'Innendämmung: 6 cm Holzfaser',
     layers: [
       { materialKey: 'lehmputz', thicknessM: 0.015 },
@@ -84,6 +115,7 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
   },
   {
     key: 'innendaemmung-holzfaser-100-lehmplatte',
+    bauteil: 'aussenwand',
     name: 'Innendämmung: 10 cm Holzfaser + Lehmbauplatte',
     layers: [
       { materialKey: 'lehmputz', thicknessM: 0.01 },
@@ -101,6 +133,7 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
   },
   {
     key: 'aussendaemmung-holzfaser-160',
+    bauteil: 'aussenwand',
     name: 'Außendämmung: 16 cm Holzfaser',
     layers: [BESTAND_ZIEGEL, { materialKey: 'holzfaser', thicknessM: 0.16 }, { materialKey: 'kalkputz', thicknessM: 0.02 }],
     zusatzkostenProM2: 45,
@@ -109,6 +142,7 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
   },
   {
     key: 'aussendaemmung-holzfaser-180',
+    bauteil: 'aussenwand',
     name: 'Außendämmung: 18 cm Holzfaser',
     layers: [BESTAND_ZIEGEL, { materialKey: 'holzfaser', thicknessM: 0.18 }, { materialKey: 'kalkputz', thicknessM: 0.02 }],
     zusatzkostenProM2: 45,
@@ -120,6 +154,7 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
   },
   {
     key: 'aussendaemmung-eps-150',
+    bauteil: 'aussenwand',
     name: 'Außendämmung: 15 cm EPS (Vergleichsmaßstab)',
     layers: [BESTAND_ZIEGEL, { materialKey: 'eps', thicknessM: 0.15 }, { materialKey: 'kalkzementputz', thicknessM: 0.02 }],
     zusatzkostenProM2: 45,
@@ -131,6 +166,7 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
   },
   {
     key: 'aussendaemmung-mineralwolle-150',
+    bauteil: 'aussenwand',
     name: 'Außendämmung: 15 cm Mineralwolle (Vergleichsmaßstab)',
     layers: [BESTAND_ZIEGEL, { materialKey: 'mineralwolle', thicknessM: 0.15 }, { materialKey: 'kalkputz', thicknessM: 0.02 }],
     zusatzkostenProM2: 45,
@@ -139,6 +175,7 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
   },
   {
     key: 'kombi-aussen-180-innen-wandheizung',
+    bauteil: 'aussenwand',
     name: 'Kombination: 18 cm Holzfaser außen + Wandheizung in Lehm innen',
     zusatzkostenProM2: 55,
     zusatzkostenQuelle: `${WDVS_ZUSATZ_QUELLE}; + 10 €/m² innen für Träger/Befestigung`,
@@ -159,10 +196,57 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
       { materialKey: 'kalkputz', thicknessM: 0.02 },
     ],
   },
+
+  // — Decke gegen unbeheizt / Boden —
+  //
+  // Both carry ONLY the layers that get added. The existing deck is left out
+  // rather than guessed: the model does not know whether it is a Holzbalken-,
+  // a Kappen- or a Betondecke, and a `bestand` layer invented here would raise
+  // R and *lower* the U-value — i.e. promise a BEG threshold on a fiction. Left
+  // out, the assessment understates the deck, which errs towards "does not
+  // qualify" and can only be corrected by measuring the real one.
+  {
+    key: 'geschossdecke-holzfaserflex-300',
+    bauteil: 'oberste-geschossdecke',
+    name: 'Oberste Geschossdecke: 30 cm Holzfaser-Flex (nicht begehbar)',
+    layers: [{ materialKey: 'holzfaserflex', thicknessM: 0.3 }],
+    zusatzkostenProM2: 10,
+    zusatzkostenQuelle: 'Rieselschutz/Randstreifen ≈ 10 €/m² (Richtwert, ohne Lohn)',
+    hinweise: [
+      'Der Dachboden ist danach NICHT begehbar. Eine lastverteilende Lage (Lattung + Platte) ' +
+        'kommt als eigenes Gewerk dazu und ist hier nicht eingerechnet.',
+      'Die Bestandsdecke ist thermisch nicht angerechnet — der U-Wert ist damit konservativ.',
+    ],
+  },
+  {
+    key: 'kellerdecke-holzfaser-160',
+    bauteil: 'kellerdecke',
+    name: 'Kellerdecke: 16 cm Holzfaser von unten',
+    layers: [{ materialKey: 'holzfaser', thicknessM: 0.16 }],
+    zusatzkostenProM2: 8,
+    zusatzkostenQuelle: 'Dübel/Befestigung ≈ 8 €/m² (Richtwert, ohne Lohn)',
+    hinweise: [
+      'Die lichte Höhe im Keller sinkt um die Dämmstärke — Leitungen, Kellertüren und ' +
+        'Treppenantritt vorher prüfen.',
+      'Die Bestandsdecke ist thermisch nicht angerechnet — der U-Wert ist damit konservativ.',
+    ],
+  },
 ];
 
 export function presetByKey(key: string): AssemblyPreset | undefined {
   return PRESET_ASSEMBLIES.find((p) => p.key === key);
+}
+
+/**
+ * The build-ups dimensioned for one component.
+ *
+ * Every surface that offers a choice of build-ups means *this*, not "all
+ * presets" — a wall picker that lists a Kellerdecke, or a variant comparison
+ * that ranks one against a façade, is comparing components that do not share a
+ * threshold, a heat-flow direction or an area.
+ */
+export function presetsFor(bauteil: BegBauteil): AssemblyPreset[] {
+  return PRESET_ASSEMBLIES.filter((p) => p.bauteil === bauteil);
 }
 
 export interface AssemblyAssessment {

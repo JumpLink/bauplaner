@@ -11,6 +11,7 @@
  * - `foerderung` — BEG-EM subsidy for the envelope (Nr. 5.1/5.2/5.4)
  * - `heizung`    — BEG-EM subsidy for the heat generator (Nr. 5.3), boni and Stichtage
  * - `kosten`     — cost estimation from verified prices
+ * - `budget`     — Modell → Mengen → Material → Kosten → Förderung → Eigenanteil
  * - `varianten`  — compares build-ups on Feuchte, Energie, Geld and Ökologie
  */
 
@@ -25,5 +26,6 @@ export * from './foerderung.ts';
 export * from './heizung.ts';
 export * from './fahrplan.ts';
 export * from './kosten.ts';
+export * from './budget.ts';
 export * from './oekobilanz.ts';
 export * from './varianten.ts';

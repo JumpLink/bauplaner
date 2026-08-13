@@ -12,11 +12,18 @@ import Gio from '@girs/gio-2.0';
 import Gtk from '@girs/gtk-4.0';
 
 import { deriveEnvelope } from '@bauplaner/core';
-import { PRESET_ASSEMBLIES, presetByKey, vergleicheVarianten } from '@bauplaner/materials';
+import { presetByKey, presetsFor, vergleicheVarianten } from '@bauplaner/materials';
 import { buildGrundrissDoc, buildSanierungsplan, renderReportPdf, type GebaeudeTeil } from '@bauplaner/report';
 
 import type { DocumentStore } from './document-store.ts';
 import { buildEnergyScreenings } from '../energy.ts';
+
+/**
+ * The build-ups that belong to an exterior wall. Everything here compares or
+ * assigns *wall* build-ups; `PRESET_ASSEMBLIES` also carries the ceiling and
+ * floor ones, which share neither a threshold nor an area with a façade.
+ */
+const WAND_PRESETS = presetsFor('aussenwand');
 
 /** The build-up every candidate is measured against, as in the Bauteile view. */
 const REFERENZ_KEY = 'bestand-vollziegel-365';
@@ -78,7 +85,7 @@ export function buildPlanForStore(store: DocumentStore): ReturnType<typeof build
     referenz && areaM2 > 0
       ? vergleicheVarianten({
           referenz,
-          varianten: PRESET_ASSEMBLIES.filter((p) => p.key !== REFERENZ_KEY),
+          varianten: WAND_PRESETS.filter((p) => p.key !== REFERENZ_KEY),
           areaM2,
           isfpBonus: true,
         })
