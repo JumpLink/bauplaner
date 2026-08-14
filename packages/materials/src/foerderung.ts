@@ -154,6 +154,22 @@ export const BEG_ISFP_MINDESTINVESTITION = 30_000;
 export const BEG_HOECHSTGRENZE_WAERMEERZEUGER = 28_000;
 
 /**
+ * Fachplanung und Baubegleitung (BEG EM Nr. 5.4): its own rate — half the
+ * cost back — and its own sub-ceiling on eligible costs, per calendar year and
+ * Wohneinheit (EFH figure). For an Eigenleistungs-Vorhaben this position is not
+ * optional decoration: Nr. 8.2 requires an Energieeffizienz-Experte (or
+ * Fachunternehmer) to confirm the proper execution and the material costs, so
+ * the EEE invoice exists anyway — leaving Nr. 5.4 unclaimed is leaving half of
+ * it on the table. The eligible amount still counts into the shared yearly
+ * envelope ceiling of Nr. 8.3.1 a ({@link BEG_HOECHSTGRENZE}); the iSFP bonus
+ * never applies to it (Nr. 8.4.2).
+ *
+ * Source: BEG EM Richtlinie 17.07.2026, Nr. 5.4 / 8.3.1.
+ */
+export const BEG_SATZ_BAUBEGLEITUNG = 0.5;
+export const BEG_HOECHSTGRENZE_BAUBEGLEITUNG = 5_000;
+
+/**
  * Which envelope measure is being funded. The distinction exists for the WPB
  * bonus: it reaches Nr. 5.1 Buchstabe **a** (Dämmung) only. Windows and doors
  * are Nr. 5.1 b and never earn it, however bad the building is.

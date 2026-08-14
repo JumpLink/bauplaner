@@ -44,6 +44,8 @@ interface BudgetArgs {
   tuer?: number;
   heizung?: number;
   'heizung-material'?: number;
+  baubegleitung?: number;
+  sonstiges?: number;
   ausfuehrung: Ausfuehrungsart;
   lohn?: number;
   datum?: string;
@@ -84,7 +86,9 @@ function mengenNote(p: BudgetPosten): string {
     case 'vorgabe':
       return 'Menge von Hand gesetzt — folgt dem Modell NICHT';
     case 'ohne':
-      return 'ohne Fläche — nach Kosten gefördert (Nr. 5.3)';
+      // Which rule pays is on the row's bezeichnung — this only explains why
+      // the Menge column is empty.
+      return p.bauteil === 'sonstiges' ? 'ohne Fläche — Pauschale' : 'ohne Fläche — nach Kosten gefördert';
   }
 }
 
@@ -159,6 +163,24 @@ function massnahmenAusFlags(args: BudgetArgs): BudgetMassnahme[] {
       bauteil: 'haustuer',
       einheitspreis: { proM2: zahl(args.tuer, '--tuer'), quelle: CLI_PREIS_QUELLE },
       ...gemeinsam,
+    });
+  }
+
+  // The EEE's confirmation is mandatory for Eigenleistung anyway (Nr. 8.2) —
+  // claiming its Nr.-5.4 half is the difference between paying him fully and
+  // paying half. Tools/scaffolding/reserve keep the bottom line honest.
+  if (args.baubegleitung != null) {
+    massnahmen.push({
+      bauteil: 'baubegleitung',
+      ausfuehrung: args.ausfuehrung,
+      pauschale: { nettoEur: zahl(args.baubegleitung, '--baubegleitung'), quelle: CLI_PREIS_QUELLE },
+    });
+  }
+  if (args.sonstiges != null) {
+    massnahmen.push({
+      bauteil: 'sonstiges',
+      ausfuehrung: args.ausfuehrung,
+      pauschale: { nettoEur: zahl(args.sonstiges, '--sonstiges'), quelle: CLI_PREIS_QUELLE },
     });
   }
 
@@ -238,6 +260,14 @@ export const budgetCommand: CommandModule<object, BudgetArgs> = {
       .option('heizung', { describe: 'Heizung: Rechnung des Fachunternehmens in € (netto)', type: 'number' })
       .option('heizung-material', {
         describe: 'Heizung: Materialkosten der Eigenleistung in € (netto, nur sie sind dort förderfähig)',
+        type: 'number',
+      })
+      .option('baubegleitung', {
+        describe: 'Energieeffizienz-Experte in € (netto) — Nr. 5.4, 50 % gefördert bis 5.000 €/Jahr',
+        type: 'number',
+      })
+      .option('sonstiges', {
+        describe: 'Werkzeug/Gerüst/Entsorgung/Reserve in € (netto) — nicht gefördert, nur für die Gesamtsumme',
         type: 'number',
       })
       .option('ausfuehrung', {

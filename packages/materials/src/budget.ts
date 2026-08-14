@@ -41,7 +41,11 @@ import { computeEnvelope, type EnvelopeTakeoff, type HomeData } from '@bauplaner
 import { BAUTEIL_ART, assessAssembly, presetByKey, presetsFor, type AssemblyPreset } from './assemblies.ts';
 import type { LayerSpec } from './bauphysik.ts';
 import {
+  BEG_HOECHSTGRENZE,
+  BEG_HOECHSTGRENZE_BAUBEGLEITUNG,
+  BEG_HOECHSTGRENZE_ISFP,
   BEG_MAX_U,
+  BEG_SATZ_BAUBEGLEITUNG,
   checkBeg,
   computeFoerderung,
   type BausubstanzStatus,
@@ -61,14 +65,19 @@ import { formatEuro, istIsoDatum } from './zeitachse.ts';
 
 /**
  * What a measure can address: any component BEG-EM sets a U-value for, plus the
- * heat generator.
+ * heat generator, the Baubegleitung and the unfunded rest.
  *
  * Reusing {@link BegBauteil} rather than inventing a parallel list is what keeps
  * the threshold, the maximum U-value and the measure letter of a component in
- * one place. `'heizung'` is the one addition, and it is a different rule set
- * (Nr. 5.3), which is why it is a separate member and not a seventh Bauteil.
+ * one place. The additions are different rule sets, which is why they are
+ * separate members and not further Bauteile: `'heizung'` is Nr. 5.3,
+ * `'baubegleitung'` is Nr. 5.4 (50 %, own sub-ceiling, mandatory anyway for an
+ * Eigenleistungs-Vorhaben via Nr. 8.2), and `'sonstiges'` is everything a real
+ * Vorhaben pays that BEG never funds — tools, scaffolding, disposal, reserve —
+ * carried so the budget's bottom line is the whole bill, not just the funded
+ * part of it.
  */
-export type BudgetBauteil = BegBauteil | 'heizung';
+export type BudgetBauteil = BegBauteil | 'heizung' | 'baubegleitung' | 'sonstiges';
 
 /** Every component a budget measure can name, in the order a retrofit meets them. */
 export const BUDGET_BAUTEILE: readonly BudgetBauteil[] = [
@@ -79,6 +88,8 @@ export const BUDGET_BAUTEILE: readonly BudgetBauteil[] = [
   'fenster',
   'haustuer',
   'heizung',
+  'baubegleitung',
+  'sonstiges',
 ];
 
 /**
@@ -94,6 +105,8 @@ export const BUDGET_BAUTEIL_LABEL: Record<BudgetBauteil, string> = {
   fenster: 'Fenster',
   haustuer: 'Türen',
   heizung: 'Heizung',
+  baubegleitung: 'Fachplanung/Baubegleitung',
+  sonstiges: 'Sonstiges (ohne Förderung)',
 };
 
 /**
@@ -183,6 +196,13 @@ export interface BudgetMassnahme {
   jahr?: number;
   /** Required for `bauteil: 'heizung'`, ignored otherwise. */
   heizung?: HeizungAngaben;
+  /**
+   * Flat net amount for `'baubegleitung'` and `'sonstiges'` — positions that
+   * have no area and no layer stack (an EEE quote, tools, scaffolding, a
+   * reserve). Required for those two, ignored otherwise. Carries its source,
+   * because an unsourced figure is a guess wearing a decimal point.
+   */
+  pauschale?: { nettoEur: number; quelle: string; stand?: string };
 }
 
 export interface BudgetPlan {
@@ -464,6 +484,8 @@ export function computeBudget(home: HomeData, plan: BudgetPlan): BudgetErgebnis 
    */
   const jahresVolumen = new Map<number, number>();
   const jahresFoerderung = new Map<number, number>();
+  /** Nr.-5.4 eligible costs already booked per calendar year (own sub-ceiling). */
+  const jahresBaubegleitung = new Map<number, number>();
 
   plan.massnahmen.forEach((m, i) => {
     const id = m.id ?? `${m.bauteil}-${i + 1}`;
@@ -478,6 +500,19 @@ export function computeBudget(home: HomeData, plan: BudgetPlan): BudgetErgebnis 
 
     if (m.bauteil === 'heizung') {
       posten.push(heizungsPosten(id, m, plan, ausfuehrung, jahr, ustSatz, bemessung, hinweise, heizungErgebnisse));
+      return;
+    }
+
+    if (m.bauteil === 'baubegleitung' || m.bauteil === 'sonstiges') {
+      posten.push(
+        pauschalPosten(id, m, plan, ausfuehrung, jahr, ustSatz, bemessung, hinweise, {
+          jahresVolumen,
+          jahresFoerderung,
+          jahresBaubegleitung,
+          preisDaten,
+          preisOhneDatum,
+        }),
+      );
       return;
     }
 
@@ -656,6 +691,118 @@ export function computeBudget(home: HomeData, plan: BudgetPlan): BudgetErgebnis 
     hinweise: [...new Set([...globaleHinweise, ...posten.flatMap((p) => p.hinweise)])],
     aufmass,
     heizung: heizungErgebnisse,
+  };
+}
+
+/**
+ * Flat positions: Nr.-5.4 Baubegleitung and the unfunded rest.
+ *
+ * Baubegleitung is the position an Eigenleistungs-Vorhaben cannot skip — the
+ * Energieeffizienz-Experte who must confirm the execution and material costs
+ * (Nr. 8.2) invoices anyway, and Nr. 5.4 pays half of it back up to its own
+ * yearly sub-ceiling. His invoice is a real outlay even when everything else
+ * is Eigenleistung, so the Nr.-8.2 labour filter never applies here. The
+ * eligible amount also counts into the shared yearly envelope ceiling; the
+ * remaining headroom is read against the plain (or iSFP) ceiling — a
+ * simplification of `computeFoerderung`'s slice logic that errs small.
+ *
+ * `'sonstiges'` is the honest rest of the bill: tools, scaffolding, disposal,
+ * reserve. BEG pays nothing for it; a budget that omits it looks cheaper than
+ * the Vorhaben is.
+ */
+function pauschalPosten(
+  id: string,
+  m: BudgetMassnahme,
+  plan: BudgetPlan,
+  ausfuehrung: Ausfuehrungsart,
+  jahr: number,
+  ustSatz: number,
+  bemessung: 'brutto' | 'netto',
+  hinweise: string[],
+  konten: {
+    jahresVolumen: Map<number, number>;
+    jahresFoerderung: Map<number, number>;
+    jahresBaubegleitung: Map<number, number>;
+    preisDaten: string[];
+    preisOhneDatum: string[];
+  },
+): BudgetPosten {
+  const was = `Maßnahme ${id}`;
+  const label = BUDGET_BAUTEIL_LABEL[m.bauteil];
+  if (!m.pauschale) {
+    throw new Error(
+      `${was}: bauteil "${m.bauteil}" braucht pauschale ({ nettoEur, quelle }) — es gibt weder ` +
+        'Fläche noch Aufbau, nur einen Betrag mit Herkunft (Angebot, Schätzung).',
+    );
+  }
+  if (!m.pauschale.quelle.trim()) {
+    throw new Error(`${was}: pauschale braucht eine quelle — ein Betrag ohne Herkunft ist eine Schätzung.`);
+  }
+  if (m.aufbau || m.einheitspreis || m.flaecheM2 !== undefined || m.anteil !== undefined || m.lohnProM2 !== undefined) {
+    hinweise.push(`Bauteil „${label}": Aufbau, Einheitspreis, Fläche, Anteil und Lohn bleiben außer Ansatz.`);
+  }
+  const netto = round2(pruefeZahl(m.pauschale.nettoEur, 'pauschale.nettoEur', was) ?? 0);
+  if (m.pauschale.stand) konten.preisDaten.push(m.pauschale.stand);
+  else konten.preisOhneDatum.push(`${label} (Pauschale)`);
+  hinweise.push(`Pauschale ${formatEuro(netto)} netto: ${m.pauschale.quelle}.`);
+  const kostenBrutto = round2(netto * (1 + ustSatz));
+
+  let foerderung = 0;
+  let foerderfaehig = 0;
+  let satz = 0;
+  if (m.bauteil === 'baubegleitung') {
+    const basis = round2(bemessung === 'brutto' ? kostenBrutto : netto);
+    const vor54 = konten.jahresBaubegleitung.get(jahr) ?? 0;
+    const grenzeJahr = plan.isfpBonus ? BEG_HOECHSTGRENZE_ISFP : BEG_HOECHSTGRENZE;
+    const vorJahr = konten.jahresVolumen.get(jahr) ?? 0;
+    foerderfaehig = round2(
+      Math.min(basis, Math.max(0, BEG_HOECHSTGRENZE_BAUBEGLEITUNG - vor54), Math.max(0, grenzeJahr - vorJahr)),
+    );
+    satz = BEG_SATZ_BAUBEGLEITUNG;
+    foerderung = round2(foerderfaehig * satz);
+    konten.jahresBaubegleitung.set(jahr, vor54 + foerderfaehig);
+    konten.jahresVolumen.set(jahr, vorJahr + foerderfaehig);
+    konten.jahresFoerderung.set(jahr, (konten.jahresFoerderung.get(jahr) ?? 0) + foerderung);
+    if (foerderfaehig < basis) {
+      hinweise.push(
+        `Nr. 5.4: förderfähig sind ${formatEuro(foerderfaehig)} von ${formatEuro(basis)} — der ` +
+          `eigene Höchstbetrag (${formatEuro(BEG_HOECHSTGRENZE_BAUBEGLEITUNG)} je Kalenderjahr) ` +
+          'bzw. die Jahres-Höchstgrenze der Hülle ist erreicht.',
+      );
+    }
+    hinweise.push(
+      'Die EEE-Rechnung ist auch bei Eigenleistung eine echte Ausgabe (Nr. 8.2 verlangt die ' +
+        'Bestätigung ohnehin) — der Eigenleistungs-Filter greift hier nicht; der iSFP-Bonus gilt ' +
+        'für Nr. 5.4 nie (Nr. 8.4.2).',
+    );
+  } else {
+    hinweise.push(
+      'Nicht förderfähig — der Posten läuft nur in die Gesamtsumme, damit die untere Zeile das ' +
+        'ganze Vorhaben zeigt und nicht nur den geförderten Teil.',
+    );
+  }
+
+  // Cost split follows the invoice logic: the EEE bills a service (labour
+  // column), tools/scaffolding are bought (material column).
+  const istDienstleistung = m.bauteil === 'baubegleitung';
+  return {
+    id,
+    bauteil: m.bauteil,
+    bezeichnung: istDienstleistung ? 'BEG EM Nr. 5.4 (Energieeffizienz-Experte)' : 'Pauschale',
+    ausfuehrung,
+    jahr,
+    mengeM2: 0,
+    mengeQuelle: 'ohne',
+    materialNettoEur: istDienstleistung ? 0 : netto,
+    lohnNettoEur: istDienstleistung ? netto : 0,
+    kostenNettoEur: netto,
+    kostenBruttoEur: kostenBrutto,
+    bemessungsgrundlageEur: foerderfaehig,
+    ueberHoechstgrenzeEur: m.bauteil === 'baubegleitung' ? round2(Math.max(0, (bemessung === 'brutto' ? kostenBrutto : netto) - foerderfaehig)) : 0,
+    foerdersatz: satz,
+    foerderungEur: foerderung,
+    eigenanteilEur: round2(kostenBrutto - foerderung),
+    hinweise,
   };
 }
 
