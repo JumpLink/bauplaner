@@ -1,12 +1,16 @@
 import type { CommandModule } from 'yargs';
 
+import { computeEnvelope, deriveRoofs, loadDocumentFile, type EnvelopeTakeoff } from '@bauplaner/core';
 import {
+  BAUTEIL_ART,
+  BUDGET_BAUTEIL_LABEL,
   dimensioniereDaemmung,
   parsePriceOverride,
   presetsFor,
   presetByKey,
   vergleicheVarianten,
   type BausubstanzStatus,
+  type BegBauteil,
   type Gewichtung,
   type Price,
   type VariantenErgebnis,
@@ -15,10 +19,37 @@ import {
 
 import { fmtEur, fmtNum } from '../format.ts';
 
+/** The components a layer-stack comparison makes sense for (windows are products). */
+const BAUTEILE = ['aussenwand', 'dach', 'oberste-geschossdecke', 'kellerdecke'] as const;
+type VergleichsBauteil = (typeof BAUTEILE)[number];
+
+/** The existing build-up each component is measured against by default. */
+const REFERENZ_DEFAULT: Record<VergleichsBauteil, string> = {
+  aussenwand: 'bestand-vollziegel-365',
+  dach: 'bestand-flachdach-ungedaemmt',
+  'oberste-geschossdecke': 'bestand-holzdecke-ungedaemmt',
+  kellerdecke: 'bestand-boden-dielen',
+};
+
+/** The takeoff area a component compares over — the same mapping `budget` uses. */
+function flaecheAusAufmass(t: EnvelopeTakeoff, bauteil: VergleichsBauteil): number {
+  switch (bauteil) {
+    case 'aussenwand':
+      return t.wallNetM2;
+    case 'dach':
+    case 'oberste-geschossdecke':
+      return t.ceilingM2;
+    case 'kellerdecke':
+      return t.floorM2;
+  }
+}
+
 interface VariantenArgs {
-  area: number;
+  file?: string;
+  bauteil: VergleichsBauteil;
+  area?: number;
   preset?: string[];
-  referenz: string;
+  referenz?: string;
   'ziel-u'?: number;
   isfp: boolean;
   status: BausubstanzStatus;
@@ -28,13 +59,6 @@ interface VariantenArgs {
   gewicht?: string;
   json: boolean;
 }
-
-/**
- * The build-ups that belong to an exterior wall. Everything here compares or
- * assigns *wall* build-ups; `PRESET_ASSEMBLIES` also carries the ceiling and
- * floor ones, which share neither a threshold nor an area with a façade.
- */
-const WAND_PRESETS = presetsFor('aussenwand');
 
 const RISIKO_SYMBOL = { gering: '✓ gering', mittel: '~ mittel', hoch: '✗ hoch' } as const;
 
@@ -55,18 +79,25 @@ function parseGewichtung(spec: string): Partial<Gewichtung> {
   return out as Partial<Gewichtung>;
 }
 
-function variante(key: string): WandVariante {
+function variante(key: string, bauteil: VergleichsBauteil): WandVariante {
   const p = presetByKey(key);
   if (!p) {
+    const bekannt = presetsFor(bauteil).map((a) => a.key);
     throw new Error(
-      `Unbekanntes Preset "${key}". Bekannt: ${WAND_PRESETS.map((a) => a.key).join(', ')}`,
+      `Unbekanntes Preset "${key}". Für ${BUDGET_BAUTEIL_LABEL[bauteil]} bekannt: ${bekannt.join(', ')}`,
+    );
+  }
+  if (p.bauteil !== bauteil) {
+    console.log(
+      `Hinweis: „${p.name}" ist für ${BUDGET_BAUTEIL_LABEL[p.bauteil]} dimensioniert und wird ` +
+        `hier für ${BUDGET_BAUTEIL_LABEL[bauteil]} gerechnet (Wärmestromrichtung + Grenzwert).`,
     );
   }
   return p;
 }
 
-function printKopf(r: VariantenErgebnis, areaM2: number): void {
-  console.log(`\nAusgangslage: ${r.name}   (${fmtNum(areaM2, 0)} m²)`);
+function printKopf(r: VariantenErgebnis, areaM2: number, quelle: string): void {
+  console.log(`\nAusgangslage: ${r.name}   (${fmtNum(areaM2, 0)} m² — ${quelle})`);
   console.log(
     `  U ${fmtNum(r.U, 3)} W/(m²·K) · ${fmtNum(r.endenergieKwhA, 0)} kWh/a · ` +
       `${fmtEur(r.heizkostenEurA)}/a Heizkosten · ${fmtNum(r.co2KgA, 0)} kg CO₂/a`,
@@ -193,24 +224,31 @@ function printDetail(v: VariantenErgebnis, zielU: number | undefined): void {
 
 /** `varianten` — rank retrofit build-ups on moisture, energy, money and ecology. */
 export const variantenCommand: CommandModule<object, VariantenArgs> = {
-  command: 'varianten',
+  command: 'varianten [file]',
   describe: 'Sanierungsvarianten vergleichen: Feuchte, Energie, Kosten, Ökobilanz',
   builder: (yargs) =>
     yargs
+      .positional('file', {
+        describe: 'Modell (.sh3d/Projekt) — liefert die Bauteilfläche aus dem Aufmaß',
+        type: 'string',
+      })
+      .option('bauteil', {
+        describe: 'Bauteil, dessen Aufbauten verglichen werden',
+        choices: BAUTEILE,
+        default: 'aussenwand' as VergleichsBauteil,
+      })
       .option('area', {
-        describe: 'Bauteilfläche in m²',
+        describe: 'Bauteilfläche in m² (Pflicht ohne Modell; überschreibt das Aufmaß)',
         type: 'number',
-        demandOption: true,
       })
       .option('preset', {
-        describe: `Variante, mehrfach. Ohne Angabe alle. Bekannt: ${WAND_PRESETS.map((a) => a.key).join(', ')}`,
+        describe: 'Variante, mehrfach. Ohne Angabe alle Aufbauten des Bauteils.',
         type: 'string',
         array: true,
       })
       .option('referenz', {
-        describe: 'Bestandsaufbau, gegen den gerechnet wird',
+        describe: 'Bestandsaufbau, gegen den gerechnet wird (Default je Bauteil)',
         type: 'string',
-        default: 'bestand-vollziegel-365',
       })
       .option('ziel-u', {
         describe: 'Ziel-U-Wert: zeigt je Variante die dafür nötige Dämmstärke (z. B. 0.20 für BEG)',
@@ -241,17 +279,53 @@ export const variantenCommand: CommandModule<object, VariantenArgs> = {
         type: 'string',
       })
       .option('json', { describe: 'Ergebnis als JSON ausgeben', type: 'boolean', default: false })
-      .example('$0 varianten --area 200 --isfp --ziel-u 0.20', 'Alle Presets für 200 m² Wand vergleichen')
+      .example('$0 varianten haus.sh3d --isfp --ziel-u 0.20', 'Wand-Aufbauten, Fläche aus dem Modell')
+      .example('$0 varianten haus.sh3d --bauteil kellerdecke --isfp', 'Fußboden-Aufbauten vergleichen')
+      .example(
+        '$0 varianten --bauteil dach --area 22.7 --isfp',
+        'Flachdach der Garage (Fläche von Hand — unbeheizte Flügel stehen nicht im Aufmaß)',
+      )
       .example(
         '$0 varianten --area 200 --gewicht oekologie=0.5,kosten=0.2,energie=0.2,feuchte=0.1',
         'Ökologie stärker gewichten',
       ),
   handler: (args) => {
-    const referenz = variante(args.referenz);
-    const keys = args.preset ?? WAND_PRESETS.map((a) => a.key);
+    const bauteil = args.bauteil;
+
+    // — Fläche: aus dem Aufmaß des Modells, mit --area als sichtbarem Override —
+    let areaM2 = args.area;
+    let flaechenQuelle = 'Fläche von Hand (--area)';
+    if (args.file) {
+      const { home, project } = loadDocumentFile(args.file);
+      const aufmass = computeEnvelope(home);
+      if (areaM2 == null) {
+        areaM2 = flaecheAusAufmass(aufmass, bauteil);
+        flaechenQuelle = 'Fläche aus dem Aufmaß des Modells';
+      } else {
+        flaechenQuelle =
+          `Fläche von Hand (--area); das Aufmaß nennt ${fmtNum(flaecheAusAufmass(aufmass, bauteil), 2)} m²`;
+      }
+      if (bauteil === 'dach') {
+        const flach = deriveRoofs(home, project.roofs).flatPlanM2;
+        if (flach > 0) {
+          console.log(
+            `Hinweis: das Aufmaß zählt nur Dächer der BEHEIZTEN Hülle. Flachdächer lt. Modell ` +
+              `gesamt ${fmtNum(flach, 2)} m² (auch unbeheizte Flügel) — für deren Ausbau die ` +
+              'Teilfläche mit --area angeben.',
+          );
+        }
+      }
+    }
+    if (areaM2 == null) {
+      throw new Error('Ohne Modell-Datei braucht der Vergleich --area (Bauteilfläche in m²).');
+    }
+
+    const referenzKey = args.referenz ?? REFERENZ_DEFAULT[bauteil];
+    const referenz = variante(referenzKey, bauteil);
+    const keys = args.preset ?? presetsFor(bauteil).map((a) => a.key);
     const kandidaten = keys
-      .filter((k) => k !== args.referenz)
-      .map(variante)
+      .filter((k) => k !== referenzKey && !k.startsWith('bestand-'))
+      .map((k) => variante(k, bauteil))
       .map((v) =>
         args.lohn != null
           ? {
@@ -271,7 +345,9 @@ export const variantenCommand: CommandModule<object, VariantenArgs> = {
     const ergebnis = vergleicheVarianten({
       referenz,
       varianten: kandidaten,
-      areaM2: args.area,
+      areaM2,
+      art: BAUTEIL_ART[bauteil],
+      begBauteil: bauteil,
       status: args.status,
       isfpBonus: args.isfp,
       energiePreisEurKwh: args.energiepreis,
@@ -284,7 +360,7 @@ export const variantenCommand: CommandModule<object, VariantenArgs> = {
       return;
     }
 
-    printKopf(ergebnis.referenz, ergebnis.areaM2);
+    printKopf(ergebnis.referenz, ergebnis.areaM2, flaechenQuelle);
     printTabelle(ergebnis.varianten);
     const g = ergebnis.gewichtung;
     console.log(
