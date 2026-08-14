@@ -149,6 +149,56 @@ export function polygonGridSamples(
   return points;
 }
 
+/**
+ * Offset a simple polygon outward by `d` (same unit as the vertices). Each edge
+ * is shifted along its outward normal — decided per edge by probing which side
+ * is inside, so the winding never matters — and neighbouring edge lines are
+ * re-intersected (miter). Concave corners work the same way; `d` is expected to
+ * be small against the edge lengths (a roof edge past a wall face, not a
+ * general-purpose buffer). Degenerate/near-parallel joints fall back to the
+ * plainly shifted point, so bad input cannot explode the outline.
+ */
+export function offsetPolygon(
+  vertices: readonly (readonly [number, number])[],
+  d: number,
+): [number, number][] {
+  const n = vertices.length;
+  if (n < 3 || d === 0) return vertices.map(([x, y]) => [x, y]);
+
+  // Shifted edge lines: edge i runs vertices[i] → vertices[i+1].
+  const lines: { ax: number; ay: number; bx: number; by: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    const [ax, ay] = vertices[i];
+    const [bx, by] = vertices[(i + 1) % n];
+    const len = Math.hypot(bx - ax, by - ay) || 1;
+    let nx = (by - ay) / len;
+    let ny = -(bx - ax) / len;
+    const mx = (ax + bx) / 2;
+    const my = (ay + by) / 2;
+    // Outward = the side of the edge midpoint that is NOT inside the polygon.
+    if (pointInPolygon(mx + nx * d * 0.01 + nx * 1e-6, my + ny * d * 0.01 + ny * 1e-6, vertices)) {
+      nx = -nx;
+      ny = -ny;
+    }
+    lines.push({ ax: ax + nx * d, ay: ay + ny * d, bx: bx + nx * d, by: by + ny * d });
+  }
+
+  // Corner i = intersection of the shifted edges i-1 and i.
+  const out: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    const p = lines[(i - 1 + n) % n];
+    const q = lines[i];
+    const det = (p.bx - p.ax) * (q.by - q.ay) - (p.by - p.ay) * (q.bx - q.ax);
+    if (Math.abs(det) < 1e-9) {
+      out.push([q.ax, q.ay]); // collinear joint — the shifted start point is exact
+      continue;
+    }
+    const t = ((q.ax - p.ax) * (q.by - q.ay) - (q.ay - p.ay) * (q.bx - q.ax)) / det;
+    out.push([p.ax + t * (p.bx - p.ax), p.ay + t * (p.by - p.ay)]);
+  }
+  return out;
+}
+
 export interface Footprint {
   widthM: number;
   depthM: number;
