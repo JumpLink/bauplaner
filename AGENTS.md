@@ -116,6 +116,12 @@ The tracked design + concept live in [`docs/entwurf_v3/`](docs/entwurf_v3/)
 it; the overarching goal is to **implement the entwurf fully** (2D/3D model,
 Gewerke/TGA, Sanierungsdaten, `.bauplan`). Not yet done → keep the draft tracked.
 
+Architecture decisions live in [`docs/adr/`](docs/adr/) — read them before
+changing a format or a boundary they cover. ADR 0001: `.bauplan` becomes the
+authoritative format (per-document authority flip); Sweet Home 3D stays as
+first-class import/export, never returns to being the source of truth for
+native documents.
+
 Visual language is stock libadwaita (free); the work is per-view layout, nav and
 the data behind it. **Iterative** — one coherent, screenshot-verified view per PR;
 features needing a new core (Fahrplan, Förderung, Raumklima sensors) are staged
