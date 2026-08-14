@@ -23,6 +23,20 @@ export default async () => {
     await it('interior insulation flags Tauwasser', async () => {
       expect(assessAssembly(layersOf('innendaemmung-holzfaser-60')).tauwasser).toBe(true);
     });
+
+    await it('the foam-glass floor build-ups clear the BEG floor threshold', async () => {
+      // 40 cm foam-glass gravel (λ 0,08 → R 5,0) does the U-value work; rammed
+      // earth and boards on top are mass/finish. BEG floor requires U ≤ 0,25.
+      for (const key of [
+        'boden-schaumglas-stampflehm-400',
+        'boden-schaumglas-stampflehm-diele',
+        'boden-schaumglas-fbh-stampflehm-400',
+      ]) {
+        const a = assessAssembly(layersOf(key), 'floor');
+        expect(a.U <= 0.25).toBe(true);
+        expect(a.U > 0.15).toBe(true); // sanity: not accidentally too good to be true
+      }
+    });
   });
 
   await describe('uValueColor', async () => {

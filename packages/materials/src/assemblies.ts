@@ -231,6 +231,82 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
       'Die Bestandsdecke ist thermisch nicht angerechnet — der U-Wert ist damit konservativ.',
     ],
   },
+
+  // — Boden gegen Erdreich: Kriechraum-Ersatz —
+  //
+  // For the old-house floor that is nothing but boards on joists over 40–60 cm
+  // of air: take the boards out, fill the void with compacted foam-glass gravel
+  // (insulating AND capillary-breaking in one layer), finish with rammed earth
+  // or boards on top. The gravel layers carry `verdichtung: 1.3` — the loose
+  // purchase volume per m³ installed — so the budget prices what actually gets
+  // delivered. All three build-ups clear the BEG floor threshold (U ≤ 0,25).
+  {
+    key: 'boden-schaumglas-stampflehm-400',
+    bauteil: 'kellerdecke',
+    name: 'Boden gegen Erdreich: 40 cm Schaumglasschotter + 10 cm Stampflehm (Finish)',
+    layers: [
+      { materialKey: 'stampflehm', thicknessM: 0.1 },
+      { materialKey: 'schaumglasschotter', thicknessM: 0.4, verdichtung: 1.3 },
+    ],
+    zusatzkostenProM2: 5,
+    zusatzkostenQuelle:
+      'Geotextil-Trennlage unter/über der Schüttung + Randstreifen ≈ 5 €/m² (Richtwert, ohne Lohn)',
+    hinweise: [
+      'Ersetzt den Bestandsboden: Dielen + Lagerhölzer ausbauen, Planum herstellen — Ausbau und ' +
+        'Entsorgung sind hier nicht eingerechnet.',
+      'Schaumglasschotter wird ~1,3:1 verdichtet — die Kalkulation rechnet das lose Bestellvolumen ' +
+        'bereits ein; ab ~30 m³ lose liefern lassen (deutlich unter dem Big-Bag-Preis).',
+      'Der Stampflehm ist Speichermasse und fertige Oberfläche (geölt/gewachst), keine Dämmung — ' +
+        'den U-Wert macht die Schüttung.',
+      'Die Schüttung ist kapillarbrechend — sie ersetzt die fehlende Abdichtung gegen aufsteigende ' +
+        'Feuchte unter dem Boden.',
+    ],
+  },
+  {
+    key: 'boden-schaumglas-stampflehm-diele',
+    bauteil: 'kellerdecke',
+    name: 'Boden gegen Erdreich: 40 cm Schaumglasschotter + 8 cm Stampflehm + Diele',
+    layers: [
+      { materialKey: 'diele', thicknessM: 0.028 },
+      { materialKey: 'stampflehm', thicknessM: 0.08 },
+      { materialKey: 'schaumglasschotter', thicknessM: 0.4, verdichtung: 1.3 },
+    ],
+    zusatzkostenProM2: 8,
+    zusatzkostenQuelle:
+      'Geotextil + Randstreifen ≈ 5 €/m² + Lagerhölzer/Befestigung der Dielung ≈ 3 €/m² (Richtwert, ohne Lohn)',
+    hinweise: [
+      'Ersetzt den Bestandsboden: Dielen + Lagerhölzer ausbauen, Planum herstellen — Ausbau und ' +
+        'Entsorgung sind hier nicht eingerechnet.',
+      'Schaumglasschotter wird ~1,3:1 verdichtet — die Kalkulation rechnet das lose Bestellvolumen ' +
+        'bereits ein; ab ~30 m³ lose liefern lassen (deutlich unter dem Big-Bag-Preis).',
+      'Brauchbare Bestandsdielen können wiederverlegt werden — dann entfällt die Dielen-Position.',
+    ],
+  },
+  {
+    key: 'boden-schaumglas-fbh-stampflehm-400',
+    bauteil: 'kellerdecke',
+    name: 'Boden gegen Erdreich: 40 cm Schaumglasschotter + Fußbodenheizung in 12 cm Stampflehm',
+    layers: [
+      { materialKey: 'stampflehm', thicknessM: 0.12 },
+      { materialKey: 'schaumglasschotter', thicknessM: 0.4, verdichtung: 1.3 },
+    ],
+    zusatzkostenProM2: 30,
+    zusatzkostenQuelle:
+      'FBH-Rohr + Befestigung/Tackersystem ≈ 25 €/m² Material + Geotextil/Randstreifen ≈ 5 €/m² ' +
+      '(Richtwert, ohne Lohn)',
+    hinweise: [
+      'Ersetzt den Bestandsboden: Dielen + Lagerhölzer ausbauen, Planum herstellen — Ausbau und ' +
+        'Entsorgung sind hier nicht eingerechnet.',
+      'Schaumglasschotter wird ~1,3:1 verdichtet — die Kalkulation rechnet das lose Bestellvolumen ' +
+        'bereits ein; ab ~30 m³ lose liefern lassen (deutlich unter dem Big-Bag-Preis).',
+      'Verteiler, Regelung und hydraulischer Abgleich sind ein eigenes Gewerk und hier NICHT ' +
+        'eingerechnet — wie bei der Wandheizung im Kombi-Wandaufbau.',
+      'Niedrige Vorlauftemperatur: passt zu Wärmepumpe; der Lehm macht den Boden träge — er ' +
+        'speichert lange und reagiert langsam.',
+      'Dämmung liegt UNTER der Heizschicht — die Wärme geht in den Raum, nicht ins Erdreich; die ' +
+        'Aufteilung Dämmung/Heizestrich entspricht dem Prinzip des Kombi-Wandaufbaus.',
+    ],
+  },
 ];
 
 export function presetByKey(key: string): AssemblyPreset | undefined {

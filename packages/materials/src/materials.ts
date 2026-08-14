@@ -132,6 +132,28 @@ export const MATERIALS: Record<string, Material> = {
     density: 1.9,
     source: 'Richtwert 1,8–2,0 t/m³ je Wassergehalt/Verdichtung',
   },
+  stampflehm: {
+    key: 'stampflehm',
+    name: 'Stampflehm (Boden, verdichtet, geölt/gewachst als Finish)',
+    category: 'boden',
+    // Rammed earth ≈ 2,0–2,2 t/m³; λ per TM Lehmbau / DIN-4108-4-Spanne 1,1–1,5
+    // at that density. Thermally it is mass, not insulation — the insulation
+    // below it does the U-value work.
+    density: 2.1,
+    lambda: 1.3,
+    mu: 8,
+    diffusionsoffen: true,
+    kapillaraktiv: true,
+    price: {
+      amount: 150,
+      per: 't',
+      source:
+        'Richtwert Stampflehm-Fertigmischung erdfeucht ~120–180 €/t (Claytec/conluto-Preislisten); ' +
+        'regionaler Grubenlehm deutlich billiger, braucht aber Eignungsprüfung',
+      retrievedAt: '2026-08-14',
+    },
+    source: 'Richtwerte TM Lehmbau / DIN 4108-4 (ρ 2,0–2,2, λ 1,1–1,5) — bestätigen',
+  },
   kies: {
     key: 'kies',
     name: 'Kies 8/16 (Verfüllung/Dränage)',
@@ -461,6 +483,22 @@ export const MATERIALS: Record<string, Material> = {
     mu: 40,
     diffusionsoffen: true,
     source: DIN,
+  },
+  diele: {
+    key: 'diele',
+    name: 'Massivholzdiele (Nut+Feder, Lärche/Douglasie)',
+    category: 'holz',
+    density: 0.55,
+    lambda: 0.13,
+    mu: 40,
+    diffusionsoffen: true,
+    price: {
+      amount: 45,
+      per: 'm2',
+      source: 'Richtwert Massivholzdiele 21–28 mm, Lärche/Douglasie ~35–60 €/m² → Mitte ~45 €/m²',
+      retrievedAt: '2026-08-14',
+    },
+    source: `${DIN}; Preis je m² Belagsfläche, unabhängig von der Dielenstärke`,
   },
 };
 

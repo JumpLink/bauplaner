@@ -76,6 +76,21 @@ export default async () => {
       expect(b.posten[0].kostenBruttoEur).toBeCloseTo(35 * 112.76 * (1 + BUDGET_UST_SATZ), 2);
     });
 
+    await it('prices the foam-glass floor from floorM2, loose volume included', async () => {
+      // The crawl-space replacement: 12 m² floor. Rammed earth 0,1 m × 2,1 t/m³
+      // × 150 €/t = 378 €; foam-glass 0,4 m × 1,3 loose = 6,24 m³ × 132,83 €/m³
+      // = 828,86 €; Geotextil/Randstreifen 5 €/m² = 60 € ⇒ 1 266,86 € netto.
+      const b = computeBudget(
+        SCHMAL,
+        plan([{ bauteil: 'kellerdecke', aufbau: 'boden-schaumglas-stampflehm-400' }]),
+      );
+      expect(b.posten[0].mengeM2).toBeCloseTo(12, 2);
+      expect(b.posten[0].mengeQuelle).toBe('aufmass');
+      expect(b.posten[0].kostenNettoEur).toBeCloseTo(1266.86, 2);
+      // U ≈ 0,19 clears the BEG floor threshold of 0,25 → the measure is funded.
+      expect(b.posten[0].foerdersatz > 0).toBe(true);
+    });
+
     await it('follows the model when the model is corrected', async () => {
       // The failure this whole module exists to prevent: the geometry gets
       // fixed, the wall grows — and nobody re-types anything.

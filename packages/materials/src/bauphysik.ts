@@ -69,6 +69,14 @@ export interface LayerSpec {
    * you add.
    */
   bestand?: boolean;
+  /**
+   * Order factor for loose fills: purchased (loose) volume = installed volume ×
+   * this factor. Foam-glass gravel is compacted ~1,3:1, blown-in fills settle
+   * too — thermally the layer counts with its **installed** thickness, only the
+   * purchase quantity grows. Read by `kosten.ts`; the U-value/Glaser math here
+   * ignores it. Default 1 (boards, plasters, masonry).
+   */
+  verdichtung?: number;
 }
 
 export interface ResolvedLayer {
