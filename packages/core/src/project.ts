@@ -15,7 +15,7 @@
  * (an id deleted in SH3D) are tolerated by consumers, not enforced here.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { basename, dirname, resolve } from 'node:path';
 
@@ -297,14 +297,19 @@ export function serializeProject(project: EcoProject): string {
 }
 
 /**
- * Load a document from disk — either a project file or a bare `.sh3d`. A bare
- * `.sh3d` is wrapped in a fresh in-memory project referencing it.
+ * Load a document from disk — either a project file or a bare `.sh3d`. A
+ * `.sh3d` whose sidecar (`<name>.ecoretrofit.json`) lies next to it opens THAT
+ * project — otherwise opening the geometry file directly would silently drop
+ * every annotation, cost line and roof declaration the sidecar carries. Only a
+ * `.sh3d` without a sidecar is wrapped in a fresh in-memory project.
  *
  * @param path Path to a `*.ecoretrofit.json` (or `.json`) project or a `.sh3d`.
  */
 export function loadDocumentFile(path: string): LoadedDocument {
   const abs = resolve(path);
   if (/\.sh3d$/i.test(abs)) {
+    const sidecar = abs.replace(/\.sh3d$/i, PROJECT_FILE_SUFFIX);
+    if (existsSync(sidecar)) return loadDocumentFile(sidecar);
     const bytes = new Uint8Array(readFileSync(abs));
     const home = parseSh3dBytes(bytes);
     const project = createProjectForSh3d(abs, { sha256: computeSh3dHash(bytes) });
