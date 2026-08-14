@@ -28,7 +28,7 @@
  * Pure geometry — no U-values, no physics, no cairo. Runs on Node and GJS.
  */
 
-import { pointInPolygon } from './geometry.ts';
+import { pointInPolygon, polygonGridSamples } from './geometry.ts';
 import type { Furniture, HomeData, Level, Room, Wall } from './sh3d/types.ts';
 
 const CM_TO_M = 0.01;
@@ -326,29 +326,7 @@ function envelopeShareOfSpan(hit: WallSamples, s: number, widthCm: number): numb
 
 /** Grid sample points inside a room polygon; the centroid if the room is tiny. */
 function roomSamples(vertices: readonly (readonly [number, number])[]): [number, number][] {
-  if (vertices.length < 3) return [];
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const [x, y] of vertices) {
-    minX = Math.min(minX, x);
-    maxX = Math.max(maxX, x);
-    minY = Math.min(minY, y);
-    maxY = Math.max(maxY, y);
-  }
-  const points: [number, number][] = [];
-  for (let x = minX + ROOM_GRID_CM / 2; x < maxX; x += ROOM_GRID_CM) {
-    for (let y = minY + ROOM_GRID_CM / 2; y < maxY; y += ROOM_GRID_CM) {
-      if (pointInPolygon(x, y, vertices)) points.push([x, y]);
-    }
-  }
-  if (points.length === 0) {
-    // A sliver narrower than the grid still has an area — probe its middle so it
-    // is classified rather than dropped.
-    points.push([(minX + maxX) / 2, (minY + maxY) / 2]);
-  }
-  return points;
+  return polygonGridSamples(vertices, ROOM_GRID_CM);
 }
 
 /**

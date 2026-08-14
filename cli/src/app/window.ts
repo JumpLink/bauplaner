@@ -16,7 +16,7 @@ import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 import Pango from '@girs/pango-1.0';
 
-import { climateWarningCount } from '@bauplaner/core';
+import { climateWarningCount, computeFloorAreas } from '@bauplaner/core';
 import { renderReportPdf } from '@bauplaner/report';
 
 import { APP_NAME } from './constants.ts';
@@ -421,7 +421,10 @@ export class MainWindow extends Adw.ApplicationWindow {
 
     const home = this.store.home;
     const name = this.store.project?.meta?.name || 'Bauplan';
-    const roomArea = home ? home.rooms.reduce((s, r) => s + r.area, 0) : 0;
+    // Overlap-deduplicated: a floor drawn on two levels of one storey (a real
+    // modelling mistake we hit) must not inflate the project's area.
+    const floorAreas = home ? computeFloorAreas(home) : null;
+    const roomArea = floorAreas?.netM2 ?? 0;
     const levels = home ? home.levels.length : 0;
     const subtitle =
       home && roomArea > 0 ? `${roomArea.toFixed(0)} m² · ${levels} Ebenen` : 'Sweet Home 3D-Modell';
@@ -456,6 +459,20 @@ export class MainWindow extends Adw.ApplicationWindow {
     subLabel.add_css_class('dim-label');
     text.append(nameLabel);
     text.append(subLabel);
+    if (floorAreas && floorAreas.overlapM2 >= 0.5) {
+      // Same floor drawn on two levels — point at the model instead of
+      // silently reporting the inflated sum.
+      const warn = new Gtk.Label({
+        label: `${floorAreas.overlapM2.toFixed(1).replace('.', ',')} m² doppelt gezeichnet`,
+        xalign: 0,
+        tooltipText: floorAreas.overlaps
+          .map((o) => `${o.aName || o.aLevelName} ↔ ${o.bName || o.bLevelName}: ${o.overlapM2.toFixed(1).replace('.', ',')} m²`)
+          .join('\n'),
+      });
+      warn.add_css_class('caption');
+      warn.add_css_class('warning');
+      text.append(warn);
+    }
     inner.append(icon);
     inner.append(text);
     card.append(inner);

@@ -35,6 +35,8 @@ import report from './unit/report.test.ts';
 import grundriss from './unit/grundriss.test.ts';
 import aufmass from './unit/aufmass.test.ts';
 import budget from './unit/budget.test.ts';
+import floorarea from './unit/floorarea.test.ts';
+import roofs from './unit/roofs.test.ts';
 
 run({
   bauphysik,
@@ -69,4 +71,6 @@ run({
   grundriss,
   aufmass,
   budget,
+  floorarea,
+  roofs,
 });

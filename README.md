@@ -41,7 +41,15 @@ Also usable headless via the CLI (`@bauplaner/cli`: `inspect`, `wand`,
 `materials`, `varianten`, `report`). `envelope` is the Aufmaß of the heated
 envelope — exterior wall area net of its openings, the window/door split, and the
 ceiling/floor area against unheated space or the ground, each pro-rated from the
-model geometry. `funding` computes the heating subsidy for a given application
+model geometry. It also derives the **roofs** (Sweet Home 3D has no roof entity):
+every room area not covered from above carries a flat roof at the top of its
+bounding walls; pitched roofs (Sattel/Walm — ridge and pitch are facts a floor
+plan cannot know) are declared per level in the project sidecar under
+`roofs.pitched` and replace the flat slabs they cover. Pass the
+`*.ecoretrofit.json` instead of the bare `.sh3d` to include them. The same run
+warns when the same floor is **drawn on two levels of one storey** — a real
+modelling mistake that otherwise silently inflates every area sum (the app's
+sidebar total is overlap-deduplicated for the same reason). `funding` computes the heating subsidy for a given application
 date and, with `--deadlines`, lists the coming Stichtage with the euro
 difference:
 

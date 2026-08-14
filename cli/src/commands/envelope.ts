@@ -1,6 +1,14 @@
 import type { CommandModule } from 'yargs';
 
-import { computeEnvelope, parseSh3dFile, type EnvelopeTakeoff } from '@bauplaner/core';
+import {
+  computeEnvelope,
+  computeFloorAreas,
+  deriveRoofs,
+  loadDocumentFile,
+  type EnvelopeTakeoff,
+  type FloorAreaReport,
+  type RoofModel,
+} from '@bauplaner/core';
 
 interface EnvelopeArgs {
   file: string;
@@ -58,14 +66,56 @@ function printTable(t: EnvelopeTakeoff): void {
   );
 }
 
-/** `envelope <file.sh3d>` — component areas of the heated building envelope. */
+/** Roof section: the derived flat slabs + declared pitched roofs, if any. */
+function printRoofs(roofs: RoofModel): void {
+  if (roofs.surfaces.length === 0) return;
+  console.log('Dachflächen (aus dem Modell abgeleitet)');
+  console.log(RULE);
+  for (const s of roofs.surfaces) {
+    const note =
+      s.form === 'flach'
+        ? `flach, OK ${fmt(s.eaveM)} m`
+        : `${s.form}, Traufe ${fmt(s.eaveM)} m, First ${fmt(s.ridgeM)} m`;
+    row(s.name, s.surfaceAreaM2, note);
+  }
+  console.log(RULE);
+  console.log(
+    `Flachdach gesamt: ${fmt(roofs.flatPlanM2)} m² · geneigt gesamt: ` +
+      `${fmt(roofs.pitchedPlanM2)} m² Grundriss (${fmt(roofs.surfaceM2 - roofs.flatPlanM2)} m² Dachfläche)`,
+  );
+  console.log(
+    'Geneigte Dächer stammen aus der Projektdatei (roofs.pitched); Flachdächer sind ' +
+      'jede von oben unverdeckte Raumfläche.\n',
+  );
+}
+
+/** Double-drawn floors — the model defect behind silently inflated area sums. */
+function printOverlaps(floors: FloorAreaReport): void {
+  if (floors.overlapM2 < 0.5) return;
+  console.log(
+    `Warnung: ${fmt(floors.overlapM2)} m² Raumfläche sind DOPPELT gezeichnet ` +
+      '(gleiche Fläche auf zwei Ebenen desselben Geschosses):',
+  );
+  for (const o of floors.overlaps) {
+    console.log(
+      `  ${fmt(o.overlapM2).padStart(8)} m²  ${o.aName || '(ohne Name)'} [${o.aLevelName}] ` +
+        `↔ ${o.bName || '(ohne Name)'} [${o.bLevelName}]`,
+    );
+  }
+  console.log(
+    `Flächensummen hier sind bereinigt (${fmt(floors.netM2)} m² statt ${fmt(floors.grossM2)} m²); ` +
+      'die Doppelzeichnung gehört im Modell entfernt.\n',
+  );
+}
+
+/** `envelope <file>` — component areas of the heated building envelope. */
 export const envelopeCommand: CommandModule<object, EnvelopeArgs> = {
   command: 'envelope <file>',
-  describe: 'Bauteilflächen der beheizten Gebäudehülle aus einem .sh3d ableiten',
+  describe: 'Bauteilflächen der beheizten Gebäudehülle aus einem .sh3d/Projekt ableiten',
   builder: (yargs) =>
     yargs
       .positional('file', {
-        describe: 'Pfad zur .sh3d-Datei',
+        describe: 'Pfad zur .sh3d- oder Projektdatei (*.ecoretrofit.json)',
         type: 'string',
         demandOption: true,
       })
@@ -75,11 +125,17 @@ export const envelopeCommand: CommandModule<object, EnvelopeArgs> = {
         default: false,
       }),
   handler: (args) => {
-    const takeoff = computeEnvelope(parseSh3dFile(args.file));
+    // A project file adds the roof declarations; a bare .sh3d still works.
+    const { home, project } = loadDocumentFile(args.file);
+    const takeoff = computeEnvelope(home);
+    const floorAreas = computeFloorAreas(home);
+    const roofs = deriveRoofs(home, project.roofs);
     if (args.json) {
-      console.log(JSON.stringify(takeoff, null, 2));
+      console.log(JSON.stringify({ ...takeoff, floorAreas, roofs }, null, 2));
       return;
     }
     printTable(takeoff);
+    printRoofs(roofs);
+    printOverlaps(floorAreas);
   },
 };

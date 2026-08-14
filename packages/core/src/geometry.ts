@@ -117,6 +117,38 @@ export function pointInPolygon(
   return inside;
 }
 
+/**
+ * Grid sample points inside a polygon (`[x, y]` tuples, any unit); the bbox
+ * centre if the polygon is narrower than the grid. Shared by every module that
+ * classifies partial areas by sampling (Aufmaß, floor areas, roofs) — a sliver
+ * narrower than the grid still has an area, so it gets one probe instead of
+ * being dropped.
+ */
+export function polygonGridSamples(
+  vertices: readonly (readonly [number, number])[],
+  grid: number,
+): [number, number][] {
+  if (vertices.length < 3) return [];
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of vertices) {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+  const points: [number, number][] = [];
+  for (let x = minX + grid / 2; x < maxX; x += grid) {
+    for (let y = minY + grid / 2; y < maxY; y += grid) {
+      if (pointInPolygon(x, y, vertices)) points.push([x, y]);
+    }
+  }
+  if (points.length === 0) points.push([(minX + maxX) / 2, (minY + maxY) / 2]);
+  return points;
+}
+
 export interface Footprint {
   widthM: number;
   depthM: number;

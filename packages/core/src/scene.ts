@@ -11,6 +11,7 @@
 
 import type { HomeData, Wall } from './sh3d/types.ts';
 import type { RetrofitWork } from './project.ts';
+import type { RoofSurface } from './roofs.ts';
 
 const CM_TO_M = 0.01;
 const COLOR_CLAY = 0x8d6e63; // Lehmgraben (clay)
@@ -130,6 +131,8 @@ export interface SceneModel {
   floors: FloorSlab[];
   works: WorkPart[];
   furniture: FurniturePart[];
+  /** Derived roof surfaces (see `deriveRoofs`), already in scene meters. */
+  roofs: RoofSurface[];
   bounds: SceneBounds;
   /** Compass north angle (radians), from {@link HomeData.northAngle}. */
   northAngle: number;
@@ -282,7 +285,7 @@ export function computeOpenings(home: HomeData): Map<string, WallOpening[]> {
  */
 export function buildScene(
   home: HomeData,
-  opts: { wallColor?: Record<string, number>; works?: RetrofitWork[] } = {},
+  opts: { wallColor?: Record<string, number>; works?: RetrofitWork[]; roofs?: RoofSurface[] } = {},
 ): SceneModel {
   const levelElevM = new Map<string, number>();
   for (const l of home.levels) levelElevM.set(l.id, l.elevation * CM_TO_M);
@@ -346,6 +349,7 @@ export function buildScene(
     maxZ = Math.max(maxZ, w.yStart, w.yEnd);
     maxY = Math.max(maxY, elevFor(w.level) + w.height * CM_TO_M);
   }
+  for (const r of opts.roofs ?? []) maxY = Math.max(maxY, r.ridgeM);
   if (!Number.isFinite(minX)) {
     minX = maxX = minZ = maxZ = 0;
   }
@@ -384,7 +388,15 @@ export function buildScene(
     };
   });
 
-  return { walls, floors, works, furniture, bounds: { min, max, center, sizeM }, northAngle: home.northAngle };
+  return {
+    walls,
+    floors,
+    works,
+    furniture,
+    roofs: opts.roofs ?? [],
+    bounds: { min, max, center, sizeM },
+    northAngle: home.northAngle,
+  };
 }
 
 /** Convert a retrofit work into oriented boxes (one per polyline segment). */

@@ -22,6 +22,7 @@ import { basename, dirname, resolve } from 'node:path';
 import { parseSh3dBytes } from './sh3d/parser.ts';
 import type { TgaNetwork } from './tga.ts';
 import type { DocEntry } from './doc.ts';
+import type { RoofConfig } from './roofs.ts';
 import type { HomeData } from './sh3d/types.ts';
 
 export const PROJECT_SCHEMA_VERSION = 2;
@@ -199,6 +200,11 @@ export interface EcoProject {
   tga?: TgaNetwork;
   /** Documentation entries (photos/readings/notes anchored to entities). */
   docs?: DocEntry[];
+  /**
+   * Roof declarations — only what geometry cannot tell us (ridge/pitch of the
+   * pitched roofs). Flat roofs are derived automatically; see `deriveRoofs`.
+   */
+  roofs?: RoofConfig;
   /** Raumklima config — room id → Home Assistant sensor entity per metric. */
   raumklima?: {
     entities?: Record<string, { temperature?: string; humidity?: string; co2?: string }>;
@@ -270,6 +276,7 @@ export function parseProject(json: string): EcoProject {
     costs: Array.isArray(r.costs) ? (r.costs as CostItem[]) : undefined,
     tga: isTgaNetwork(r.tga) ? (r.tga as TgaNetwork) : undefined,
     docs: Array.isArray(r.docs) ? (r.docs as DocEntry[]) : undefined,
+    roofs: typeof r.roofs === 'object' && r.roofs !== null ? (r.roofs as RoofConfig) : undefined,
     raumklima: typeof r.raumklima === 'object' && r.raumklima !== null ? (r.raumklima as EcoProject['raumklima']) : undefined,
   };
 }

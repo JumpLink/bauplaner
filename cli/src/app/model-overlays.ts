@@ -69,6 +69,18 @@ export function buildLevelControl(
   return box;
 }
 
+/**
+ * A floating toggle for the derived roofs (3D only): on = the building wears
+ * its roofs, off = look into the storeys from above.
+ */
+export function buildRoofToggle(current: boolean, onChange: (visible: boolean) => void): Gtk.Widget {
+  const btn = new Gtk.ToggleButton({ label: 'Dächer', active: current });
+  btn.connect('toggled', () => onChange(btn.get_active()));
+  const wrap = new Gtk.Box({ cssClasses: ['osd', 'toolbar'], halign: Gtk.Align.START });
+  wrap.append(btn);
+  return wrap;
+}
+
 /** The legend card for a mode, or null for `neutral` (nothing to explain). */
 export function buildLegend(mode: ColoringMode): Gtk.Widget | null {
   if (mode === 'neutral') return null;
