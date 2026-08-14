@@ -197,6 +197,43 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
     ],
   },
 
+  // — Bestand references for ceiling / roof / floor comparisons —
+  //
+  // A variant comparison needs the existing build-up to measure savings
+  // against. These are deliberately MINIMAL (one thin `bestand` layer): the
+  // less existing fabric we invent, the worse — i.e. the more honest — the
+  // reference U-value. Never assign them as a *measure*.
+  {
+    key: 'bestand-boden-dielen',
+    bauteil: 'kellerdecke',
+    name: 'Bestand: Dielen auf Lagerhölzern über Kriechraum',
+    layers: [{ materialKey: 'diele', thicknessM: 0.028, bestand: true }],
+    hinweise: [
+      'Referenz für den Bodenvergleich: nur die Dielung ist angerechnet — Lagerhölzer und ' +
+        'ruhende Luftschicht fehlen bewusst, der Bestand ist also eher noch etwas besser.',
+    ],
+  },
+  {
+    key: 'bestand-flachdach-ungedaemmt',
+    bauteil: 'dach',
+    name: 'Bestand: Flachdach ungedämmt (Schalung + Bitumen)',
+    layers: [{ materialKey: 'holz', thicknessM: 0.024, bestand: true }],
+    hinweise: [
+      'Referenz für den Flachdachvergleich: nur die Schalung ist angerechnet; die ' +
+        'Bitumenlage dämmt nicht.',
+    ],
+  },
+  {
+    key: 'bestand-holzdecke-ungedaemmt',
+    bauteil: 'oberste-geschossdecke',
+    name: 'Bestand: Holzbalkendecke ungedämmt',
+    layers: [{ materialKey: 'holz', thicknessM: 0.024, bestand: true }],
+    hinweise: [
+      'Referenz für den Deckenvergleich: nur die Beplankung ist angerechnet — Einschub und ' +
+        'Balkenlage fehlen bewusst.',
+    ],
+  },
+
   // — Decke gegen unbeheizt / Boden —
   //
   // Both carry ONLY the layers that get added. The existing deck is left out
@@ -229,6 +266,44 @@ export const PRESET_ASSEMBLIES: AssemblyPreset[] = [
       'Die lichte Höhe im Keller sinkt um die Dämmstärke — Leitungen, Kellertüren und ' +
         'Treppenantritt vorher prüfen.',
       'Die Bestandsdecke ist thermisch nicht angerechnet — der U-Wert ist damit konservativ.',
+    ],
+  },
+
+  // — Flachdach (Aufdachdämmung, z. B. beim Ausbau eines Flügels) —
+  //
+  // Only the added insulation is a thermal layer; the new sealing membrane and
+  // its fixing are system cost (the stock's `dichtungsbahn` price), because a
+  // membrane without λ/µ data must not enter the U-value/Glaser stack.
+  {
+    key: 'flachdach-holzfaser-300',
+    bauteil: 'dach',
+    name: 'Flachdach: 30 cm Holzfaser + neue Abdichtung',
+    layers: [{ materialKey: 'holzfaser', thicknessM: 0.3 }],
+    zusatzkostenProM2: 18,
+    zusatzkostenQuelle:
+      'Dichtungsbahn ≈ 12,50 €/m² (Stammpreis) + Befestigung/Verklebung ≈ 5,50 €/m² ' +
+      '(Richtwert, ohne Lohn)',
+    hinweise: [
+      'Gefälle nicht vergessen: entweder Gefälledämmung (Mehrdicke zur Ablaufseite) oder ' +
+        'das vorhandene Gefälle der Schalung nutzen.',
+      'Ein unbelüftetes Holz-Flachdach ist ein Feuchte-Risiko-Bauteil: Dampfbremse, ' +
+        'Schichtenfolge und Anschlüsse (Attika, Durchdringungen) gehören fachlich geplant — ' +
+        'das Glaser-Screening reicht hier nicht als Nachweis.',
+      'Beim Ausbau von Werkstatt/Garage vorher die Tragfähigkeit der Decke prüfen (Statik).',
+    ],
+  },
+  {
+    key: 'flachdach-eps-260',
+    bauteil: 'dach',
+    name: 'Flachdach: 26 cm EPS + neue Abdichtung (Vergleichsmaßstab)',
+    layers: [{ materialKey: 'eps', thicknessM: 0.26 }],
+    zusatzkostenProM2: 18,
+    zusatzkostenQuelle:
+      'Dichtungsbahn ≈ 12,50 €/m² (Stammpreis) + Befestigung/Verklebung ≈ 5,50 €/m² ' +
+      '(Richtwert, ohne Lohn)',
+    hinweise: [
+      'Nur als Vergleich geführt: µ 40 macht den Aufbau dampfbremsend — auf einer ' +
+        'Holzschalung verschärft das die Feuchtefalle des unbelüfteten Flachdachs.',
     ],
   },
 

@@ -278,4 +278,50 @@ export default async () => {
       expect(nurOeko.varianten[0].key).toBe('aussendaemmung-holzfaser-180');
     });
   });
+
+  await describe('vergleicheVarianten — Boden und Flachdach', async () => {
+    await it('compares the floor build-ups against the bare board floor', async () => {
+      const r = vergleicheVarianten({
+        referenz: preset('bestand-boden-dielen'),
+        varianten: [
+          preset('boden-schaumglas-stampflehm-400'),
+          preset('boden-schaumglas-stampflehm-diele'),
+          preset('boden-schaumglas-fbh-stampflehm-400'),
+        ],
+        areaM2: 75,
+        art: 'floor',
+        begBauteil: 'kellerdecke',
+        isfpBonus: true,
+      });
+      // The bare board floor is the honest disaster the retrofit is measured against.
+      expect(r.referenz.U > 1.5).toBe(true);
+      for (const v of r.varianten) {
+        expect(v.begPass).toBe(true); // all three clear U ≤ 0,25 → subsidised
+        // The iSFP bonus only bites above the yearly minimum investment — a
+        // floor alone stays below it, so the honest rate here is the base 15 %.
+        expect(v.foerderquote).toBeCloseTo(0.15, 5);
+        expect(v.ersparnisEurA > 0).toBe(true);
+        expect(v.amortisationJahre != null).toBe(true);
+      }
+    });
+
+    await it('rates the flat-roof build-ups for roof heat flow and threshold', async () => {
+      const r = vergleicheVarianten({
+        referenz: preset('bestand-flachdach-ungedaemmt'),
+        varianten: [preset('flachdach-holzfaser-300'), preset('flachdach-eps-260')],
+        areaM2: 22.7,
+        art: 'roof',
+        begBauteil: 'dach',
+      });
+      for (const v of r.varianten) {
+        expect(v.U <= 0.14).toBe(true); // BEG roof threshold
+        expect(v.begPass).toBe(true);
+      }
+      // Wood fibre stores more carbon than its production emits; EPS never does.
+      const holz = r.varianten.find((v) => v.key === 'flachdach-holzfaser-300');
+      const eps = r.varianten.find((v) => v.key === 'flachdach-eps-260');
+      expect((holz?.oekobilanz.gwpNettoKg ?? 1) < 0).toBe(true);
+      expect((eps?.oekobilanz.gwpNettoKg ?? -1) > 0).toBe(true);
+    });
+  });
 };
