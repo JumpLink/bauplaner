@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@gjsify/unit';
 
-import { deriveRoofs, parseSh3dBytes } from '@bauplaner/core';
+import { deriveRoofs, offsetPolygon, parseSh3dBytes } from '@bauplaner/core';
 import { zipSync, strToU8 } from 'fflate';
 
 /** Synthetic homes on a 100 cm grid — see aufmass.test.ts for the conventions. */
@@ -105,11 +105,12 @@ export default async () => {
       expect(r.surfaces.length).toBe(1);
       const s = r.surfaces[0];
       expect(s?.form).toBe('sattel');
-      // eave at 2.80 + 2.50, ridge 45° over the 2.00 m half-depth
+      // eave at 2.80 + 2.50; the footprint reaches the wall OUTER faces (room
+      // 8,00 × 4,00 m + 12 cm each side), so the ridge is 45° over 2,12 m.
       expect(s?.eaveM).toBeCloseTo(5.3, 2);
-      expect(s?.ridgeM).toBeCloseTo(7.3, 2);
-      expect(s?.planAreaM2).toBeCloseTo(32, 2);
-      expect(s?.surfaceAreaM2).toBeCloseTo(32 / Math.cos(Math.PI / 4), 1);
+      expect(s?.ridgeM).toBeCloseTo(7.42, 2);
+      expect(s?.planAreaM2).toBeCloseTo(8.24 * 4.24, 2);
+      expect(s?.surfaceAreaM2).toBeCloseTo((8.24 * 4.24) / Math.cos(Math.PI / 4), 1);
       // two slopes + two gable triangles
       expect(s?.faces.length).toBe(4);
     });
@@ -146,7 +147,80 @@ export default async () => {
       expect(flat?.eaveM).toBeCloseTo(4.6, 2);
       // the Sattel footprint must not include the excluded room
       const sattel = r.surfaces.find((s) => s.form === 'sattel');
-      expect(sattel?.planAreaM2).toBeCloseTo(32, 2);
+      expect(sattel?.planAreaM2).toBeCloseTo(8.24 * 4.24, 2);
+    });
+
+    await it('builds a Pult rising over the full width, high side declared', async () => {
+      const r = deriveRoofs(home(TWO_STOREY), {
+        pitched: [
+          { level: 'OG', form: 'pult', pitchDeg: 45, overhangM: 0, ridgeAxis: 'x', hochseite: 'min' },
+        ],
+      });
+      const s = r.surfaces[0];
+      expect(s?.form).toBe('pult');
+      expect(s?.eaveM).toBeCloseTo(5.3, 2);
+      // full 4,24 m width at 45° — not the half-width of a Sattel
+      expect(s?.ridgeM).toBeCloseTo(5.3 + 4.24, 2);
+      // slope + vertical high side + two flanks
+      expect(s?.faces.length).toBe(4);
+      // the high edge runs along minY: its two ridge-height points sit at minY
+      const slope = s!.faces[0];
+      const highPts = slope.points.filter((p) => p.y > s!.eaveM + 0.01);
+      expect(highPts.length).toBe(2);
+      for (const p of highPts) expect(p.z).toBeCloseTo(-0.12, 2);
+    });
+
+    await it('rotates a skewed annex roof into its own frame and back', async () => {
+      const r = deriveRoofs(home(TWO_STOREY), {
+        pitched: [{ level: 'OG', form: 'sattel', pitchDeg: 45, overhangM: 0, angleDeg: 90 }],
+      });
+      const s = r.surfaces[0];
+      // The building itself is NOT rotated — computing in a 90°-turned frame
+      // and rotating back must cover the same plan extents as angle 0.
+      const xs = s!.faces.flatMap((f) => f.points.map((p) => p.x));
+      const zs = s!.faces.flatMap((f) => f.points.map((p) => p.z));
+      expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(8.24, 2);
+      expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(4.24, 2);
+      expect(s?.planAreaM2).toBeCloseTo(8.24 * 4.24, 2);
+      // …but the ridge axis was decided in the frame: there the long side is
+      // plan-X seen sideways, so the ridge runs along plan X after all.
+      expect(s?.ridgeM).toBeCloseTo(5.3 + 2.12, 2);
+    });
+  });
+
+  await describe('offsetPolygon', async () => {
+    await it('grows a rectangle by d on every side, any winding', async () => {
+      const cw: [number, number][] = [
+        [0, 0],
+        [400, 0],
+        [400, 300],
+        [0, 300],
+      ];
+      for (const poly of [cw, [...cw].reverse()]) {
+        const o = offsetPolygon(poly, 10);
+        const xs = o.map(([x]) => x);
+        const ys = o.map(([, y]) => y);
+        expect(Math.min(...xs)).toBeCloseTo(-10, 6);
+        expect(Math.max(...xs)).toBeCloseTo(410, 6);
+        expect(Math.min(...ys)).toBeCloseTo(-10, 6);
+        expect(Math.max(...ys)).toBeCloseTo(310, 6);
+      }
+    });
+
+    await it('handles a concave (L-shaped) outline', async () => {
+      const l: [number, number][] = [
+        [0, 0],
+        [400, 0],
+        [400, 200],
+        [200, 200],
+        [200, 400],
+        [0, 400],
+      ];
+      const o = offsetPolygon(l, 10);
+      expect(o.length).toBe(6);
+      // the concave corner moves INTO the notch: (200,200) → (210,210)
+      expect(o[3]?.[0]).toBeCloseTo(210, 6);
+      expect(o[3]?.[1]).toBeCloseTo(210, 6);
     });
   });
 };
