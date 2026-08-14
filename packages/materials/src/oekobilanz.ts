@@ -116,10 +116,22 @@ export const OEKOBILANZ: Record<string, Oekobilanz> = {
     quelle: `${OEKOBAUDAT}; im Bestand als \`bestand\`-Schicht führen → zählt nicht`,
   },
   holz: { gwpFossil: 130, gwpBiogen: -900, peiNe: 400, quelle: OEKOBAUDAT },
+  diele: {
+    gwpFossil: 130,
+    gwpBiogen: -900,
+    peiNe: 400,
+    quelle: `${OEKOBAUDAT}; wie Vollholz — die Diele ist gehobeltes Vollholz`,
+  },
 
   // — Sealing / soil —
   dernoton: { gwpFossil: 30, gwpBiogen: 0, peiNe: 25, quelle: `${OEKOBAUDAT}; mineralisch, ungebrannt` },
   grubenlehm: { gwpFossil: 10, gwpBiogen: 0, peiNe: 10, quelle: `${OEKOBAUDAT}; Abbau + Transport` },
+  stampflehm: {
+    gwpFossil: 12,
+    gwpBiogen: 0,
+    peiNe: 12,
+    quelle: `${OEKOBAUDAT}; ungebrannt — Abbau, Aufbereitung, Transport, Verdichtung`,
+  },
   kies: { gwpFossil: 8, gwpBiogen: 0, peiNe: 10, quelle: `${OEKOBAUDAT}; Abbau + Transport` },
   sand: { gwpFossil: 8, gwpBiogen: 0, peiNe: 10, quelle: `${OEKOBAUDAT}; Abbau + Transport` },
   bitumendickbeschichtung: { gwpFossil: 1200, gwpBiogen: 0, peiNe: 1400, quelle: `${OEKOBAUDAT}; erdölbasiert` },

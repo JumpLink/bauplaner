@@ -208,14 +208,19 @@ export function estimateAssemblyCost(
   const layerCosts: LayerCost[] = layers.map((l) => {
     const m = getMaterial(l.materialKey);
     const bestand = l.bestand === true;
-    const volumeM3 = bestand ? 0 : areaM2 * l.thicknessM;
+    // A loose fill is bought by its LOOSE volume: compacting foam-glass gravel
+    // 1,3:1 means ordering 30 % more than the installed layer holds. Thermally
+    // the layer still counts with its installed thickness (bauphysik.ts ignores
+    // the factor) — only the purchase quantity grows.
+    const bestellDickeM = l.thicknessM * (l.verdichtung ?? 1);
+    const volumeM3 = bestand ? 0 : areaM2 * bestellDickeM;
     const massT = volumeM3 * m.density;
     const price = priceOverrides[l.materialKey] ?? m.price;
     let cost: number | undefined;
     if (bestand) {
       cost = 0;
     } else if (price) {
-      cost = materialCost(price, areaM2, l.thicknessM, m.density);
+      cost = materialCost(price, areaM2, bestellDickeM, m.density);
       total += cost;
     } else {
       missingPrice.push(l.materialKey);

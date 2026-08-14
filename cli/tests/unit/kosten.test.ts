@@ -103,6 +103,24 @@ export default async () => {
       expect(c.missingPrice.length).toBe(0);
       expect(c.total).toBe(88.64);
     });
+
+    await it('prices a loose fill by its purchase volume (verdichtung)', async () => {
+      // 10 m² × 0,4 m installed × 1,3 loose factor = 5,2 m³ ordered × 100 €/m³
+      const c = estimateAssemblyCost(
+        [{ materialKey: 'schaumglasschotter', thicknessM: 0.4, verdichtung: 1.3 }],
+        10,
+        { schaumglasschotter: { amount: 100, per: 'm3' } },
+      );
+      expect(c.total).toBe(520);
+      expect(c.layers[0]?.volumeM3).toBe(5.2);
+      // without the factor the same layer is 4 m³
+      const plain = estimateAssemblyCost(
+        [{ materialKey: 'schaumglasschotter', thicknessM: 0.4 }],
+        10,
+        { schaumglasschotter: { amount: 100, per: 'm3' } },
+      );
+      expect(plain.total).toBe(400);
+    });
   });
 
   await describe('material reference prices', async () => {
