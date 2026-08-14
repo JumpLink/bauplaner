@@ -12,10 +12,10 @@ import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 import { WebGLBridge } from '@gjsify/webgl';
 
-import { buildScene, deriveTgaScene, type TgaTrade } from '@bauplaner/core';
+import { buildScene, deriveRoofs, deriveTgaScene, type TgaTrade } from '@bauplaner/core';
 
 import type { DocumentStore } from '../document-store.ts';
-import { buildLegend, buildLevelControl, buildModeControls } from '../model-overlays.ts';
+import { buildLegend, buildLevelControl, buildModeControls, buildRoofToggle } from '../model-overlays.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
 import { TRADE_META } from '../tga.ts';
 import { startBuildingView, type BuildingView } from '../three/building-scene.ts';
@@ -37,6 +37,8 @@ export class Ansicht3dView extends Gtk.Box {
   private inspectorHolder?: Gtk.Box;
   /** Isolated level id (only that storey shown), or null for all. Persists across reloads. */
   private isolatedLevel: string | null = null;
+  /** Whether the derived roofs are shown. Persists across store reloads. */
+  private roofsVisible = true;
   /** One-shot guard for the BP_APP_LEVEL dev hook. */
   private levelHookDone = false;
   /** Bumped per showScene; a stale GLArea's async onReady checks it before assigning. */
@@ -142,6 +144,9 @@ export class Ansicht3dView extends Gtk.Box {
     const scene = buildScene(home, {
       wallColor: this.wallColors(),
       works: this.store.project?.works ?? [],
+      // Flat roofs derive from the geometry; pitched ones from the project's
+      // roof declarations (ridge and pitch are facts the plan cannot know).
+      roofs: deriveRoofs(home, this.store.project?.roofs).surfaces,
     });
     // Derive the TGA network's 3D placement (with risers across storeys), if any.
     const net = this.store.tga;
@@ -164,6 +169,7 @@ export class Ansicht3dView extends Gtk.Box {
       if (gen !== this.sceneGen) return;
       this.view = startBuildingView(canvas, scene, models, (id) => this.showInspector(id), tga);
       if (this.isolatedLevel) this.view.setVisibleLevel(this.isolatedLevel);
+      if (!this.roofsVisible) this.view.setRoofsVisible(false);
     });
 
     // Float the mode switcher (top-start) and colour legend (bottom-start) over
@@ -212,6 +218,14 @@ export class Ansicht3dView extends Gtk.Box {
         buildLevelControl(home, this.isolatedLevel, (levelId) => {
           this.isolatedLevel = levelId;
           this.view?.setVisibleLevel(this.isolatedLevel);
+        }),
+      );
+    }
+    if (scene.roofs.length > 0) {
+      topStart.append(
+        buildRoofToggle(this.roofsVisible, (visible) => {
+          this.roofsVisible = visible;
+          this.view?.setRoofsVisible(visible);
         }),
       );
     }

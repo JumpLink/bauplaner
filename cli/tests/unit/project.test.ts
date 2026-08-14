@@ -162,6 +162,12 @@ export default async () => {
       const doc3 = loadDocumentFile(saved);
       expect(doc3.sh3dChanged).toBe(true);
       expect(doc3.home.walls.length).toBe(2);
+
+      // opening the bare .sh3d again now DISCOVERS the sidecar — otherwise the
+      // geometry path silently drops every annotation the project carries
+      const doc4 = loadDocumentFile(sh3dPath);
+      expect(doc4.projectPath?.endsWith('plan.ecoretrofit.json')).toBe(true);
+      expect(doc4.project.meta?.name).toBe(doc.project.meta?.name);
     });
 
     // gjsify 0.32.0 rebuilt writeFileSync fd-first (#1039): it opens with a

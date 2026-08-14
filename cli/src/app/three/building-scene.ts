@@ -31,6 +31,8 @@ export interface BuildingView {
    * Retrofit works (earthworks) are level-agnostic and stay visible.
    */
   setVisibleLevel(levelId: string | null): void;
+  /** Show or hide the derived roof surfaces (they hide the storeys below). */
+  setRoofsVisible(visible: boolean): void;
   /** Release GL resources. */
   dispose(): void;
 }
@@ -38,6 +40,8 @@ export interface BuildingView {
 const COLOR_BG = 0x1b1b1b;
 const COLOR_WALL = 0xd9c7a3; // warm clay tone (natural-materials theme)
 const COLOR_FLOOR = 0x8a8f98;
+const COLOR_ROOF_FLAT = 0x565b60; // bitumen grey
+const COLOR_ROOF_PITCHED = 0x6f5648; // dark tile brown
 
 /** Row-major 3×3 (Sweet Home 3D `modelRotation`) → a THREE rotation Matrix4. */
 function rotationMatrix(m?: number[]): THREE.Matrix4 | null {
@@ -270,6 +274,40 @@ export function startBuildingView(
     threeScene.add(mesh);
   }
 
+  // Derived roofs — each face is a planar convex polygon in world meters, so a
+  // triangle fan per face is exact. Tracked separately from the level filter:
+  // roofs can be hidden as a group to look into the building from above.
+  const roofFlatMaterial = new THREE.MeshLambertMaterial({ color: COLOR_ROOF_FLAT, side: THREE.DoubleSide });
+  const roofPitchedMaterial = new THREE.MeshLambertMaterial({ color: COLOR_ROOF_PITCHED, side: THREE.DoubleSide });
+  const roofObjects = new Set<THREE.Object3D>();
+  for (const roof of scene.roofs) {
+    const material = roof.form === 'flach' ? roofFlatMaterial : roofPitchedMaterial;
+    for (const face of roof.faces) {
+      if (face.points.length < 3) continue;
+      const positions: number[] = [];
+      for (const p of face.points) positions.push(p.x, p.y + 0.02, p.z);
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const index: number[] = [];
+      for (let i = 1; i < face.points.length - 1; i++) index.push(0, i, i + 1);
+      geometry.setIndex(index);
+      geometry.computeVertexNormals();
+      ownedGeometries.push(geometry);
+      const mesh = new THREE.Mesh(geometry, material);
+      roofObjects.add(mesh);
+      leveledObjects.push({ object: mesh, level: roof.level });
+      threeScene.add(mesh);
+    }
+  }
+  let visibleLevel: string | null = null;
+  let roofsVisible = true;
+  const applyVisibility = (): void => {
+    for (const { object, level } of leveledObjects) {
+      const levelOk = visibleLevel == null || level === visibleLevel;
+      object.visible = levelOk && (roofsVisible || !roofObjects.has(object));
+    }
+  };
+
   // Retrofit works (Lehmgraben, pipes …) — our own geometry, coloured per kind.
   for (const p of scene.works) {
     const mesh = new THREE.Mesh(
@@ -444,9 +482,13 @@ export function startBuildingView(
       raf(draw);
     },
     setVisibleLevel(levelId: string | null) {
-      for (const { object, level } of leveledObjects) {
-        object.visible = levelId == null || level === levelId;
-      }
+      visibleLevel = levelId;
+      applyVisibility();
+      raf(draw);
+    },
+    setRoofsVisible(visible: boolean) {
+      roofsVisible = visible;
+      applyVisibility();
       raf(draw);
     },
     dispose() {
@@ -461,6 +503,8 @@ export function startBuildingView(
       for (const material of tgaMaterials.values()) material.dispose();
       for (const geometry of ownedGeometries) geometry.dispose();
       floorMaterial.dispose();
+      roofFlatMaterial.dispose();
+      roofPitchedMaterial.dispose();
       // The scene helpers own GL buffers too; the view is rebuilt on every store
       // change, so these must be freed or they accumulate on the GPU.
       grid.geometry.dispose();
