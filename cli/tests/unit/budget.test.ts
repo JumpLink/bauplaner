@@ -91,6 +91,72 @@ export default async () => {
       expect(b.posten[0].foerdersatz > 0).toBe(true);
     });
 
+    await it('funds the EEE at 50 % up to the yearly Nr.-5.4 sub-ceiling', async () => {
+      // 8 000 € net quote, gross assessment: eligible is capped at 5 000 €,
+      // half of that comes back — and the labour filter must NOT zero it in
+      // Eigenleistung, because the EEE invoices regardless.
+      const b = computeBudget(
+        SCHMAL,
+        plan([
+          {
+            bauteil: 'baubegleitung',
+            ausfuehrung: 'eigenleistung',
+            pauschale: { nettoEur: 8000, quelle: 'Angebot EEE' },
+          },
+        ]),
+      );
+      const p = b.posten[0];
+      expect(p.foerdersatz).toBe(0.5);
+      expect(p.bemessungsgrundlageEur).toBeCloseTo(5000, 2);
+      expect(p.foerderungEur).toBeCloseTo(2500, 2);
+      expect(p.kostenBruttoEur).toBeCloseTo(8000 * (1 + BUDGET_UST_SATZ), 2);
+      expect(p.eigenanteilEur).toBeCloseTo(9520 - 2500, 2);
+    });
+
+    await it('books the Nr.-5.4 amount into the shared yearly ceiling', async () => {
+      // Envelope first (fills the year), then the EEE: with 30 000 € already
+      // booked, Nr. 5.4 has no headroom left and gets nothing.
+      const b = computeBudget(
+        SCHMAL,
+        plan([
+          { bauteil: 'aussenwand', aufbau: WAND_180, flaecheM2: 300 }, // ≈ 40 k gross
+          { bauteil: 'baubegleitung', pauschale: { nettoEur: 4000, quelle: 'Angebot EEE' } },
+        ]),
+      );
+      const eee = b.posten[1];
+      expect(eee.foerderungEur).toBeCloseTo(0, 2);
+      expect(eee.hinweise.some((h) => h.includes('Höchstgrenze'))).toBe(true);
+    });
+
+    await it('carries unfunded flat positions into the totals only', async () => {
+      const b = computeBudget(
+        SCHMAL,
+        plan([
+          { bauteil: 'aussenwand', aufbau: WAND_180 },
+          { bauteil: 'sonstiges', pauschale: { nettoEur: 3000, quelle: 'Werkzeug/Gerüst-Schätzung' } },
+        ]),
+      );
+      const rest = b.posten[1];
+      expect(rest.foerderungEur).toBe(0);
+      expect(rest.foerdersatz).toBe(0);
+      expect(b.kostenNettoEur).toBeCloseTo(b.posten[0].kostenNettoEur + 3000, 2);
+      // it must not eat the envelope's yearly ceiling
+      expect(b.proJahr[0].bemessungEur).toBeCloseTo(b.posten[0].bemessungsgrundlageEur, 2);
+    });
+
+    await it('refuses a flat position without amount or source', async () => {
+      const wirft = (m: BudgetMassnahme): boolean => {
+        try {
+          computeBudget(SCHMAL, plan([m]));
+          return false;
+        } catch {
+          return true;
+        }
+      };
+      expect(wirft({ bauteil: 'baubegleitung' })).toBe(true);
+      expect(wirft({ bauteil: 'sonstiges', pauschale: { nettoEur: 100, quelle: '  ' } })).toBe(true);
+    });
+
     await it('follows the model when the model is corrected', async () => {
       // The failure this whole module exists to prevent: the geometry gets
       // fixed, the wall grows — and nobody re-types anything.
