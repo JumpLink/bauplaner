@@ -98,8 +98,26 @@ export interface PitchedRoofSpec {
    * e.g. a lower annex drawn on the main level keeps its own flat roof.
    */
   excludeRooms?: string[];
+  /**
+   * Room-name substrings to build the footprint FROM — the roof of an annex
+   * that shares its level with the main building (mutually exclusive with a
+   * plain full-level roof; rooms not matching are simply not part of it).
+   */
+  includeRooms?: string[];
   /** Eave overhang beyond the wall outer face, m (default 0.3). */
   overhangM?: number;
+  /**
+   * Per-side overhang override, m, in the roof's (rotated) frame — where the
+   * roof butts against a taller building it overhangs nothing. Sides not set
+   * fall back to {@link overhangM}.
+   */
+  overhangSeitenM?: { xMin?: number; xMax?: number; yMin?: number; yMax?: number };
+  /**
+   * Eave height override, m above ground. The derived value is the top of the
+   * bounding walls — declare it where a neighbouring facade would win the
+   * derivation, or where the drawn walls do not reach the real eave.
+   */
+  eaveM?: number;
 }
 
 /** Roof declarations of a project (only what geometry cannot tell us). */
@@ -254,8 +272,15 @@ export function deriveRoofs(home: HomeData, config?: RoofConfig): RoofModel {
     const rad = ((spec.angleDeg ?? 0) * Math.PI) / 180;
     const excluded = (room: Room): boolean =>
       (spec.excludeRooms ?? []).some((n) => room.name.includes(n));
+    const included = (room: Room): boolean =>
+      !spec.includeRooms || spec.includeRooms.some((n) => room.name.includes(n));
     const rooms = home.rooms.filter(
-      (r) => r.level === level.id && r.vertices.length >= 3 && !excluded(r) && !OUTDOOR_ROOM.test(r.name),
+      (r) =>
+        r.level === level.id &&
+        r.vertices.length >= 3 &&
+        included(r) &&
+        !excluded(r) &&
+        !OUTDOOR_ROOM.test(r.name),
     );
     // Room bbox in the rotated frame, then widened to the wall OUTER faces —
     // rooms are drawn to the inner faces, and an eave measured from there
@@ -269,10 +294,20 @@ export function deriveRoofs(home: HomeData, config?: RoofConfig): RoofModel {
       for (const r of rooms) eaveCm = Math.max(eaveCm, roofTopCm(home, r, level));
       for (const w of boundingWalls(home, level.id, planBox)) {
         wallCm = Math.max(wallCm, w.thickness);
+        // Only endpoints that lie in the footprint band widen the box — a
+        // shared wall running on into the NEIGHBOURING building part must not
+        // drag the roof over that part.
         for (const [x, y] of [
           [w.xStart, w.yStart],
           [w.xEnd, w.yEnd],
         ] as const) {
+          if (
+            x < planBox.minX - WALL_NEAR_CM ||
+            x > planBox.maxX + WALL_NEAR_CM ||
+            y < planBox.minY - WALL_NEAR_CM ||
+            y > planBox.maxY + WALL_NEAR_CM
+          )
+            continue;
           const [rx, ry] = rot(x, y, -rad);
           box.minX = Math.min(box.minX, rx - w.thickness / 2);
           box.maxX = Math.max(box.maxX, rx + w.thickness / 2);
@@ -290,6 +325,7 @@ export function deriveRoofs(home: HomeData, config?: RoofConfig): RoofModel {
       }
     }
     if (eaveCm === 0) eaveCm = (level.elevation ?? 0) + (level.height > 0 ? level.height : DEFAULT_LEVEL_HEIGHT_CM);
+    if (spec.eaveM != null) eaveCm = spec.eaveM / CM_TO_M;
     pitched.push({ spec, level, storey: storeyOf.get(level.id) ?? 0, rad, box, eaveCm });
   }
 
@@ -348,11 +384,13 @@ export function deriveRoofs(home: HomeData, config?: RoofConfig): RoofModel {
   // --- pitched roof bodies --------------------------------------------------
   for (const p of pitched) {
     const overhang = (p.spec.overhangM ?? DEFAULT_OVERHANG_M) / CM_TO_M;
+    const seite = (o?: number): number => (o != null ? o / CM_TO_M : overhang);
+    const s = p.spec.overhangSeitenM;
     const box: Bbox = {
-      minX: p.box.minX - overhang,
-      minY: p.box.minY - overhang,
-      maxX: p.box.maxX + overhang,
-      maxY: p.box.maxY + overhang,
+      minX: p.box.minX - seite(s?.xMin),
+      minY: p.box.minY - seite(s?.yMin),
+      maxX: p.box.maxX + seite(s?.xMax),
+      maxY: p.box.maxY + seite(s?.yMax),
     };
     const pitchDeg = p.spec.pitchDeg ?? DEFAULT_PITCH_DEG;
     const pitch = (pitchDeg * Math.PI) / 180;

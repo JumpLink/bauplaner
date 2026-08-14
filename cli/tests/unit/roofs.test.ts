@@ -170,6 +170,43 @@ export default async () => {
       for (const p of highPts) expect(p.z).toBeCloseTo(-0.12, 2);
     });
 
+    await it('roofs only the included rooms of a shared level, eave declared', async () => {
+      // Annex rooms share the main level: the main Walm excludes them, their
+      // own Pult includes them — the annex ends up under the Pult, the main
+      // room under the Walm, and nobody keeps a flat slab.
+      const r = deriveRoofs(
+        home(
+          TWO_STOREY +
+            wall('sanit-s', 'OG', 800, 176, 1000, 176, 180) +
+            room('c', 'OG', 'Sanitär-Anbau OG', 800, 0, 1000, 176),
+        ),
+        {
+          pitched: [
+            { level: 'OG', form: 'sattel', pitchDeg: 45, excludeRooms: ['Sanitär-Anbau'], overhangM: 0 },
+            {
+              level: 'OG',
+              form: 'pult',
+              includeRooms: ['Sanitär-Anbau'],
+              pitchDeg: 13,
+              ridgeAxis: 'x',
+              hochseite: 'min',
+              eaveM: 4.2,
+              overhangM: 0.2,
+              overhangSeitenM: { yMin: 0 },
+            },
+          ],
+        },
+      );
+      expect(r.surfaces.filter((s) => s.form === 'flach').length).toBe(0);
+      const pult = r.surfaces.find((s) => s.form === 'pult');
+      expect(pult?.eaveM).toBeCloseTo(4.2, 2); // declared, not derived
+      // no overhang on the high side (yMin), 0.2 m everywhere else: the pult
+      // plan depth is the room 1.76 m + 12 cm wall + 0.2 m south overhang.
+      const zs = pult!.faces.flatMap((f) => f.points.map((p) => p.z));
+      expect(Math.min(...zs)).toBeCloseTo(0, 2);
+      expect(Math.max(...zs)).toBeCloseTo(1.76 + 0.12 + 0.2, 2);
+    });
+
     await it('rotates a skewed annex roof into its own frame and back', async () => {
       const r = deriveRoofs(home(TWO_STOREY), {
         pitched: [{ level: 'OG', form: 'sattel', pitchDeg: 45, overhangM: 0, angleDeg: 90 }],
