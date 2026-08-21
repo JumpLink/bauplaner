@@ -10,6 +10,7 @@
     "scripts": {
         "start": "gjsify run dist/bauplaner.gjs.mjs",
         "check": "gjsify tsc --noEmit && gjsify run check:packages && gjsify run check:markup && gjsify run check:actions",
+        "check:licenses": "node dev/check-licenses.js",
         "check:markup": "gjs -m dev/check-markup.js src",
         "check:actions": "gjs -m dev/check-actions.js src",
         "build": "gjsify run build:gjs",
