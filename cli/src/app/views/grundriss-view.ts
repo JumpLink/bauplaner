@@ -19,6 +19,8 @@
 
 import Adw from '@girs/adw-1';
 import GObject from '@girs/gobject-2.0';
+import Gdk from '@girs/gdk-4.0';
+import GLib from '@girs/glib-2.0';
 import Gtk from '@girs/gtk-4.0';
 
 import {
@@ -173,6 +175,10 @@ export class GrundrissView extends Gtk.Box {
   private dragStartY = 0;
   private dragMoved = false;
   private dragPreview: { x: number; z: number } | null = null;
+  /** Pending keyboard nudge, committed as ONE move when the keys stop (see commitNudge). */
+  private nudgePreview: { x: number; z: number } | null = null;
+  /** Whether the canvas held focus before the current rebuild — see render(). */
+  private canvasHadFocus = false;
   private idCounter = 0;
   // Placement palette: the trade + kind a click will drop, and whether armed.
   private placeTrade: TgaTrade = 'heizung';
@@ -222,6 +228,11 @@ export class GrundrissView extends Gtk.Box {
   }
 
   private render(): void {
+    // Every render REPLACES the canvas widget, and a fresh widget has no focus. Without carrying
+    // it over, a keyboard nudge would work exactly once: the commit rebuilds the view, focus is
+    // gone, and the next arrow key goes nowhere — with no way to tell that from "the key does
+    // not do anything".
+    this.canvasHadFocus = this.drawArea?.has_focus ?? false;
     if (this.store.error) {
       this.showStatus('dialog-error-symbolic', 'Konnte nicht geladen werden', `${this.store.path ?? ''}\n${this.store.error}`, 'Andere Datei …');
       return;
@@ -344,6 +355,27 @@ export class GrundrissView extends Gtk.Box {
       else if (this.editTarget === 'geometrie' && this.geomTool === 'select' && nPress >= 2) this.insertRoomVertexAt(x, y);
     });
     area.add_controller(click);
+
+    // Keyboard. The only editor in the app had ZERO key controllers: no arrow keys, no Delete —
+    // a selected node could be moved by dragging it and by nothing else, and the delete button
+    // was the single way to remove one. An editor that cannot be nudged is an editor you cannot
+    // be precise in.
+    //
+    // The area must be focusable for any of this to arrive: a Gtk.DrawingArea is not by default,
+    // and a key controller on an unfocusable widget receives nothing at all — silently.
+    area.set_focusable(true);
+    click.connect('pressed', () => area.grab_focus());
+    // Restore focus after a rebuild — on idle, because the widget is not in a window yet here.
+    if (this.canvasHadFocus) {
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        area.grab_focus();
+        return GLib.SOURCE_REMOVE;
+      });
+    }
+    const keys = new Gtk.EventControllerKey();
+    keys.connect('key-pressed', (_c, keyval, _code, state) => this.onKeyPressed(keyval, state));
+    keys.connect('key-released', () => this.commitNudge());
+    area.add_controller(keys);
 
     const drag = new Gtk.GestureDrag();
     drag.connect('drag-begin', (_g, sx, sy) => this.onDragBegin(sx, sy));
@@ -1462,6 +1494,68 @@ export class GrundrissView extends Gtk.Box {
       this.selectedNode = null;
     }
     this.drawArea?.queue_draw();
+  }
+
+  /**
+   * Arrow keys nudge, Delete removes, Escape deselects. Returns true when the key was consumed —
+   * false lets it travel on, so Tab still leaves the canvas and Ctrl+S still saves.
+   *
+   * The nudge does NOT write per keypress. Holding an arrow for two seconds would otherwise leave
+   * sixty entries in the undo stack, and undoing a nudge would take sixty presses of Ctrl+Z. It
+   * moves the same `dragPreview` the mouse drag uses and commits ONE command when the keys stop.
+   */
+  private onKeyPressed(keyval: number, state: Gdk.ModifierType): boolean {
+    if (keyval === Gdk.KEY_Escape) {
+      this.selectedNode = null;
+      this.selectedEdge = null;
+      this.drawArea?.queue_draw();
+      return true;
+    }
+    if (keyval === Gdk.KEY_Delete || keyval === Gdk.KEY_KP_Delete) {
+      if (!this.selectedNode && !this.selectedEdge) return false;
+      this.deleteSelection();
+      return true;
+    }
+
+    const step = (state & Gdk.ModifierType.SHIFT_MASK) !== 0 ? 0.01 : 0.1;
+    let dx = 0;
+    let dz = 0;
+    if (keyval === Gdk.KEY_Left || keyval === Gdk.KEY_KP_Left) dx = -step;
+    else if (keyval === Gdk.KEY_Right || keyval === Gdk.KEY_KP_Right) dx = step;
+    else if (keyval === Gdk.KEY_Up || keyval === Gdk.KEY_KP_Up) dz = -step;
+    else if (keyval === Gdk.KEY_Down || keyval === Gdk.KEY_KP_Down) dz = step;
+    else return false;
+
+    if (this.editTarget !== 'gewerke' || !this.selectedNode) return false;
+    const node = this.tgaNodes.get(this.selectedNode);
+    if (!node) return false;
+
+    const from = this.nudgePreview ?? { x: node.x, z: node.z };
+    this.nudgePreview = { x: from.x + dx, z: from.z + dz };
+    // Reuse the drag preview so the canvas draws the node (and its edges) at the pending position.
+    this.dragNodeId = this.selectedNode;
+    this.dragPreview = this.nudgePreview;
+    this.drawArea?.queue_draw();
+    return true;
+  }
+
+  /**
+   * Write the accumulated nudge as one undoable move.
+   *
+   * On key RELEASE rather than on a timer: a release is the fact that the burst ended, where a
+   * timeout is a guess about it, and a guess that fires mid-burst splits one nudge into two undo
+   * steps. How auto-repeat is delivered differs per backend, so the granularity is "one entry per
+   * burst as the toolkit reports it" — bounded either way, unlike one entry per keypress.
+   */
+  private commitNudge(): void {
+    const target = this.dragNodeId;
+    const to = this.nudgePreview;
+    this.nudgePreview = null;
+    if (!target || !to) return;
+    const round3 = (n: number): number => Math.round(n * 1000) / 1000;
+    this.dragNodeId = null;
+    this.dragPreview = null;
+    this.store.moveTgaNode(target, round3(to.x), round3(to.z));
   }
 
   private deleteSelection(): void {
