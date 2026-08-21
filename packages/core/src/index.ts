@@ -34,6 +34,8 @@ export * from './aufmass.ts';
 export * from './floorarea.ts';
 export * from './roofs.ts';
 export * from './commands.ts';
+export * from './ids.ts';
+export * from './project-commands.ts';
 export * from './tga.ts';
 export * from './doc.ts';
 export * from './raumklima.ts';

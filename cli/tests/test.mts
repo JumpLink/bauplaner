@@ -12,6 +12,7 @@ import geometryEdit from './unit/geometry-edit.test.ts';
 import bauplan from './unit/bauplan.test.ts';
 import nativeDocument from './unit/native-document.test.ts';
 import demoLookup from './unit/demo-lookup.test.ts';
+import projectCommands from './unit/project-commands.test.ts';
 import models from './unit/models.test.ts';
 import feuchte from './unit/feuchte.test.ts';
 import geometry from './unit/geometry.test.ts';
@@ -50,6 +51,7 @@ run({
   bauplan,
   nativeDocument,
   demoLookup,
+  projectCommands,
   models,
   feuchte,
   geometry,
