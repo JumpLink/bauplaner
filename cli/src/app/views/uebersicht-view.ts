@@ -24,6 +24,7 @@ import {
 import { VERLUST_FARBE } from '@bauplaner/report';
 
 import type { DocumentStore } from '../document-store.ts';
+import { buildWelcome } from '../welcome.ts';
 import { buildEnergyScreenings } from '../../energy.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
 import { setHex } from '../paint.ts';
@@ -84,18 +85,12 @@ export class UebersichtView extends Gtk.Box {
   }
 
   private showWelcome(): void {
-    const button = new Gtk.Button({ label: 'Öffnen …', halign: Gtk.Align.CENTER });
-    button.add_css_class('suggested-action');
-    button.add_css_class('pill');
-    button.connect('clicked', () => this.openFile());
     this.setChild(
-      new Adw.StatusPage({
-        iconName: 'document-open-symbolic',
-        title: 'Bauplan öffnen',
-        description: 'Sweet Home 3D (.sh3d) laden, um Ebenen, Räume und Wände zu sehen.',
-        hexpand: true,
-        vexpand: true,
-        child: button,
+      buildWelcome({
+        title: 'Bauplaner',
+        description:
+          'Ein Beispielhaus ansehen, ein neues Projekt anlegen oder eine vorhandene Datei öffnen — ' +
+          'danach zeigt die Übersicht Kennzahlen und die nächsten Schritte.',
       }),
     );
   }

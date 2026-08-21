@@ -22,7 +22,8 @@ import { renderReportPdf } from '@bauplaner/report';
 import { APP_NAME } from './constants.ts';
 import { DocumentStore } from './document-store.ts';
 import { buildGrundrissForStore, buildPlanForStore, exportGrundrissDialog, exportPlanDialog } from './export-dialog.ts';
-import { openDocumentDialog } from './open-dialog.ts';
+import { demoProjectPath, hasDemoProject } from './demo.ts';
+import { openDocumentDialog, saveDocumentAsDialog } from './open-dialog.ts';
 import { BauteileView } from './views/bauteile-view.ts';
 import { DokumentationView } from './views/dokumentation-view.ts';
 import { FahrplanView } from './views/fahrplan-view.ts';
@@ -123,13 +124,62 @@ export class MainWindow extends Adw.ApplicationWindow {
     this.store.subscribe(() => this.refreshProjectHeader());
     this.store.subscribe(() => this.refreshBadges());
     saveAction.connect('activate', () => {
+      // A new native project has nowhere to go yet — ask, rather than throwing at the user.
+      if (this.store.needsTarget) {
+        saveDocumentAsDialog(this, this.store, (message) => this.toast(message));
+        return;
+      }
+      // store.save() does real I/O (patching the .sh3d, writing the sidecar, re-bundling the
+      // .bauplan) and can throw: disk full, read-only target, the .sh3d moved away. This runs
+      // inside a GObject signal handler, where an escaping exception produced NO toast, no dialog
+      // and no message at all — the user saw nothing and believed the save had worked.
       this.lastSaveUs = GLib.get_monotonic_time();
-      const written = this.store.save();
-      this.toastOverlay.add_toast(
-        new Adw.Toast({ title: written ? `Projekt gespeichert: ${written}` : 'Kein Dokument geöffnet' }),
-      );
+      try {
+        const written = this.store.save();
+        this.toast(written ? `Projekt gespeichert: ${written}` : 'Kein Dokument geöffnet');
+      } catch (error) {
+        this.showSaveError(error);
+      }
     });
     this.add_action(saveAction);
+
+    // "Speichern unter …" — always available with a document, and the only way a brand-new native
+    // project ever reaches the disk.
+    const saveAsAction = new Gio.SimpleAction({ name: 'save-project-as' });
+    saveAsAction.set_enabled(false);
+    this.store.subscribe(() => saveAsAction.set_enabled(this.store.hasDocument));
+    saveAsAction.connect('activate', () => saveDocumentAsDialog(this, this.store, (message) => this.toast(message)));
+    this.add_action(saveAsAction);
+
+    // "Neues Projekt" — the entry point that did not exist. Before this, the app could only open
+    // what another program had produced, so someone without a Sweet Home 3D file could do nothing.
+    const newAction = new Gio.SimpleAction({ name: 'new-project' });
+    newAction.connect('activate', () => {
+      this.store.newDocument();
+      this.toast('Neues Projekt — im Grundriss die erste Wand ziehen, dann speichern.');
+    });
+    this.add_action(newAction);
+
+    // "Beispielhaus ansehen" — cli/demo/ has shipped all along and was unreachable from the GUI.
+    const demoAction = new Gio.SimpleAction({ name: 'open-demo' });
+    demoAction.set_enabled(hasDemoProject());
+    demoAction.connect('activate', () => {
+      const path = demoProjectPath();
+      if (path) this.store.load(path);
+      else this.toast('Diese Installation enthält kein Beispielhaus.');
+    });
+    this.add_action(demoAction);
+
+    // "Öffnen …" as an action, so the header button, the menu and the accelerator share one path.
+    const openAction = new Gio.SimpleAction({ name: 'open-project' });
+    openAction.connect('activate', () => openDocumentDialog(this, this.store));
+    this.add_action(openAction);
+
+    const app3 = this.get_application();
+    app3?.set_accels_for_action('win.new-project', ['<Control>n']);
+    app3?.set_accels_for_action('win.open-project', ['<Control>o']);
+    app3?.set_accels_for_action('win.save-project', ['<Control>s']);
+    app3?.set_accels_for_action('win.save-project-as', ['<Control><Shift>s']);
 
     // PDF export — same precondition as saving: there has to be a document.
     const exportAction = new Gio.SimpleAction({ name: 'export-pdf' });
@@ -340,6 +390,34 @@ export class MainWindow extends Adw.ApplicationWindow {
     this.toastOverlay.add_toast(new Adw.Toast({ title: 'Extern geändert — neu geladen' }));
   }
 
+  /** One place for transient status, so every action reports the same way. */
+  private toast(title: string): void {
+    this.toastOverlay.add_toast(new Adw.Toast({ title }));
+  }
+
+  /**
+   * Report a failed save as a DIALOG, not a toast.
+   *
+   * A toast is the wrong shape for this: it disappears on its own, and the one thing the user must
+   * not do after a failed write is carry on believing the work is safe. The dialog names the cause
+   * and offers the way out — write it somewhere else.
+   */
+  private showSaveError(error: unknown): void {
+    const detail = error instanceof Error ? error.message : String(error);
+    const dialog = new Adw.AlertDialog({
+      heading: 'Speichern fehlgeschlagen',
+      body: `Die Änderungen sind NICHT gespeichert.\n\n${detail}`,
+    });
+    dialog.add_response('close', 'Schließen');
+    dialog.add_response('saveas', 'Speichern unter …');
+    dialog.set_response_appearance('saveas', Adw.ResponseAppearance.SUGGESTED);
+    dialog.set_default_response('saveas');
+    dialog.connect('response', (_d, response) => {
+      if (response === 'saveas') saveDocumentAsDialog(this, this.store, (message) => this.toast(message));
+    });
+    dialog.present(this);
+  }
+
   private buildSidebar(): Adw.NavigationPage {
     const header = new Adw.HeaderBar();
     header.set_title_widget(new Adw.WindowTitle({ title: APP_NAME, subtitle: 'Nativer Bauplaner' }));
@@ -348,7 +426,7 @@ export class MainWindow extends Adw.ApplicationWindow {
       iconName: 'document-open-symbolic',
       tooltipText: 'Projekt oder Sweet Home 3D-Datei öffnen',
     });
-    openButton.connect('clicked', () => openDocumentDialog(this, this.store));
+    openButton.set_action_name('win.open-project');
     header.pack_start(openButton);
 
     const exportButton = new Gtk.Button({
@@ -359,7 +437,11 @@ export class MainWindow extends Adw.ApplicationWindow {
     header.pack_start(exportButton);
 
     const menu = new Gio.Menu();
+    menu.append('Neues Projekt', 'win.new-project');
+    menu.append('Öffnen …', 'win.open-project');
+    menu.append('Beispielhaus ansehen', 'win.open-demo');
     menu.append('Projekt speichern', 'win.save-project');
+    menu.append('Speichern unter …', 'win.save-project-as');
     menu.append('Vom Datenträger neu laden', 'win.reload-project');
     menu.append('Sanierungsplan als PDF …', 'win.export-pdf');
     menu.append('Grundriss als PDF …', 'win.export-grundriss');

@@ -15,6 +15,7 @@ import { WebGLBridge } from '@gjsify/webgl';
 import { buildScene, deriveRoofs, deriveTgaScene, type TgaTrade } from '@bauplaner/core';
 
 import type { DocumentStore } from '../document-store.ts';
+import { buildWelcome } from '../welcome.ts';
 import { buildLegend, buildLevelControl, buildModeControls, buildRoofToggle } from '../model-overlays.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
 import { TRADE_META } from '../tga.ts';
@@ -82,19 +83,12 @@ export class Ansicht3dView extends Gtk.Box {
   }
 
   private showWelcome(): void {
-    const button = new Gtk.Button({ label: 'Öffnen …', halign: Gtk.Align.CENTER });
-    button.add_css_class('suggested-action');
-    button.add_css_class('pill');
-    button.connect('clicked', () => this.openFile());
-
     this.setChild(
-      new Adw.StatusPage({
-        iconName: 'view-paged-symbolic',
+      buildWelcome({
         title: '3D-Ansicht',
-        description: 'Sweet Home 3D (.sh3d) laden, um das Gebäude in 3D zu sehen.',
-        hexpand: true,
-        vexpand: true,
-        child: button,
+        description:
+          'Ein Beispielhaus ansehen, ein neues Projekt anlegen oder eine Datei öffnen — ' +
+          'danach steht das Gebäude hier in 3D.',
       }),
     );
   }
