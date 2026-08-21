@@ -17,6 +17,9 @@ export interface HaRefreshResult {
   error?: string;
 }
 
+/** How long the Home Assistant call may take before it is abandoned, in milliseconds. */
+const HA_TIMEOUT_MS = 10_000;
+
 const METRICS = ['temperature', 'humidity', 'co2'] as const;
 const METRIC_UNIT = { temperature: '°C', humidity: '% rF', co2: 'ppm' } as const;
 const METRIC_TITLE = { temperature: 'Raumtemperatur', humidity: 'Luftfeuchte', co2: 'CO₂' } as const;
@@ -37,10 +40,29 @@ export async function refreshFromHomeAssistant(store: DocumentStore): Promise<Ha
 
   let states: { entity_id: string; state: string }[];
   try {
-    const res = await fetch(`${url}/api/states`, { headers: { Authorization: `Bearer ${token}` } });
+    // WITH a deadline. The catch below turns a refusal into a message, but a connection that is
+    // ACCEPTED and never answered is not an error — it simply never returns, and the button stays
+    // "Aktualisiere …" forever. That is the normal shape of a Home Assistant on a VPN that dropped,
+    // or one that is mid-restart. Ten seconds: HA answers /api/states in well under a second on a
+    // local network, so anything near this is already broken.
+    const res = await fetch(`${url}/api/states`, {
+      headers: { Authorization: `Bearer ${token}` },
+      ...(typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+        ? { signal: AbortSignal.timeout(HA_TIMEOUT_MS) }
+        : {}),
+    });
     if (!res.ok) return { recorded: 0, error: `Home Assistant: HTTP ${res.status}` };
     states = (await res.json()) as { entity_id: string; state: string }[];
   } catch (e) {
+    const name = (e as { name?: string } | null)?.name;
+    if (name === 'TimeoutError' || name === 'AbortError') {
+      // The raw "The operation was aborted" reads like an internal fault; say whose machine went
+      // quiet and how long we waited.
+      return {
+        recorded: 0,
+        error: `Home Assistant hat nach ${Math.round(HA_TIMEOUT_MS / 1000)} s nicht geantwortet — läuft die Instanz, und stimmt HA_URL?`,
+      };
+    }
     return { recorded: 0, error: `Home Assistant nicht erreichbar: ${(e as Error).message}` };
   }
 
