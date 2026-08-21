@@ -19,6 +19,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { basename, dirname, resolve } from 'node:path';
 
+import { createEmptyHome, type NewLevelInput } from './home.ts';
 import { parseSh3dBytes } from './sh3d/parser.ts';
 import type { TgaNetwork } from './tga.ts';
 import type { DocEntry } from './doc.ts';
@@ -177,7 +178,12 @@ export function summarizeCosts(costs: CostItem[]): CostSummary {
 
 export interface EcoProject {
   schemaVersion: number;
-  sh3d: {
+  /**
+   * The imported `.sh3d` this project annotates — **absent for a native document**
+   * (ADR 0001 Stage A), where `geometry.json` inside the `.bauplan` is authoritative
+   * and there is no external geometry file to drift against.
+   */
+  sh3d?: {
     /** Path to the `.sh3d` relative to this project file (it lies next to it). */
     path: string;
     /** sha256 of the `.sh3d` at last save — detects drift. */
@@ -216,9 +222,12 @@ export interface LoadedDocument {
   home: HomeData;
   /** Absolute path to the project file, or null when a bare `.sh3d` was opened. */
   projectPath: string | null;
-  /** Absolute path to the resolved `.sh3d`. */
-  sh3dPath: string;
-  /** True if the `.sh3d` content differs from the project's stored sha256. */
+  /**
+   * Absolute path to the resolved `.sh3d`, or **null for a native document** that never had one.
+   * Callers that write geometry back must branch on this: there is nothing to patch.
+   */
+  sh3dPath: string | null;
+  /** True if the `.sh3d` content differs from the project's stored sha256. Always false when native. */
   sh3dChanged: boolean;
 }
 
@@ -243,6 +252,38 @@ export function createProjectForSh3d(
   };
 }
 
+/**
+ * A fresh empty project for a NATIVE document — no `.sh3d` reference at all (ADR 0001 Stage A).
+ * The geometry travels in the `.bauplan`'s `geometry.json`, so there is nothing to point at and
+ * nothing to hash for drift.
+ */
+export function createEmptyProject(opts: { name?: string; createdAt?: string } = {}): EcoProject {
+  return {
+    schemaVersion: PROJECT_SCHEMA_VERSION,
+    meta: { name: opts.name ?? 'Neues Projekt', ...(opts.createdAt ? { createdAt: opts.createdAt } : {}) },
+    annotations: { walls: {} },
+    works: [],
+    costs: [],
+  };
+}
+
+/**
+ * A brand-new NATIVE document, in memory: an empty building with the requested storeys plus an
+ * empty project layer, referencing no file at all. Both paths are null — the caller decides where
+ * it lands, and until then nothing on disk has been touched.
+ */
+export function createNativeDocument(
+  opts: { name?: string; levels?: NewLevelInput[]; northAngle?: number; createdAt?: string } = {},
+): LoadedDocument {
+  return {
+    project: createEmptyProject({ name: opts.name, createdAt: opts.createdAt }),
+    home: createEmptyHome({ levels: opts.levels, northAngle: opts.northAngle }),
+    projectPath: null,
+    sh3dPath: null,
+    sh3dChanged: false,
+  };
+}
+
 /** Parse + validate a project JSON string. Throws on malformed / unsupported version. */
 export function parseProject(json: string): EcoProject {
   let raw: unknown;
@@ -263,13 +304,18 @@ export function parseProject(json: string): EcoProject {
       `Projektdatei: schemaVersion ${r.schemaVersion} ist neuer als unterstützt (${PROJECT_SCHEMA_VERSION}).`,
     );
   }
+  // A native document (ADR 0001 Stage A) carries no `sh3d` block at all. One that IS present must
+  // still be well-formed — a half-written reference would resolve against the project's own
+  // directory and read back an unrelated file, which is worse than saying so.
   const sh3d = r.sh3d as Record<string, unknown> | undefined;
-  if (!sh3d || typeof sh3d.path !== 'string' || sh3d.path.length === 0) {
-    throw new Error('Projektdatei: sh3d.path fehlt.');
+  if (sh3d !== undefined && (typeof sh3d.path !== 'string' || sh3d.path.length === 0)) {
+    throw new Error('Projektdatei: sh3d ist vorhanden, aber sh3d.path fehlt oder ist leer.');
   }
   return {
     schemaVersion: r.schemaVersion,
-    sh3d: { path: sh3d.path, ...(typeof sh3d.sha256 === 'string' ? { sha256: sh3d.sha256 } : {}) },
+    ...(sh3d
+      ? { sh3d: { path: sh3d.path as string, ...(typeof sh3d.sha256 === 'string' ? { sha256: sh3d.sha256 } : {}) } }
+      : {}),
     meta: (r.meta as EcoProject['meta']) ?? undefined,
     annotations: (r.annotations as EcoProject['annotations']) ?? undefined,
     works: Array.isArray(r.works) ? (r.works as RetrofitWork[]) : undefined,
@@ -316,6 +362,13 @@ export function loadDocumentFile(path: string): LoadedDocument {
     return { project, home, projectPath: null, sh3dPath: abs, sh3dChanged: false };
   }
   const project = parseProject(readFileSync(abs, 'utf8'));
+  if (!project.sh3d) {
+    // A native project has no external geometry, so a bare sidecar cannot carry it — the geometry
+    // lives in the matching `.bauplan`. Say that rather than dereferencing `undefined.path`.
+    throw new Error(
+      'Projektdatei ohne sh3d-Verweis: die Geometrie liegt in der zugehörigen .bauplan-Datei. Öffne diese stattdessen.',
+    );
+  }
   const sh3dPath = resolve(dirname(abs), project.sh3d.path);
   const bytes = new Uint8Array(readFileSync(sh3dPath));
   const home = parseSh3dBytes(bytes);
@@ -327,14 +380,18 @@ export function loadDocumentFile(path: string): LoadedDocument {
  * Write a project as a sidecar next to its `.sh3d` (or to `projectPath`),
  * refreshing the stored `.sh3d` hash first. Returns the path written.
  */
-export function saveProjectFile(project: EcoProject, sh3dPath: string, projectPath?: string): string {
-  const target = projectPath ?? sh3dPath.replace(/\.sh3d$/i, PROJECT_FILE_SUFFIX);
-  try {
-    const bytes = new Uint8Array(readFileSync(sh3dPath));
-    project.sh3d.sha256 = computeSh3dHash(bytes);
-    project.sh3d.path = basename(sh3dPath);
-  } catch {
-    // .sh3d unreadable — keep the existing reference/hash
+export function saveProjectFile(project: EcoProject, sh3dPath: string | null, projectPath?: string): string {
+  // A native document has no `.sh3d` to derive the sidecar name from, so the caller must name the
+  // target. Deriving one silently would put the file somewhere the caller never asked for.
+  const target = projectPath ?? (sh3dPath ? sh3dPath.replace(/\.sh3d$/i, PROJECT_FILE_SUFFIX) : null);
+  if (!target) throw new Error('saveProjectFile: ohne .sh3d muss ein projectPath angegeben werden.');
+  if (sh3dPath) {
+    try {
+      const bytes = new Uint8Array(readFileSync(sh3dPath));
+      project.sh3d = { path: basename(sh3dPath), sha256: computeSh3dHash(bytes) };
+    } catch {
+      // .sh3d unreadable — keep the existing reference/hash
+    }
   }
   writeFileSync(target, serializeProject(project));
   return target;

@@ -37,6 +37,7 @@ export * from './commands.ts';
 export * from './tga.ts';
 export * from './doc.ts';
 export * from './raumklima.ts';
+export * from './home.ts';
 export * from './project.ts';
 export {
   BAUPLAN_SUFFIX,
@@ -46,5 +47,6 @@ export {
   readBauplanFile,
   exportBauplanFile,
   extractBauplanFile,
+  writeBauplanFile,
 } from './io/bauplan.ts';
 export type { BauplanManifest, BauplanContents } from './io/bauplan.ts';

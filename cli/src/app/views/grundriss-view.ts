@@ -232,6 +232,52 @@ export class GrundrissView extends Gtk.Box {
     this.showPlan();
   }
 
+  /**
+   * A "draw your first wall" hint over an empty plan.
+   *
+   * Deliberately an overlay and not a StatusPage: the mode switcher and level chooser must stay
+   * reachable — the hint tells you to use them, so replacing the whole view with a message would be
+   * self-defeating. And it is CLAMPED: an Adw.StatusPage expands to fill its overlay, which pushed a
+   * 3-line title and a giant icon straight through the switcher pills above it.
+   *
+   * Without any hint at all, a brand-new native document (ADR 0001 Stage A) shows a black void
+   * indistinguishable from a broken view.
+   */
+  private emptyPlanHint(): Gtk.Widget {
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, halign: Gtk.Align.CENTER });
+
+    const icon = new Gtk.Image({ iconName: 'document-edit-symbolic', pixelSize: 40, halign: Gtk.Align.CENTER });
+    icon.add_css_class('dim-label');
+
+    const title = new Gtk.Label({ label: 'Noch keine Wände', halign: Gtk.Align.CENTER });
+    title.add_css_class('title-4');
+
+    // No `&` or `<` in this string — Adw/Pango would blank the label silently; `check:markup`
+    // guards the class repo-wide.
+    const body = new Gtk.Label({
+      label: 'Im Reiter „Geometrie" eine Wand ziehen — oder ein Sweet-Home-3D-Modell öffnen.',
+      wrap: true,
+      justify: Gtk.Justification.CENTER,
+      halign: Gtk.Align.CENTER,
+    });
+    body.add_css_class('dim-label');
+
+    box.append(icon);
+    box.append(title);
+    box.append(body);
+
+    const clamp = new Adw.Clamp({
+      maximumSize: 320,
+      child: box,
+      halign: Gtk.Align.CENTER,
+      valign: Gtk.Align.CENTER,
+      hexpand: true,
+      vexpand: true,
+    });
+    clamp.set_can_target(false); // decoration only — clicks belong to the drawing area underneath
+    return clamp;
+  }
+
   private showStatus(icon: string, title: string, description: string, buttonLabel: string): void {
     const button = new Gtk.Button({ label: buttonLabel, halign: Gtk.Align.CENTER });
     button.add_css_class('pill');
@@ -354,6 +400,7 @@ export class GrundrissView extends Gtk.Box {
     overlay.add_overlay(topStart);
     overlay.add_overlay(legend);
     overlay.add_overlay(inspector);
+    if (home.walls.length === 0) overlay.add_overlay(this.emptyPlanHint());
     this.setChild(overlay);
 
     // Dev hook: pre-select a wall's inspector on startup (BP_APP_PICKWALL).

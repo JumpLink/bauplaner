@@ -426,8 +426,16 @@ export class MainWindow extends Adw.ApplicationWindow {
     const floorAreas = home ? computeFloorAreas(home) : null;
     const roomArea = floorAreas?.netM2 ?? 0;
     const levels = home ? home.levels.length : 0;
+    // A native document (ADR 0001 Stage A) was never imported from Sweet Home 3D, so saying so
+    // would be false — and it is exactly the document that starts out with no rooms, i.e. the case
+    // that falls through to this label.
+    const imported = this.store.isImported;
     const subtitle =
-      home && roomArea > 0 ? `${roomArea.toFixed(0)} m² · ${levels} Ebenen` : 'Sweet Home 3D-Modell';
+      home && roomArea > 0
+        ? `${roomArea.toFixed(0)} m² · ${levels} Ebenen`
+        : imported
+          ? 'Sweet Home 3D-Modell'
+          : `${levels} Ebene${levels === 1 ? '' : 'n'} · noch keine Räume`;
 
     const card = new Gtk.Box({
       orientation: Gtk.Orientation.HORIZONTAL,

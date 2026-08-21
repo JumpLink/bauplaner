@@ -262,10 +262,23 @@ export class UebersichtView extends Gtk.Box {
       description: 'Endenergiebedarf nach Energieausweis-Skala — jede Maßnahme schiebt den Marker nach links',
     });
 
-    const markers: { label: string; kwh: number; color: string; below: boolean }[] = [
-      { label: `Heute ${heute.endenergieKwhM2a}`, kwh: heute.endenergieKwhM2a, color: '#e66100', below: true },
-      { label: `Ziel ${ziel.endenergieKwhM2a}`, kwh: ziel.endenergieKwhM2a, color: '#26a269', below: true },
-    ];
+    // Heute and Ziel land on the same spot whenever the target is already met — including the
+    // brand-new empty model, where both are 0. Two triangles and two labels then paint over each
+    // other into an unreadable smear, so collapse them into one honest marker.
+    const zielErreicht = Math.abs(heute.endenergieKwhM2a - ziel.endenergieKwhM2a) <= 2;
+    const markers: { label: string; kwh: number; color: string; below: boolean }[] = zielErreicht
+      ? [
+          {
+            label: `Heute = Ziel ${ziel.endenergieKwhM2a}`,
+            kwh: ziel.endenergieKwhM2a,
+            color: '#26a269',
+            below: true,
+          },
+        ]
+      : [
+          { label: `Heute ${heute.endenergieKwhM2a}`, kwh: heute.endenergieKwhM2a, color: '#e66100', below: true },
+          { label: `Ziel ${ziel.endenergieKwhM2a}`, kwh: ziel.endenergieKwhM2a, color: '#26a269', below: true },
+        ];
     if (Math.abs(start.endenergieKwhM2a - heute.endenergieKwhM2a) > 2) {
       markers.push({ label: `Start ${start.endenergieKwhM2a}`, kwh: start.endenergieKwhM2a, color: '#9a9996', below: false });
     }

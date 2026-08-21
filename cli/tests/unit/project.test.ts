@@ -36,8 +36,8 @@ export default async () => {
     await it('createProjectForSh3d references the file by basename', async () => {
       const p = createProjectForSh3d('/some/dir/beispielhaus.sh3d', { sha256: 'deadbeef' });
       expect(p.schemaVersion).toBe(PROJECT_SCHEMA_VERSION);
-      expect(p.sh3d.path).toBe('beispielhaus.sh3d');
-      expect(p.sh3d.sha256).toBe('deadbeef');
+      expect(p.sh3d?.path).toBe('beispielhaus.sh3d');
+      expect(p.sh3d?.sha256).toBe('deadbeef');
       expect(p.meta?.name).toBe('beispielhaus');
     });
 
@@ -45,8 +45,8 @@ export default async () => {
       const p = createProjectForSh3d('/d/plan.sh3d', { sha256: 'abc123' });
       const back = parseProject(serializeProject(p));
       expect(back.schemaVersion).toBe(p.schemaVersion);
-      expect(back.sh3d.path).toBe('plan.sh3d');
-      expect(back.sh3d.sha256).toBe('abc123');
+      expect(back.sh3d?.path).toBe('plan.sh3d');
+      expect(back.sh3d?.sha256).toBe('abc123');
     });
 
     await it('preserves wall annotations (assembly + feuchte) through a round-trip', async () => {
@@ -130,8 +130,13 @@ export default async () => {
       };
       expect(throws(() => parseProject('not json'))).toBe(true);
       expect(throws(() => parseProject('{}'))).toBe(true); // no schemaVersion
-      expect(throws(() => parseProject('{"schemaVersion":1}'))).toBe(true); // no sh3d.path
       expect(throws(() => parseProject('{"schemaVersion":999,"sh3d":{"path":"x.sh3d"}}'))).toBe(true);
+      // A PRESENT sh3d block must still be well-formed: an empty path resolves against the
+      // project's own directory and would read back an unrelated file.
+      expect(throws(() => parseProject('{"schemaVersion":1,"sh3d":{"path":""}}'))).toBe(true);
+      // But an ABSENT one is now legal — that is a native document (ADR 0001 Stage A), whose
+      // geometry lives in the .bauplan's geometry.json. It used to be rejected here.
+      expect(throws(() => parseProject('{"schemaVersion":1}'))).toBe(false);
     });
   });
 

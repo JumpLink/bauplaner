@@ -47,7 +47,7 @@ export default async () => {
       expect(json(back.project.docs)).toBe(json(project().docs));
       expect(json(back.project.annotations)).toBe(json(project().annotations));
       // The embedded .sh3d is preserved byte-for-byte (re-parses identically).
-      expect(back.sh3dBytes.length).toBe(src.length);
+      expect(back.sh3dBytes?.length).toBe(src.length);
       expect(back.sh3dName).toBe('plan.sh3d');
     });
 
@@ -57,9 +57,9 @@ export default async () => {
       const back = readBauplanBytes(written);
       expect(back.manifest.formatVersion).toBe(BAUPLAN_FORMAT_VERSION);
       expect(back.manifest.app).toBe('bauplaner');
-      expect(back.manifest.checksums.sh3d.length).toBe(64);
+      expect(back.manifest.checksums.sh3d?.length).toBe(64);
       // The embedded project points at the bundled copy.
-      expect(back.project.sh3d.path).toBe('sh3d/plan.sh3d');
+      expect(back.project.sh3d?.path).toBe('sh3d/plan.sh3d');
 
       const entries = unzipSync(written);
       expect('geometry.json' in entries).toBe(true);

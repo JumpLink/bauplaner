@@ -10,6 +10,7 @@ import sh3d from './unit/sh3d.test.ts';
 import sh3dSerializer from './unit/sh3d-serializer.test.ts';
 import geometryEdit from './unit/geometry-edit.test.ts';
 import bauplan from './unit/bauplan.test.ts';
+import nativeDocument from './unit/native-document.test.ts';
 import models from './unit/models.test.ts';
 import feuchte from './unit/feuchte.test.ts';
 import geometry from './unit/geometry.test.ts';
@@ -46,6 +47,7 @@ run({
   sh3dSerializer,
   geometryEdit,
   bauplan,
+  nativeDocument,
   models,
   feuchte,
   geometry,
