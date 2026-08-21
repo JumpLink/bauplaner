@@ -1,6 +1,7 @@
 import type { CommandModule } from 'yargs';
 
 import {
+  addCostCommand,
   loadDocumentFile,
   saveProjectFile,
   summarizeCosts,
@@ -118,8 +119,10 @@ export const kostenCommand: CommandModule<object, KostenArgs> = {
       if (!args.label || args.net == null) {
         throw new Error('--add braucht --label und --net.');
       }
-      const item: CostItem = {
-        id: `cost-${project.costs.length + 1}-${args.category}`,
+      // Same kernel command the app uses — including the collision-free id. The old
+      // `costs.length + 1` handed out an id a surviving item already held once anything had been
+      // deleted, and `kosten --remove` then hit whichever line came first.
+      const cmd = addCostCommand(project, {
         label: args.label,
         category: args.category,
         status: args.status,
@@ -128,8 +131,8 @@ export const kostenCommand: CommandModule<object, KostenArgs> = {
         ...(args.date ? { date: args.date } : {}),
         ...(args.note ? { note: args.note } : {}),
         ...(args.work ? { workId: args.work } : {}),
-      };
-      project.costs.push(item);
+      });
+      cmd.do();
       const written = saveProjectFile(project, doc.sh3dPath, doc.projectPath ?? undefined);
       console.log(`Posten hinzugefügt und gespeichert: ${written}`);
     }

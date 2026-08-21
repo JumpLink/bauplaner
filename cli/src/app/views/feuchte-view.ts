@@ -200,6 +200,20 @@ export class FeuchteView extends Gtk.Box {
         const label = CAUSE_LABELS[e.f!.topCause as keyof typeof CAUSE_LABELS] ?? e.f!.topCause;
         const row = new Adw.ActionRow({ title: `Wand ${e.i + 1}`, subtitle: label });
         row.add_prefix(Gtk.Image.new_from_icon_name('weather-showers-symbolic'));
+        // A diagnosis used to be permanent: recorded from one wrong observation, it kept flagging
+        // the wall in the nav badge and the overview, and the only fix was editing project.json.
+        // Undoable like every other project edit, so this needs no confirmation dialog.
+        const clear = new Gtk.Button({
+          iconName: 'user-trash-symbolic',
+          tooltipText: 'Diagnose entfernen',
+          valign: Gtk.Align.CENTER,
+        });
+        clear.add_css_class('flat');
+        clear.connect('clicked', () => {
+          this.store.clearWallFeuchte(e.w.id);
+          this.render();
+        });
+        row.add_suffix(clear);
         list.add(row);
       }
       page.add(list);

@@ -15,8 +15,11 @@ import { join, resolve } from 'node:path';
 import {
   CommandStore,
   addDocCommand,
+  addCostCommand,
   addTgaEdgeCommand,
   addTgaNodeCommand,
+  addWorkCommand,
+  clearWallFeuchteCommand,
   applyEditsToHome,
   createNativeDocument,
   createStackedLevels,
@@ -31,6 +34,12 @@ import {
   loadDocumentFile,
   moveTgaNodeCommand,
   parseSh3dBytes,
+  removeCostCommand,
+  removeWorkCommand,
+  setAllWallAssembliesCommand,
+  setWallAssemblyCommand,
+  setWallFeuchteCommand,
+  updateCostCommand,
   readBauplanFile,
   saveProjectFile,
   summarizeCosts,
@@ -310,65 +319,56 @@ export class DocumentStore {
     this.commands.execute({ label, do: () => apply(edits), undo: () => apply(inverses) });
   }
 
-  /** Assign the same wall build-up to every wall of the model (bulk apply). */
+  /** Assign the same wall build-up to every wall of the model (bulk apply, ONE undo step). */
   setAllWallAssemblies(layers: AssemblyLayers): void {
     if (!this._doc) return;
-    const walls: Record<string, WallAnnotation> = { ...(this._doc.project.annotations?.walls ?? {}) };
-    for (const w of this._doc.home.walls) {
-      walls[w.id] = { ...(walls[w.id] ?? {}), assemblyLayers: layers };
-    }
-    this._doc.project.annotations = { ...this._doc.project.annotations, walls };
-    this.notify();
+    const ids = this._doc.home.walls.map((w) => w.id);
+    this.commands.execute(setAllWallAssembliesCommand(this._doc.project, ids, layers));
   }
 
-  /** Assign (or clear, with `[]`) the build-up of a single wall. */
+  /** Assign (or clear, with `[]`) the build-up of a single wall (undoable). */
   setWallAssembly(wallId: string, layers: AssemblyLayers): void {
     if (!this._doc) return;
-    const walls: Record<string, WallAnnotation> = { ...(this._doc.project.annotations?.walls ?? {}) };
-    const next: WallAnnotation = { ...(walls[wallId] ?? {}) };
-    if (layers.length === 0) {
-      delete next.assemblyLayers;
-    } else {
-      next.assemblyLayers = layers;
-    }
-    walls[wallId] = next;
-    this._doc.project.annotations = { ...this._doc.project.annotations, walls };
-    this.notify();
+    this.commands.execute(setWallAssemblyCommand(this._doc.project, wallId, layers));
   }
 
   wallAssemblyLayers(wallId: string): AssemblyLayers | undefined {
     return this._doc?.project.annotations?.walls?.[wallId]?.assemblyLayers;
   }
 
-  /** Store a damp-wall diagnosis on a wall. */
+  /** Store a damp-wall diagnosis on a wall (undoable). */
   setWallFeuchte(wallId: string, feuchte: WallFeuchte): void {
     if (!this._doc) return;
-    const walls: Record<string, WallAnnotation> = { ...(this._doc.project.annotations?.walls ?? {}) };
-    walls[wallId] = { ...(walls[wallId] ?? {}), feuchte };
-    this._doc.project.annotations = { ...this._doc.project.annotations, walls };
-    this.notify();
+    this.commands.execute(setWallFeuchteCommand(this._doc.project, wallId, feuchte));
+  }
+
+  /**
+   * Remove a wall's damp diagnosis (undoable).
+   *
+   * There was no way to do this at all: a diagnosis recorded from a wrong observation kept flagging
+   * the wall in the nav badge and the overview forever, and the only fix was editing project.json.
+   */
+  clearWallFeuchte(wallId: string): void {
+    if (!this._doc) return;
+    this.commands.execute(clearWallFeuchteCommand(this._doc.project, wallId));
   }
 
   wallAnnotation(wallId: string): WallAnnotation | undefined {
     return this._doc?.project.annotations?.walls?.[wallId];
   }
 
-  /** Add a retrofit work (unique id per kind), returning its id. */
-  addWork(work: RetrofitWork): string | null {
+  /** Add a retrofit work (collision-free id per kind, undoable), returning its id. */
+  addWork(work: Omit<RetrofitWork, 'id'>): string | null {
     if (!this._doc) return null;
-    const works = [...(this._doc.project.works ?? [])];
-    const n = works.filter((w) => w.kind === work.kind).length + 1;
-    const id = n > 1 ? `${work.kind}-${n}` : work.kind;
-    works.push({ ...work, id });
-    this._doc.project.works = works;
-    this.notify();
-    return id;
+    const cmd = addWorkCommand(this._doc.project, work);
+    this.commands.execute(cmd);
+    return cmd.id;
   }
 
+  /** Delete a work (undoable). Cost lines that referenced it are unlinked, and relinked on undo. */
   removeWork(id: string): void {
     if (!this._doc) return;
-    this._doc.project.works = (this._doc.project.works ?? []).filter((w) => w.id !== id);
-    this.notify();
+    this.commands.execute(removeWorkCommand(this._doc.project, id));
   }
 
   get works(): RetrofitWork[] {
@@ -467,30 +467,24 @@ export class DocumentStore {
     return this.commands.redoLabel;
   }
 
-  /** Add a cost item (auto-assigns a unique id), returning its id, or null. */
+  /** Add a cost item (collision-free id, undoable), returning its id, or null. */
   addCost(item: Omit<CostItem, 'id'>): string | null {
     if (!this._doc) return null;
-    const costs = [...(this._doc.project.costs ?? [])];
-    const id = `cost-${costs.length + 1}-${item.category}`;
-    costs.push({ ...item, id });
-    this._doc.project.costs = costs;
-    this.notify();
-    return id;
+    const cmd = addCostCommand(this._doc.project, item);
+    this.commands.execute(cmd);
+    return cmd.id;
   }
 
+  /** Delete a cost item (undoable — it comes back at its original position). */
   removeCost(id: string): void {
     if (!this._doc) return;
-    this._doc.project.costs = (this._doc.project.costs ?? []).filter((c) => c.id !== id);
-    this.notify();
+    this.commands.execute(removeCostCommand(this._doc.project, id));
   }
 
-  /** Patch a cost item in place (e.g. advance its status). */
+  /** Patch a cost item in place, e.g. advance its status (undoable). */
   updateCost(id: string, patch: Partial<Omit<CostItem, 'id'>>): void {
     if (!this._doc) return;
-    this._doc.project.costs = (this._doc.project.costs ?? []).map((c) =>
-      c.id === id ? { ...c, ...patch } : c,
-    );
-    this.notify();
+    this.commands.execute(updateCostCommand(this._doc.project, id, patch));
   }
 
   get costs(): CostItem[] {
