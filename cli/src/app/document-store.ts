@@ -18,6 +18,8 @@ import {
   addTgaEdgeCommand,
   addTgaNodeCommand,
   applyEditsToHome,
+  createNativeDocument,
+  createStackedLevels,
   deleteDocCommand,
   deleteTgaEdgeCommand,
   deleteTgaNodeCommand,
@@ -133,6 +135,49 @@ export class DocumentStore {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  /**
+   * Start a brand-new NATIVE project in memory (ADR 0001 Stage A) — no file anywhere yet.
+   *
+   * The counterpart to {@link load}, and the reason a stranger can now use the app at all: until
+   * this existed the only entry point was opening a file someone else's program had produced.
+   * `save()` refuses until a target is named, so nothing lands on disk until the user says where.
+   */
+  newDocument(opts: { name?: string; levels?: number } = {}): void {
+    this._models = null;
+    this.commands.clear();
+    this.geometryDirtyFlag = false;
+    this.bauplanPath = null;
+    this._doc = createNativeDocument({
+      name: opts.name,
+      levels: createStackedLevels(opts.levels ?? 1),
+      createdAt: new Date().toISOString().slice(0, 10),
+    });
+    this._path = null;
+    this._error = null;
+    this.notify();
+  }
+
+  /**
+   * Point the document at `path` and write it there — "Speichern unter …".
+   *
+   * Required for a new native project, which has no target yet, and useful for an imported one to
+   * bundle a copy. Returns the written path.
+   */
+  saveAs(path: string): string {
+    if (!this._doc) throw new Error('Kein Dokument geöffnet.');
+    this.bauplanPath = resolve(path);
+    const written = this.save();
+    if (!written) throw new Error('Speichern unter fehlgeschlagen.');
+    this._path = written;
+    this.notify();
+    return written;
+  }
+
+  /** True when the document has nowhere to save to yet — a new project before its first save. */
+  get needsTarget(): boolean {
+    return this._doc != null && this._doc.sh3dPath == null && this.bauplanPath == null;
   }
 
   /** Load a project file or a bare `.sh3d`; notify all listeners (success or error). */

@@ -40,6 +40,7 @@ import {
 } from '@bauplaner/core';
 
 import type { DocumentStore } from '../document-store.ts';
+import { buildWelcome } from '../welcome.ts';
 import { buildLegend, buildLevelControl, buildModeControls } from '../model-overlays.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
 import { KINDS_BY_TRADE, KIND_LABELS, TRADE_META } from '../tga.ts';
@@ -226,7 +227,14 @@ export class GrundrissView extends Gtk.Box {
       return;
     }
     if (!this.store.home) {
-      this.showStatus('view-paged-symbolic', 'Grundriss', 'Sweet Home 3D (.sh3d) laden, um den Grundriss zu sehen.', 'Öffnen …');
+      this.setChild(
+        buildWelcome({
+          title: 'Grundriss',
+          description:
+            'Ein Beispielhaus ansehen, ein neues Projekt anlegen oder eine Datei öffnen — ' +
+            'danach lassen sich hier Wände zeichnen und bewerten.',
+        }),
+      );
       return;
     }
     this.showPlan();

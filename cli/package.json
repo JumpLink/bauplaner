@@ -9,8 +9,9 @@
     },
     "scripts": {
         "start": "gjsify run dist/bauplaner.gjs.mjs",
-        "check": "gjsify tsc --noEmit && gjsify run check:packages && gjsify run check:markup",
+        "check": "gjsify tsc --noEmit && gjsify run check:packages && gjsify run check:markup && gjsify run check:actions",
         "check:markup": "gjs -m dev/check-markup.js src",
+        "check:actions": "gjs -m dev/check-actions.js src",
         "build": "gjsify run build:gjs",
         "build:gjs": "gjsify build src/index.ts --app gjs --outfile dist/bauplaner.gjs.mjs --exclude-globals document,navigator,HTMLElement,location,Image,HTMLCanvasElement,HTMLImageElement,FontFace,matchMedia,MutationObserver,ResizeObserver,IntersectionObserver",
         "build:node": "gjsify build src/index.ts --app node --outfile dist/bauplaner.node.mjs",
