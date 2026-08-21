@@ -12,7 +12,15 @@ import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 import { pickFile } from '@gjsify/adwaita-app';
 
-import { DOC_KIND_ORDER, docCountByKind, type DocAnchor, type DocEntry, type DocKind, type DocTargetType } from '@bauplaner/core';
+import {
+  DOC_KIND_ORDER,
+  docCountByKind,
+  parseGermanNumber,
+  type DocAnchor,
+  type DocEntry,
+  type DocKind,
+  type DocTargetType,
+} from '@bauplaner/core';
 
 import type { DocumentStore } from '../document-store.ts';
 
@@ -227,8 +235,8 @@ export class DokumentationView extends Gtk.Box {
       const date = dateRow.get_text().trim();
       if (date) entry.date = date;
       if (kind === 'reading') {
-        const v = Number.parseFloat(valueRow.get_text().replace(',', '.'));
-        if (!Number.isNaN(v)) entry.value = v;
+        const v = parseGermanNumber(valueRow.get_text());
+        if (v != null) entry.value = v;
         const u = unitRow.get_text().trim();
         if (u) entry.unit = u;
       } else if (kind === 'note') {

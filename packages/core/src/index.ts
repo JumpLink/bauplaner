@@ -40,6 +40,7 @@ export * from './tga.ts';
 export * from './doc.ts';
 export * from './raumklima.ts';
 export * from './home.ts';
+export * from './number-input.ts';
 export * from './project.ts';
 export {
   BAUPLAN_SUFFIX,

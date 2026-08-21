@@ -6,6 +6,12 @@
 #     out  : output PNG path
 #     sh3d : model to load (default: the bundled demo cli/demo/beispielhaus.sh3d)
 #
+#   BP_SHOT_SIZE="W H"      window size before capture
+#   BP_SHOT_SETTLE=s        seconds to settle before capturing (default 2.5)
+#   BP_APP_DIALOG=          open a dialog on start, e.g. "kosten-add"
+#   BP_SHOT_ACTIVATE=       press a widget first, e.g. "GtkButton:suggested-action"
+#                           (type[:css-class]); the capture FAILS if it is missing or inert
+#
 # How it works: GNOME apps are single-instance per app-id, so this launches a
 # SECOND instance under a distinct id (BP_APP_ID) — it won't hijack a Bauplaner
 # you already have open. GJSIFY_DEVTOOLS=1 exports the org.gjsify.Devtools D-Bus
@@ -44,6 +50,7 @@ export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}" DISPLAY="${DISPLAY:-:0}"
 # whole tree (subshell → gjsify → gjs); killing the bare subshell PID would
 # orphan the gjs child, which then lingers and blocks future single-instance runs.
 setsid env GJSIFY_DEVTOOLS=1 BP_APP_ID="$APP_ID" BP_APP_FILE="$SH3D" BP_APP_VIEW="$VIEW" \
+    BP_APP_DIALOG="${BP_APP_DIALOG:-}" \
     bash -c "cd \"$CLI\" && exec \"$GJSIFY\" run start:app" >/tmp/bauplaner-shot.log 2>&1 &
 APP_PID=$!
 trap 'kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true' EXIT
@@ -59,5 +66,26 @@ if [ -n "${BP_SHOT_SIZE:-}" ]; then
   gdbus call --session --dest "$APP_ID" --object-path "$OBJ" \
     --method org.gjsify.Devtools.ResizeWindow ${BP_SHOT_SIZE} >/dev/null 2>&1 || true
 fi
-sleep 2.5   # let the GSK renderer lay out a few frames
+sleep "${BP_SHOT_SETTLE:-2.5}"   # let the GSK renderer lay out a few frames
+
+# Optional: press something first (BP_SHOT_ACTIVATE="GtkButton:suggested-action").
+#
+# A screenshot proves a widget was DRAWN, never that it does anything — and a button whose
+# activate_action names an action the widget tree cannot resolve fails in total silence (the class
+# check-actions.js exists for). So: find the widget, activate it, and refuse to produce a picture if
+# either step fails. A rig that cannot report failure is a rig that lies.
+if [ -n "${BP_SHOT_ACTIVATE:-}" ]; then
+  WPATH="$(gjs -m "$HERE/dbus-find.js" "$APP_ID" "$OBJ" "$BP_SHOT_ACTIVATE")" || {
+    echo "no widget matches $BP_SHOT_ACTIVATE" >&2; exit 1;
+  }
+  echo "activating $BP_SHOT_ACTIVATE at $WPATH" >&2
+  RESULT="$(gdbus call --session --dest "$APP_ID" --object-path "$OBJ" \
+    --method org.gjsify.Devtools.ActivateWidget "$WPATH")"
+  case "$RESULT" in
+    *true*) : ;;
+    *) echo "ActivateWidget refused $WPATH: $RESULT" >&2; exit 1 ;;
+  esac
+  sleep "${BP_SHOT_SETTLE:-2.5}"   # whatever it triggered needs its own settle
+fi
+
 gjs -m "$HERE/dbus-shot.js" "$APP_ID" "$OBJ" "$OUT"

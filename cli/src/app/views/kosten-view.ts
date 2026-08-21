@@ -7,6 +7,7 @@
 
 import Adw from '@girs/adw-1';
 import GObject from '@girs/gobject-2.0';
+import GLib from '@girs/glib-2.0';
 import Gtk from '@girs/gtk-4.0';
 
 import {
@@ -15,6 +16,7 @@ import {
   type CostCategory,
   type CostStatus,
   type HomeData,
+  parseGermanNumber,
 } from '@bauplaner/core';
 import {
   BEG_FOERDERFAEHIG,
@@ -55,6 +57,15 @@ export class KostenView extends Gtk.Box {
     this.store = store;
     store.subscribe(() => this.render());
     this.render();
+
+    // Dev hook: open the Erfassen dialog straight away (for screenshots). The rig can then press
+    // a button INSIDE it — same shape as the other BP_APP_* hooks.
+    if (globalThis.process?.env?.BP_APP_DIALOG === 'kosten-add') {
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        this.openAddDialog();
+        return GLib.SOURCE_REMOVE;
+      });
+    }
   }
 
   private setChild(widget: Gtk.Widget): void {
@@ -222,7 +233,7 @@ export class KostenView extends Gtk.Box {
   /** Modal dialog to capture a new cost item, then store it. */
   private openAddDialog(): void {
     const dialog = new Adw.Dialog();
-    dialog.set_title('Kostenposten erfassen');
+    dialog.set_title('Kostenposten');
     dialog.set_content_width(420);
 
     const group = new Adw.PreferencesGroup();
@@ -236,7 +247,18 @@ export class KostenView extends Gtk.Box {
     const noteRow = new Adw.EntryRow({ title: 'Notiz / Beleg (optional)' });
     for (const r of [labelRow, netRow, categoryRow, statusRow, noteRow]) group.add(r);
 
+    // A red field says something is wrong but not what. The banner names it — and since the amount
+    // is now REFUSED rather than half-read, saying so is the whole difference between a correction
+    // and a wrong number in the plan.
+    const banner = new Adw.Banner({ revealed: false });
+
     const page = new Adw.PreferencesPage();
+    // The banner goes ABOVE the fields, and a PreferencesPage takes groups only, so it rides in one
+    // of its own. Above, because the dialog is only as tall as its content: added last, the message
+    // sat under the fold — present, unreadable without scrolling, which is the same as absent.
+    const bannerGroup = new Adw.PreferencesGroup();
+    bannerGroup.add(banner);
+    page.add(bannerGroup);
     page.add(group);
 
     const cancel = new Gtk.Button({ label: 'Abbrechen' });
@@ -245,10 +267,19 @@ export class KostenView extends Gtk.Box {
     save.add_css_class('suggested-action');
     save.connect('clicked', () => {
       const label = labelRow.get_text().trim();
-      const net = Number.parseFloat(netRow.get_text().replace(',', '.').replace(/[^0-9.\-]/g, ''));
-      if (!label || !Number.isFinite(net)) {
-        labelRow.add_css_class('error');
-        netRow.add_css_class('error');
+      // `12.500,00` used to parse as 12.5 here — see parseGermanNumber for what that cost.
+      const net = parseGermanNumber(netRow.get_text());
+      if (!label || net == null) {
+        labelRow.remove_css_class('error');
+        netRow.remove_css_class('error');
+        if (!label) labelRow.add_css_class('error');
+        if (net == null) netRow.add_css_class('error');
+        banner.set_title(
+          !label
+            ? 'Die Bezeichnung fehlt.'
+            : 'Der Nettobetrag ist keine Zahl — z. B. 12.500,00 oder 12500,00.',
+        );
+        banner.set_revealed(true);
         return;
       }
       this.store.addCost({
