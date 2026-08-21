@@ -29,8 +29,10 @@ import {
   loadDocumentFile,
   moveTgaNodeCommand,
   parseSh3dBytes,
+  readBauplanFile,
   saveProjectFile,
   summarizeCosts,
+  writeBauplanFile,
   writeSh3dFile,
   type CostItem,
   type CostSummary,
@@ -113,6 +115,9 @@ export class DocumentStore {
     if (this._models) return this._models;
     const doc = this._doc;
     if (!doc) return new Map();
+    // Model geometry only exists inside an imported .sh3d. A native document has no furniture
+    // catalog yet (Stage D), so it renders boxes — the same fallback as an unreadable archive.
+    if (!doc.sh3dPath) return (this._models = new Map());
     try {
       const refs = doc.home.furniture.map((f) => f.model);
       this._models = extractSh3dModelsFromFile(doc.sh3dPath, refs);
@@ -138,14 +143,29 @@ export class DocumentStore {
     this.bauplanPath = null;
     try {
       let loadPath = path;
-      // A .bauplan is self-contained: unbundle it into a temp .sh3d + sidecar the
-      // rest of the store already understands, and remember the .bauplan so save()
-      // re-bundles into it.
       if (/\.bauplan$/i.test(path)) {
+        this.bauplanPath = resolve(path);
+        const bundle = readBauplanFile(path);
+        if (!bundle.sh3dBytes) {
+          // NATIVE container (ADR 0001 Stage A): geometry.json IS the model. There is no .sh3d to
+          // unbundle, so the extract detour below would throw — read it straight into the document.
+          this._doc = {
+            project: bundle.project,
+            home: bundle.home,
+            projectPath: null,
+            sh3dPath: null,
+            sh3dChanged: false,
+          };
+          this._path = path;
+          this._error = null;
+          this.notify();
+          return;
+        }
+        // An IMPORTED .bauplan is self-contained: unbundle it into a temp .sh3d + sidecar the rest
+        // of the store already understands, and save() re-bundles into the remembered path.
         const dir = mkdtempSync(join(tmpdir(), 'bauplan-'));
         const { projectPath } = extractBauplanFile(path, dir);
         loadPath = projectPath;
-        this.bauplanPath = resolve(path);
       }
       this._doc = loadDocumentFile(loadPath);
       this._path = path; // keep the original path for display
@@ -164,25 +184,38 @@ export class DocumentStore {
    */
   save(): string | null {
     if (!this._doc) return null;
-    // Edited geometry lives in the .sh3d (still the geometry source of truth):
-    // diff the in-memory model against the file on disk and patch only what
-    // changed (adds/removes/moves), then saveProjectFile refreshes the sidecar's
-    // sha256 to match — so the reference stays consistent and no false "sh3d
-    // changed". Diffing (vs. re-emitting everything) also never fabricates a
-    // height on a wall whose source omitted the nullable attribute.
+    const doc = this._doc;
+
+    // NATIVE document (ADR 0001 Stage A): no .sh3d anywhere, geometry.json inside the .bauplan is
+    // the model. There is nothing to diff and nothing to patch — the whole home is written out.
+    if (!doc.sh3dPath) {
+      if (!this.bauplanPath) {
+        throw new Error('Natives Projekt ohne Zieldatei — bitte zuerst „Speichern unter …“ wählen.');
+      }
+      writeBauplanFile(this.bauplanPath, { home: doc.home, project: doc.project });
+      this.geometryDirtyFlag = false;
+      this._doc = { ...doc, sh3dChanged: false };
+      this.notify();
+      return this.bauplanPath;
+    }
+
+    // IMPORTED document: edited geometry lives in the .sh3d (still the geometry source of truth
+    // for these). Diff the in-memory model against the file on disk and patch only what changed
+    // (adds/removes/moves), then saveProjectFile refreshes the sidecar's sha256 to match — so the
+    // reference stays consistent and no false "sh3d changed". Diffing (vs. re-emitting everything)
+    // also never fabricates a height on a wall whose source omitted the nullable attribute.
     if (this.geometryDirtyFlag) {
-      const original = parseSh3dBytes(new Uint8Array(readFileSync(this._doc.sh3dPath)));
-      const edits = diffGeometryEdits(original, this._doc.home);
-      if (edits.length > 0) writeSh3dFile(this._doc.sh3dPath, this._doc.sh3dPath, edits);
+      const original = parseSh3dBytes(new Uint8Array(readFileSync(doc.sh3dPath)));
+      const edits = diffGeometryEdits(original, doc.home);
+      if (edits.length > 0) writeSh3dFile(doc.sh3dPath, doc.sh3dPath, edits);
+      // Clear AFTER the write, never before: writeSh3dFile does real I/O and can throw (disk full,
+      // read-only target, the .sh3d moved out from under us). Resetting first marked a FAILED
+      // write as done, so the next save skipped the geometry entirely and the edits were lost.
       this.geometryDirtyFlag = false;
       this._models = null; // the .sh3d changed → re-extract OBJ geometry on demand
     }
-    const written = saveProjectFile(
-      this._doc.project,
-      this._doc.sh3dPath,
-      this._doc.projectPath ?? undefined,
-    );
-    this._doc = { ...this._doc, projectPath: written, sh3dChanged: false };
+    const written = saveProjectFile(doc.project, doc.sh3dPath, doc.projectPath ?? undefined);
+    this._doc = { ...doc, projectPath: written, sh3dChanged: false };
     // Opened from a .bauplan → re-bundle the (temp) sidecar + .sh3d back into it.
     if (this.bauplanPath) {
       exportBauplanFile(written, this.bauplanPath);
@@ -191,6 +224,17 @@ export class DocumentStore {
     }
     this.notify();
     return written;
+  }
+
+  /**
+   * True when the open document came from a Sweet Home 3D `.sh3d` — false for a NATIVE document
+   * (ADR 0001 Stage A), whose geometry was authored here and has no external source file.
+   *
+   * Views need this to stay truthful about provenance and to hide the Sweet-Home-3D-only affordances
+   * (model catalog, lossless re-export) on a document that has none.
+   */
+  get isImported(): boolean {
+    return this._doc?.sh3dPath != null;
   }
 
   /** True while the model geometry has unsaved edits (drives the save hint). */

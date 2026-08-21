@@ -46,17 +46,24 @@ export interface BauplanManifest {
   app: string;
   /** ISO date the container was written (optional — passed in, never generated here). */
   createdAt?: string;
-  /** Integrity checksums; `sh3d` is the sha256 of the embedded `.sh3d`. */
-  checksums: { sh3d: string };
+  /**
+   * Integrity checksums. `sh3d` is the sha256 of the embedded `.sh3d` and is **absent for a
+   * native document** (ADR 0001 Stage A), which embeds no `.sh3d` to check.
+   */
+  checksums: { sh3d?: string };
 }
 
 /** The pieces a `.bauplan` bundles. */
 export interface BauplanContents {
   home: HomeData;
   project: EcoProject;
-  sh3dBytes: Uint8Array;
-  /** File name of the embedded `.sh3d` (e.g. `beispielhaus.sh3d`). */
-  sh3dName: string;
+  /**
+   * The original `.sh3d`, embedded for a lossless roundtrip back to Sweet Home 3D — **absent for a
+   * native document** (ADR 0001 Stage A), which was never imported from one.
+   */
+  sh3dBytes?: Uint8Array;
+  /** File name of the embedded `.sh3d` (e.g. `beispielhaus.sh3d`); absent when native. */
+  sh3dName?: string;
 }
 
 const APP = 'bauplaner';
@@ -72,6 +79,24 @@ export function writeBauplanBytes(
   opts: { createdAt?: string } = {},
 ): Uint8Array {
   const { home, project, sh3dBytes } = contents;
+  // Native document: no `.sh3d` to embed, so no checksum to advertise and no reference to
+  // normalise. `geometry.json` carries the model and is authoritative on the way back in.
+  if (!sh3dBytes) {
+    const manifest: BauplanManifest = {
+      formatVersion: BAUPLAN_FORMAT_VERSION,
+      app: APP,
+      ...(opts.createdAt ? { createdAt: opts.createdAt } : {}),
+      checksums: {},
+    };
+    const nativeProject: EcoProject = { ...project };
+    delete nativeProject.sh3d;
+    return zipSync({
+      'manifest.json': json(manifest),
+      'geometry.json': json(home),
+      'project.json': strToU8(serializeProject(nativeProject)),
+    });
+  }
+
   const sh3dName = contents.sh3dName || 'model.sh3d';
   const sh3dHash = computeSh3dHash(sh3dBytes);
 
@@ -124,16 +149,32 @@ export function readBauplanBytes(bytes: Uint8Array): { manifest: BauplanManifest
       `.bauplan: formatVersion ${manifest.formatVersion} ist neuer als unterstützt (${BAUPLAN_FORMAT_VERSION}).`,
     );
   }
-  if (!manifest.checksums || typeof manifest.checksums.sh3d !== 'string') {
-    throw new Error('.bauplan: manifest.checksums.sh3d fehlt.');
-  }
+  if (!manifest.checksums) throw new Error('.bauplan: manifest.checksums fehlt.');
 
   const projectRaw = entries['project.json'];
   if (!projectRaw) throw new Error('.bauplan: project.json fehlt.');
   const project = parseProject(strFromU8(projectRaw));
 
   const sh3dEntry = findSh3dEntry(entries);
-  if (!sh3dEntry) throw new Error('.bauplan: eingebettete .sh3d fehlt (sh3d/…).');
+  if (!sh3dEntry) {
+    // NATIVE document (ADR 0001 Stage A): geometry.json is the model, not an interop mirror.
+    // Only a container that ALSO advertises an sh3d checksum is genuinely broken here — that one
+    // promised an embedded archive and did not deliver it.
+    if (typeof manifest.checksums.sh3d === 'string') {
+      throw new Error('.bauplan: manifest nennt eine sh3d-Prüfsumme, aber die eingebettete .sh3d fehlt.');
+    }
+    const geometryRaw = entries['geometry.json'];
+    if (!geometryRaw) throw new Error('.bauplan: weder eine eingebettete .sh3d noch geometry.json vorhanden.');
+    const home = JSON.parse(strFromU8(geometryRaw)) as HomeData;
+    if (!Array.isArray(home.levels) || !Array.isArray(home.walls)) {
+      throw new Error('.bauplan: geometry.json hat nicht die erwartete Struktur (levels/walls).');
+    }
+    return { manifest, home, project };
+  }
+
+  if (typeof manifest.checksums.sh3d !== 'string') {
+    throw new Error('.bauplan: eingebettete .sh3d vorhanden, aber manifest.checksums.sh3d fehlt.');
+  }
   const sh3dBytes = entries[sh3dEntry];
   // Enforce the advertised integrity guarantee: the embedded .sh3d must match the
   // manifest checksum, so a tampered/corrupt container fails loudly, not silently.
@@ -156,13 +197,29 @@ export function readBauplanFile(path: string): { manifest: BauplanManifest } & B
  */
 export function exportBauplanFile(inputPath: string, destPath: string, opts: { createdAt?: string } = {}): string {
   const doc = loadDocumentFile(inputPath);
-  const sh3dBytes = new Uint8Array(readFileSync(doc.sh3dPath));
-  const bytes = writeBauplanBytes(
-    { home: doc.home, project: doc.project, sh3dBytes, sh3dName: basename(doc.sh3dPath) },
-    opts,
-  );
+  // loadDocumentFile only yields a null sh3dPath for a native document, which has no sidecar on
+  // disk to be handed here — but the type says it can be null, so branch rather than assert.
+  const sh3d = doc.sh3dPath
+    ? { sh3dBytes: new Uint8Array(readFileSync(doc.sh3dPath)), sh3dName: basename(doc.sh3dPath) }
+    : {};
+  const bytes = writeBauplanBytes({ home: doc.home, project: doc.project, ...sh3d }, opts);
   const target = resolve(destPath);
   writeFileSync(target, bytes);
+  return target;
+}
+
+/**
+ * Write a `.bauplan` straight from in-memory contents — the path a NATIVE document takes, where
+ * there is no source file to bundle from. {@link exportBauplanFile} stays the importer's route
+ * (read a `.sh3d`/sidecar off disk, wrap it); this one is the writer's.
+ */
+export function writeBauplanFile(
+  destPath: string,
+  contents: BauplanContents,
+  opts: { createdAt?: string } = {},
+): string {
+  const target = resolve(destPath);
+  writeFileSync(target, writeBauplanBytes(contents, opts));
   return target;
 }
 
@@ -173,6 +230,14 @@ export function exportBauplanFile(inputPath: string, destPath: string, opts: { c
  */
 export function extractBauplanFile(path: string, destDir: string): { sh3dPath: string; projectPath: string } {
   const { project, sh3dBytes, sh3dName } = readBauplanFile(path);
+  // A native `.bauplan` has no `.sh3d` inside it, so there is nothing to unbundle INTO the pair of
+  // files this returns. Refuse loudly instead of writing a sidecar pointing at a file we never
+  // wrote — the caller wants the Sweet-Home-3D interop form and this document has none.
+  if (!sh3dBytes || !sh3dName) {
+    throw new Error(
+      '.bauplan ist ein natives Dokument ohne eingebettete .sh3d — es kann nicht in .sh3d + Sidecar entpackt werden.',
+    );
+  }
   const dir = resolve(destDir);
   const sh3dPath = join(dir, sh3dName);
   writeFileSync(sh3dPath, sh3dBytes);
