@@ -189,8 +189,19 @@ export class GrundrissView extends Gtk.Box {
   private geomDrag: GeomCluster | null = null;
   private geomPreview: { x: number; z: number } | null = null;
   private selectedGeom: GeomCluster | null = null;
-  // Geometry sub-tool: reshape existing (select) vs. draw a new wall (draw).
-  private geomTool: 'select' | 'draw' = 'select';
+  // Geometry sub-tool: reshape existing (select), draw a new wall (draw), or measure (messen).
+  private geomTool: 'select' | 'draw' | 'messen' = 'select';
+  /**
+   * The measuring tape: two world points, or null.
+   *
+   * Kept as view state on purpose — a measurement is a question, not a fact about the building. It
+   * survives the drag so the number stays readable after the mouse is released, and it is cleared
+   * by the next measurement or by leaving the tool.
+   *
+   * NOT called `measure`: that is `Gtk.Widget`'s size-request vfunc, and overriding it with a
+   * nullable field would break layout for the whole canvas. tsc catches it; the name says why.
+   */
+  private tape: { from: { x: number; z: number }; to: { x: number; z: number } } | null = null;
   /** A wall picked in Geometrie mode (for deletion), or null. */
   private selectedGeomWall: string | null = null;
   // Draw tool: the pending wall's start + live end (world metres), while dragging.
@@ -213,6 +224,20 @@ export class GrundrissView extends Gtk.Box {
     if (editHook === 'geometrie' || editHook === 'gewerke' || editHook === 'erdarbeiten') this.editTarget = editHook;
     else if (editHook) this.editTarget = 'gewerke';
     if (env?.BP_APP_EDITSEL) this.selectedNode = env.BP_APP_EDITSEL;
+    // Dev hook: BP_APP_TAPE="x1 z1 x2 z2" (world metres) selects the measuring tool and lays a tape
+    // between those points. The tape is normally the result of a DRAG, and no headless transport
+    // can drag — without this the drawing code would be the one part of the tool that ships unseen.
+    const tapeHook = env?.BP_APP_TAPE;
+    if (tapeHook) {
+      const [x1, z1, x2, z2] = tapeHook.trim().split(/\s+/).map(Number);
+      if ([x1, z1, x2, z2].every((n) => Number.isFinite(n))) {
+        this.editTarget = 'geometrie';
+        this.geomTool = 'messen';
+        this.tape = { from: { x: x1, z: z1 }, to: { x: x2, z: z2 } };
+      } else {
+        printerr(`[app] BP_APP_TAPE="${tapeHook}" braucht vier Zahlen: x1 z1 x2 z2`);
+      }
+    }
     store.subscribe(() => this.render());
     this.render();
   }
@@ -650,7 +675,7 @@ export class GrundrissView extends Gtk.Box {
     // Earthworks (Vorhaben) belong to the model — always shown, in every mode.
     this.drawWorks(cr, sx, sy);
     // Geometrie shows drag handles; the Gewerke overlay only in Ansicht/Gewerke.
-    if (this.editTarget === 'geometrie') this.drawGeomHandles(cr, sx, sy);
+    if (this.editTarget === 'geometrie') this.drawGeomHandles(cr, sx, sy, width, height);
     else if (this.editTarget === 'view' || this.editTarget === 'gewerke') this.drawTga(cr, sx, sy);
     this.drawCompass(cr, width - 34, 38, 15, northAngle, fg);
     this.drawScaleBar(cr, width, height, s, fgA);
@@ -791,9 +816,10 @@ export class GrundrissView extends Gtk.Box {
 
     // Sub-tool: reshape existing geometry vs. draw a new wall.
     const seg = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, cssClasses: ['linked'] });
-    const tools: { key: 'select' | 'draw'; label: string }[] = [
+    const tools: { key: 'select' | 'draw' | 'messen'; label: string }[] = [
       { key: 'select', label: 'Auswählen' },
       { key: 'draw', label: 'Wand zeichnen' },
+      { key: 'messen', label: 'Messen' },
     ];
     let group: Gtk.ToggleButton | undefined;
     for (const t of tools) {
@@ -807,6 +833,7 @@ export class GrundrissView extends Gtk.Box {
           this.selectedGeomWall = null;
           this.drawStart = null;
           this.drawEnd = null;
+          this.tape = null;
           this.showPlan();
         }
       });
@@ -826,13 +853,15 @@ export class GrundrissView extends Gtk.Box {
     box.append(row);
 
     const hint =
-      this.geomTool === 'draw'
-        ? 'Ziehen: neue Wand · Raster 5 cm'
-        : this.selectedGeomWall
-          ? 'Wand gewählt — Dicke/Höhe rechts · löschen · ziehen zum Verschieben'
-          : this.selectedVertexCluster()
-            ? 'Raumpunkt gewählt — löschen möglich'
-            : 'Ziehen: Ecke/Punkt · Wand ziehen=verschieben · Doppelklick Kante=Punkt +';
+      this.geomTool === 'messen'
+        ? 'Ziehen: Strecke messen · ohne Raster, das Maß bleibt stehen'
+        : this.geomTool === 'draw'
+          ? 'Ziehen: neue Wand · Raster 5 cm'
+          : this.selectedGeomWall
+            ? 'Wand gewählt — Dicke/Höhe rechts · löschen · ziehen zum Verschieben'
+            : this.selectedVertexCluster()
+              ? 'Raumpunkt gewählt — löschen möglich'
+              : 'Ziehen: Ecke/Punkt · Wand ziehen=verschieben · Doppelklick Kante=Punkt +';
     box.append(new Gtk.Label({ label: hint, cssClasses: ['caption', 'dim-label'], xalign: 0 }));
     return box;
   }
@@ -1106,6 +1135,13 @@ export class GrundrissView extends Gtk.Box {
     this.dragStartY = sy;
     this.dragMoved = false;
     if (this.editTarget === 'geometrie') {
+      if (this.geomTool === 'messen') {
+        // NOT snapped to the 5 cm grid: a tape measure answers what IS there, and rounding the
+        // question to the drawing grid would answer a different one.
+        const w = this.toWorld(sx, sy);
+        this.tape = w ? { from: w, to: w } : null;
+        return;
+      }
       if (this.geomTool === 'draw') {
         const w = this.toWorld(sx, sy);
         this.drawStart = w ? this.snapPoint(w) : null;
@@ -1135,6 +1171,13 @@ export class GrundrissView extends Gtk.Box {
   private onDragUpdate(offsetX: number, offsetY: number): void {
     if (Math.hypot(offsetX, offsetY) > 4) this.dragMoved = true;
     if (this.editTarget === 'geometrie') {
+      if (this.geomTool === 'messen') {
+        if (!this.tape) return;
+        const w = this.toWorld(this.dragStartX + offsetX, this.dragStartY + offsetY);
+        if (w) this.tape = { from: this.tape.from, to: w };
+        this.drawArea?.queue_draw();
+        return;
+      }
       if (this.geomTool === 'draw') {
         if (!this.drawStart || !this.dragMoved) return;
         const w = this.toWorld(this.dragStartX + offsetX, this.dragStartY + offsetY);
@@ -1166,6 +1209,14 @@ export class GrundrissView extends Gtk.Box {
 
   private onDragEnd(offsetX: number, offsetY: number): void {
     if (this.editTarget === 'geometrie') {
+      if (this.geomTool === 'messen') {
+        // The measurement STAYS after the release — that is the whole point of taking one. Only a
+        // tape that never moved is discarded, since a zero-length one says nothing.
+        if (!this.dragMoved) this.tape = null;
+        this.dragMoved = false;
+        this.drawArea?.queue_draw();
+        return;
+      }
       if (this.geomTool === 'draw') {
         if (this.drawStart && this.drawEnd && this.dragMoved) {
           const lenM = Math.hypot(this.drawEnd.x - this.drawStart.x, this.drawEnd.z - this.drawStart.z);
@@ -1410,7 +1461,13 @@ export class GrundrissView extends Gtk.Box {
   }
 
   /** Draw the geometry handles (square markers) + a live draw preview. */
-  private drawGeomHandles(cr: Cr, sx: (x: number) => number, sy: (z: number) => number): void {
+  private drawGeomHandles(
+    cr: Cr,
+    sx: (x: number) => number,
+    sy: (z: number) => number,
+    width: number,
+    height: number,
+  ): void {
     for (const c of this.geomClusters()) {
       const isDrag = !!this.geomDrag && Math.abs(this.geomDrag.x - c.x) < 1e-6 && Math.abs(this.geomDrag.z - c.z) < 1e-6;
       const isSel = !!this.selectedGeom && Math.abs(this.selectedGeom.x - c.x) < 1e-6 && Math.abs(this.selectedGeom.z - c.z) < 1e-6;
@@ -1428,6 +1485,53 @@ export class GrundrissView extends Gtk.Box {
         cr.setLineWidth(2);
         cr.stroke();
       }
+    }
+    // The measuring tape: the line, end ticks, and the distance where it can be read.
+    if (this.geomTool === 'messen' && this.tape) {
+      const ax = sx(this.tape.from.x);
+      const ay = sy(this.tape.from.z);
+      const bx = sx(this.tape.to.x);
+      const by = sy(this.tape.to.z);
+      const metres = Math.hypot(this.tape.to.x - this.tape.from.x, this.tape.to.z - this.tape.from.z);
+      setNum(cr, SELECT_COLOR, 0.95);
+      cr.setLineWidth(2);
+      cr.moveTo(ax, ay);
+      cr.lineTo(bx, by);
+      cr.stroke();
+      // End ticks perpendicular to the tape, the way a dimension line is drawn — a plain dot at
+      // each end reads as two nodes, which is what every other handle in this canvas is.
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      const nx = (-(by - ay) / len) * 6;
+      const ny = ((bx - ax) / len) * 6;
+      for (const [px, py] of [
+        [ax, ay],
+        [bx, by],
+      ]) {
+        cr.moveTo(px - nx, py - ny);
+        cr.lineTo(px + nx, py + ny);
+      }
+      cr.stroke();
+      const label = `${metres.toFixed(2).replace('.', ',')} m`;
+      // Past the END of the tape, not at its midpoint. A dimension line conventionally labels the
+      // middle, and that is where the floating toolbar sits — the first measurement taken from the
+      // top-left of the plan put „8,94 m" squarely behind the tool card. The end is in the
+      // direction you dragged, hence away from where you started reading.
+      const ex = bx + (bx - ax) / (Math.hypot(bx - ax, by - ay) || 1) * 14;
+      const ey = by + (by - ay) / (Math.hypot(bx - ax, by - ay) || 1) * 14;
+      // Over a filled plate: a bare number on a floor plan lands on wall hatching as often as not,
+      // and a measurement you cannot read is not a measurement.
+      cr.selectFontFace('sans-serif', 0, 1);
+      cr.setFontSize(13);
+      const ext = cr.textExtents(label);
+      // Clamped into the canvas so a tape dragged to the edge does not label itself off-screen.
+      const lx = Math.min(Math.max(ex - ext.width / 2, 6), width - ext.width - 6);
+      const ly = Math.min(Math.max(ey, 22), height - 6);
+      setNum(cr, 0x000000, 0.78);
+      cr.rectangle(lx - 5, ly - 16, ext.width + 10, 20);
+      cr.fill();
+      setNum(cr, 0xffffff, 1);
+      cr.moveTo(lx, ly - 2);
+      cr.showText(label);
     }
     // Live preview of the wall being drawn.
     if (this.geomTool === 'draw' && this.drawStart && this.drawEnd && this.dragMoved) {
