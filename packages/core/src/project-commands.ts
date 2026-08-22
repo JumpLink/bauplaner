@@ -16,6 +16,7 @@
  */
 
 import type { Command } from './commands.ts';
+import type { PitchedRoofSpec } from './roofs.ts';
 import { nextId } from './ids.ts';
 import type { CostItem, EcoProject, RetrofitWork, WallAnnotation, MaterialPrice, ComponentAnnotation, EnvelopeComponent, FoerderProfil, RoadmapPaket, RoadmapPlan } from './project.ts';
 
@@ -36,6 +37,33 @@ function restore(project: EcoProject, wallId: string, previous: WallAnnotation |
     const walls = wallsOf(project);
     if (previous) walls[wallId] = previous;
     else delete walls[wallId];
+}
+
+// --- Roofs -----------------------------------------------------------------------------------
+
+/**
+ * Declare (or, with `null`, withdraw) the pitched roof over one level. Undoable.
+ *
+ * Sweet Home 3D has no roof entity, so an imported model is flat-topped everywhere and the pitched
+ * roofs are declared per level. There was no setter at all — the only way to say „this wing has a
+ * gable roof" was to write it into the project JSON by hand, and the 3D view, the envelope takeoff
+ * and the roof area in every energy screening all read that declaration.
+ */
+export function setPitchedRoofCommand(project: EcoProject, level: string, spec: PitchedRoofSpec | null): Command {
+    let previous: PitchedRoofSpec[] | undefined;
+    return {
+        label: spec ? 'Dachform setzen' : 'Dach entfernen',
+        do() {
+            previous = project.roofs?.pitched ? project.roofs.pitched.map((r) => ({ ...r })) : undefined;
+            const pitched = (project.roofs?.pitched ?? []).filter((r) => r.level !== level);
+            if (spec) pitched.push({ ...spec, level });
+            project.roofs = { ...project.roofs, pitched };
+        },
+        undo() {
+            if (previous) project.roofs = { ...project.roofs, pitched: previous };
+            else delete project.roofs;
+        },
+    };
 }
 
 // --- Funding profile -------------------------------------------------------------------------

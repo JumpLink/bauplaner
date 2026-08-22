@@ -147,4 +147,27 @@ export default async () => {
       expect(kaputt.heute.transmissionWPerK).toBe(bestand.heute.transmissionWPerK);
     });
   });
+
+  await describe('roof area in the screening', async () => {
+    const none = () => undefined;
+
+    await it('uses the passed roof area instead of the plan projection', async () => {
+      // deriveEnvelope reports the top level's ROOM area, because a plan is all it has. A declared
+      // 45° gable roof has 1/cos(45°) ≈ 1,41× that surface, and heat leaves through surface.
+      const flat = buildEnergyScreenings(homeWithWindows(), none, none);
+      const geneigt = buildEnergyScreenings(homeWithWindows(), none, none, flat.envelope.roofAreaM2 * 1.41);
+      expect(geneigt.envelope.roofAreaM2 > flat.envelope.roofAreaM2).toBe(true);
+      expect(geneigt.heute.transmissionWPerK > flat.heute.transmissionWPerK).toBe(true);
+    });
+
+    await it('ignores an absent or zero roof area, so a flat model is unchanged', async () => {
+      const flat = buildEnergyScreenings(homeWithWindows(), none, none);
+      expect(buildEnergyScreenings(homeWithWindows(), none, none, 0).envelope.roofAreaM2).toBe(
+        flat.envelope.roofAreaM2,
+      );
+      expect(buildEnergyScreenings(homeWithWindows(), none, none, undefined).envelope.roofAreaM2).toBe(
+        flat.envelope.roofAreaM2,
+      );
+    });
+  });
 };

@@ -17,7 +17,7 @@ import { resolve } from 'node:path';
 
 import type { CommandModule } from 'yargs';
 
-import { deriveEnvelope, loadDocumentFile } from '@bauplaner/core';
+import { deriveEnvelope, deriveRoofs, loadDocumentFile } from '@bauplaner/core';
 import {
   presetsFor,
   parsePriceOverride,
@@ -168,6 +168,11 @@ export const reportCommand: CommandModule<object, ReportArgs> = {
         doc.home,
         (id) => doc.project.annotations?.walls?.[id]?.assemblyLayers,
         (component) => doc.project.annotations?.bauteile?.[component],
+        // Same as the app: the roof's true surface where a pitch is declared, so the exported
+        // report and the dashboard cannot disagree about the same house.
+        doc.project.roofs?.pitched?.length
+          ? deriveRoofs(doc.home, { pitched: doc.project.roofs.pitched }).surfaceM2
+          : undefined,
       );
       gebaeude = {
         envelope: energie.envelope,

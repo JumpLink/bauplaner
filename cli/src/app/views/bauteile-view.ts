@@ -36,6 +36,7 @@ import { escapeMarkup, fmtEur, fmtNum } from '../../format.ts';
 import type { AssemblyLayers, DocumentStore } from '../document-store.ts';
 import { setHex } from '../paint.ts';
 import { openAufbauDialog } from './aufbau-dialog.ts';
+import { openDachDialog } from './dach-dialog.ts';
 import { adoptPresetFlags, indexForLayers, layersForIndex } from './assembly-selection.ts';
 
 /** The build-up the comparison measures every candidate against. */
@@ -121,6 +122,12 @@ export class BauteileView extends Gtk.Box {
     // stack HAS an insulation layer — and the demo house's wall is bare masonry, so the one state
     // worth a picture is unreachable from the other value.
     const hook = globalThis.process?.env?.BP_APP_DIALOG;
+    if (hook === 'dachform') {
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        openDachDialog(this, this.store);
+        return GLib.SOURCE_REMOVE;
+      });
+    }
     if (hook === 'aufbau' || hook === 'aufbau-daemmung') {
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         const home = this.store.home;
@@ -282,6 +289,14 @@ export class BauteileView extends Gtk.Box {
         if (!picked) return; // „Eigener Aufbau" describes what is there; it selects nothing.
         this.store.setComponentAnnotation(spec.key, picked.length > 0 ? { assemblyLayers: picked } : null);
       });
+      if (spec.key === 'dach') {
+        // The roof's SHAPE decides the area its build-up covers — a 30° pitch adds about 15 % — so
+        // the two belong next to each other, even though one is geometry and one is physics.
+        const shape = new Gtk.Button({ label: 'Dachform', valign: Gtk.Align.CENTER });
+        shape.add_css_class('flat');
+        shape.connect('clicked', () => openDachDialog(this, this.store));
+        row.add_suffix(shape);
+      }
       row.add_suffix(
         this.editButton(
           `Aufbau — ${spec.label}`,

@@ -142,8 +142,14 @@ export function buildEnergyScreenings(
   home: HomeData,
   layersFor: LayersFor,
   componentFor?: ComponentFor,
+  roofAreaM2?: number,
 ): BuildingEnergy {
-  const envelope = deriveEnvelope(home);
+  const derived = deriveEnvelope(home);
+  // `deriveEnvelope` reports the roof's PLAN area — the top level's room area — because a plan is
+  // all it has. A declared 45° gable roof has 41 % more surface than that, and heat leaves through
+  // surface, not through the projection. Where the project declares a pitch, the caller passes the
+  // true area; where it does not, the plan area IS the flat roof's area and nothing changes.
+  const envelope = roofAreaM2 != null && roofAreaM2 > 0 ? { ...derived, roofAreaM2 } : derived;
   return {
     start: screen(envelope, layersFor, 'start', componentFor),
     heute: screen(envelope, layersFor, 'heute', componentFor),
