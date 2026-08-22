@@ -1,0 +1,12 @@
+Bauplaner — Drittanbieter-Hinweise
+
+Diese Datei wird erzeugt (cli/dev/check-licenses.js) und listet jede Laufzeit-Abhängigkeit,
+die in ein ausgeliefertes Bundle eingebunden wird, mit Version und Lizenz.
+
+  @gjsify/adwaita-app@0.38.1 — MIT
+  @gjsify/devtools@0.38.1 — MIT
+  @gjsify/webgl@0.38.1 — MIT
+  fast-xml-parser@5.9.3 — MIT
+  fflate@0.8.3 — MIT
+  three@0.185.1 — MIT
+  yargs@18.0.0 — MIT
