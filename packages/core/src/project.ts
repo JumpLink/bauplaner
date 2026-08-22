@@ -228,8 +228,45 @@ export interface ComponentAnnotation {
   note?: string;
 }
 
+/**
+ * What the user decided about one measure package of the retrofit roadmap.
+ *
+ * `computeRoadmap` produces a starting PROPOSAL from areas and flat €/m² figures. That proposal is
+ * a computation, and a computation cannot remember that the cellar ceiling was done in April for
+ * less than estimated. Everything here overrides the proposal for one package id; anything absent
+ * keeps whatever the generator said.
+ */
+export interface RoadmapPaket {
+  /** Package id — either one of `ISFP_PAKETE` or a locally created one. */
+  id: string;
+  /** Renamed by the user; the generator's title otherwise. */
+  title?: string;
+  /** Actual or quoted net cost, replacing the flat estimate. */
+  kostenEur?: number;
+  /** Target/completion year. */
+  jahr?: number;
+  status?: 'geplant' | 'laeuft' | 'erledigt';
+  note?: string;
+  /** A package the user added — it has no counterpart in the generator's list. */
+  eigenes?: boolean;
+  /** Hidden from the plan (a measure that does not apply to this house). */
+  entfernt?: boolean;
+}
+
+/** The retrofit roadmap as a PLAN: the generator's options plus the user's decisions. */
+export interface RoadmapPlan {
+  /** Whether to net the BEG funding off the packages (the view's switch, now remembered). */
+  foerderung?: boolean;
+  /** Whether the user does the work themselves where the package allows it. */
+  eigenleistung?: boolean;
+  /** Per-package decisions, keyed by package id. */
+  pakete?: RoadmapPaket[];
+}
+
 export interface EcoProject {
   schemaVersion: number;
+  /** The retrofit roadmap as a plan (v3+); absent means „whatever the generator proposes". */
+  roadmap?: RoadmapPlan;
   /** Project-specific material prices (material key → price), overriding the catalogue. */
   materialPrices?: Record<string, MaterialPrice>;
   /**
@@ -392,6 +429,7 @@ export function parseProject(json: string): EcoProject {
       typeof r.materialPrices === 'object' && r.materialPrices !== null
         ? (r.materialPrices as Record<string, MaterialPrice>)
         : undefined,
+    roadmap: typeof r.roadmap === 'object' && r.roadmap !== null ? (r.roadmap as RoadmapPlan) : undefined,
     raumklima: typeof r.raumklima === 'object' && r.raumklima !== null ? (r.raumklima as EcoProject['raumklima']) : undefined,
   };
 }
