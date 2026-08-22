@@ -33,6 +33,7 @@ export * from './envelope.ts';
 export * from './aufmass.ts';
 export * from './floorarea.ts';
 export * from './roofs.ts';
+export * from './wohnflaeche.ts';
 export * from './commands.ts';
 export * from './ids.ts';
 export * from './project-commands.ts';
