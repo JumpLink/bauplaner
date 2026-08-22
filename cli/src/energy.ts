@@ -7,9 +7,14 @@
  * cannot show two different numbers for the same house.
  *
  * Three screenings for the same envelope:
- *   start — every exterior wall at the Bestand default U (pre-retrofit baseline)
- *   heute — walls at their assigned assembly's U (current state)
+ *   start — every component at the Bestand default U (pre-retrofit baseline)
+ *   heute — each component at its assigned build-up's U (current state)
  *   ziel  — retrofit target U-values (fully insulated envelope)
+ *
+ * „heute" covers roof, windows and floor as well as walls. It did not: those three sat at
+ * BESTAND_U in every screening, so a model could never show an insulated top-floor ceiling — one
+ * of the cheapest measures there is — and the dashboard, the funding view, the roadmap and the
+ * exported report all inherited that blind spot from this one function.
  */
 
 import { deriveEnvelope, type Envelope, type HomeData } from '@bauplaner/core';
@@ -21,41 +26,98 @@ import {
   type EnergyScreening,
 } from '@bauplaner/materials';
 
-export type AssemblyLayers = { materialKey: string; thicknessM: number }[];
+export type AssemblyLayers = { materialKey: string; thicknessM: number; bestand?: boolean }[];
 /** Look up a wall's assigned assembly layers (the document store's getter). */
 export type LayersFor = (wallId: string) => AssemblyLayers | undefined;
+
+/** What is known about one non-wall envelope component: a build-up, a datasheet U-value, or nothing. */
+export interface ComponentState {
+  assemblyLayers?: AssemblyLayers;
+  uValue?: number;
+}
+
+/** Look up an envelope component's state. Omitted entirely → everything stays at Bestand, as before. */
+export type ComponentFor = (component: 'dach' | 'oberste-geschossdecke' | 'kellerdecke' | 'fenster') =>
+  | ComponentState
+  | undefined;
 
 /** "Retrofitted" target U-values for the Ziel screening (GEG-oriented). */
 export const ZIEL_U = { wall: 0.24, roof: 0.2, window: 1.3, floor: 0.3 };
 
 type Variant = 'start' | 'heute' | 'ziel';
 
-function uForWall(layers: AssemblyLayers | undefined): number {
+function uForLayers(layers: AssemblyLayers | undefined, art: 'wall' | 'roof' | 'floor', fallback: number): number {
   if (layers && layers.length > 0) {
     try {
-      return computeAssembly(layers, { art: 'wall' }).U;
+      return computeAssembly(layers, { art }).U;
     } catch {
-      return BESTAND_U.wall;
+      // An unknown material key (a file from a newer catalogue). The Bestand value is the honest
+      // fallback — pretending the component is insulated would flatter the whole screening.
+      return fallback;
     }
   }
-  return BESTAND_U.wall;
+  return fallback;
 }
 
-function screen(env: Envelope, layersFor: LayersFor, variant: Variant): EnergyScreening {
+/**
+ * The U-value of a non-wall component in the „heute" screening.
+ *
+ * A stated `uValue` wins over a layer stack only when there IS no stack: for a window the
+ * datasheet is the only honest input (U_w depends on frame, glazing and spacer), for a ceiling the
+ * stack is the more specific statement.
+ */
+function uForComponent(state: ComponentState | undefined, art: 'wall' | 'roof' | 'floor', fallback: number): number {
+  if (state?.assemblyLayers?.length) return uForLayers(state.assemblyLayers, art, fallback);
+  if (state?.uValue != null && state.uValue > 0) return state.uValue;
+  return fallback;
+}
+
+function screen(env: Envelope, layersFor: LayersFor, variant: Variant, componentFor?: ComponentFor): EnergyScreening {
   const retrofit = variant === 'ziel';
   const wallU = (id: string): number =>
-    variant === 'start' ? BESTAND_U.wall : variant === 'ziel' ? ZIEL_U.wall : uForWall(layersFor(id));
+    variant === 'start'
+      ? BESTAND_U.wall
+      : variant === 'ziel'
+        ? ZIEL_U.wall
+        : uForLayers(layersFor(id), 'wall', BESTAND_U.wall);
   const elements: EnergyElement[] = env.exteriorWalls.map((w) => ({
     kind: 'wall' as const,
     areaM2: w.netAreaM2,
     u: wallU(w.id),
   }));
-  if (env.roofAreaM2 > 0)
-    elements.push({ kind: 'roof', areaM2: env.roofAreaM2, u: retrofit ? ZIEL_U.roof : BESTAND_U.roof });
+  /** The „heute" U of a non-wall component; start and ziel are fixed by definition. */
+  const componentU = (
+    key: 'dach' | 'oberste-geschossdecke' | 'kellerdecke' | 'fenster',
+    art: 'wall' | 'roof' | 'floor',
+    bestand: number,
+    ziel: number,
+  ): number =>
+    variant === 'start' ? bestand : variant === 'ziel' ? ziel : uForComponent(componentFor?.(key), art, bestand);
+
+  if (env.roofAreaM2 > 0) {
+    // Roof or top-floor ceiling, whichever the project annotated — they are alternatives for the
+    // same heat path, and a project insulates one of them, not both.
+    const dach = componentFor?.('dach');
+    const decke = componentFor?.('oberste-geschossdecke');
+    const key = dach?.assemblyLayers?.length || dach?.uValue != null ? 'dach' : 'oberste-geschossdecke';
+    elements.push({
+      kind: 'roof',
+      areaM2: env.roofAreaM2,
+      u: componentU(decke || dach ? key : 'dach', 'roof', BESTAND_U.roof, ZIEL_U.roof),
+    });
+  }
   if (env.windowAreaM2 > 0)
-    elements.push({ kind: 'window', areaM2: env.windowAreaM2, u: retrofit ? ZIEL_U.window : BESTAND_U.window });
+    elements.push({
+      kind: 'window',
+      areaM2: env.windowAreaM2,
+      u: componentU('fenster', 'wall', BESTAND_U.window, ZIEL_U.window),
+    });
   if (env.floorAreaM2 > 0)
-    elements.push({ kind: 'floor', areaM2: env.floorAreaM2, u: retrofit ? ZIEL_U.floor : BESTAND_U.floor });
+    elements.push({
+      kind: 'floor',
+      areaM2: env.floorAreaM2,
+      u: componentU('kellerdecke', 'floor', BESTAND_U.floor, ZIEL_U.floor),
+    });
   return computeEnergyScreening({
     elements,
     heatedFloorAreaM2: env.heatedFloorAreaM2,
@@ -76,12 +138,16 @@ export interface BuildingEnergy {
 }
 
 /** Build the start/heute/ziel screenings for a model from its wall assemblies. */
-export function buildEnergyScreenings(home: HomeData, layersFor: LayersFor): BuildingEnergy {
+export function buildEnergyScreenings(
+  home: HomeData,
+  layersFor: LayersFor,
+  componentFor?: ComponentFor,
+): BuildingEnergy {
   const envelope = deriveEnvelope(home);
   return {
-    start: screen(envelope, layersFor, 'start'),
-    heute: screen(envelope, layersFor, 'heute'),
-    ziel: screen(envelope, layersFor, 'ziel'),
+    start: screen(envelope, layersFor, 'start', componentFor),
+    heute: screen(envelope, layersFor, 'heute', componentFor),
+    ziel: screen(envelope, layersFor, 'ziel', componentFor),
     envelope,
   };
 }

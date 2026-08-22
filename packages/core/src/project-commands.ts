@@ -17,7 +17,7 @@
 
 import type { Command } from './commands.ts';
 import { nextId } from './ids.ts';
-import type { CostItem, EcoProject, RetrofitWork, WallAnnotation, MaterialPrice } from './project.ts';
+import type { CostItem, EcoProject, RetrofitWork, WallAnnotation, MaterialPrice, ComponentAnnotation, EnvelopeComponent } from './project.ts';
 
 /** The mutable annotation map, created on demand. */
 function wallsOf(project: EcoProject): Record<string, WallAnnotation> {
@@ -36,6 +36,34 @@ function restore(project: EcoProject, wallId: string, previous: WallAnnotation |
     const walls = wallsOf(project);
     if (previous) walls[wallId] = previous;
     else delete walls[wallId];
+}
+
+// --- Envelope components ---------------------------------------------------------------------
+
+/** Set (or, with `null`, clear) the annotation of one envelope component. Undoable. */
+export function setComponentAnnotationCommand(
+    project: EcoProject,
+    component: EnvelopeComponent,
+    annotation: ComponentAnnotation | null,
+): Command {
+    let previous: ComponentAnnotation | undefined;
+    let existed = false;
+    return {
+        label: annotation ? 'Bauteil zuweisen' : 'Bauteil zuruecksetzen',
+        do() {
+            const annotations = (project.annotations ??= {});
+            const bauteile = (annotations.bauteile ??= {});
+            existed = component in bauteile;
+            previous = bauteile[component];
+            if (annotation) bauteile[component] = { ...annotation };
+            else delete bauteile[component];
+        },
+        undo() {
+            const bauteile = ((project.annotations ??= {}).bauteile ??= {});
+            if (existed && previous) bauteile[component] = previous;
+            else delete bauteile[component];
+        },
+    };
 }
 
 // --- Material prices -------------------------------------------------------------------------

@@ -13,7 +13,14 @@ import GLib from '@girs/glib-2.0';
 import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
-import { deriveEnvelope, wallLengthM, type Wall } from '@bauplaner/core';
+import {
+  deriveEnvelope,
+  parseGermanNumber,
+  wallLengthM,
+  type Envelope,
+  type EnvelopeComponent,
+  type Wall,
+} from '@bauplaner/core';
 import {
   KATEGORIE_FARBE,
   presetsFor,
@@ -21,6 +28,7 @@ import {
   getMaterial,
   presetByKey,
   vergleicheVarianten,
+  type BauteilArt,
   type VariantenErgebnis,
 } from '@bauplaner/materials';
 
@@ -47,6 +55,35 @@ const RISIKO_CSS = { gering: 'success', mittel: 'warning', hoch: 'error' } as co
  * floor ones, which share neither a threshold nor an area with a façade.
  */
 const WAND_PRESETS = presetsFor('aussenwand');
+
+/**
+ * The envelope components besides the individual walls, with the area each one covers.
+ *
+ * `art` is not decoration: the same layers give a different U-value on a roof than on a wall
+ * (heat rises, so the inner surface resistance differs), and GEG Anlage 7 sets its own maximum per
+ * component. The Kellerdecke is a `floor`, the top-floor ceiling a `roof` — that is the direction
+ * of heat flow, not where the component sits.
+ */
+const COMPONENTS: ReadonlyArray<{
+  key: EnvelopeComponent;
+  label: string;
+  art: BauteilArt;
+  area: (e: Envelope) => number;
+}> = [
+  { key: 'dach', label: 'Dach', art: 'roof', area: (e) => e.roofAreaM2 },
+  { key: 'oberste-geschossdecke', label: 'Oberste Geschossdecke', art: 'roof', area: (e) => e.roofAreaM2 },
+  { key: 'kellerdecke', label: 'Kellerdecke', art: 'floor', area: (e) => e.floorAreaM2 },
+  { key: 'fenster', label: 'Fenster', art: 'wall', area: (e) => e.windowAreaM2 },
+];
+
+/** The stack's U-value, or null when a material in it is unknown to this build. */
+function safeU(layers: AssemblyLayers, art: BauteilArt): number | null {
+  try {
+    return assessAssembly(layers, art).U;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Combo entries: „(keiner)", the presets, and — last — „Eigener Aufbau".
@@ -205,8 +242,89 @@ export class BauteileView extends Gtk.Box {
       perWall.add(expander);
     }
     page.add(perWall);
+    page.add(this.buildComponentsGroup(deriveEnvelope(home)));
 
     return page;
+  }
+
+  /**
+   * The envelope components that are not individual walls: roof, top-floor ceiling, basement
+   * ceiling, windows.
+   *
+   * The catalogue above is filtered to `presetsFor('aussenwand')`, and until now that was the
+   * whole editable envelope — while the Übersicht reported the heat loss of all four. The roof was
+   * held at its Bestand U-value no matter what was built on it.
+   */
+  private buildComponentsGroup(envelope: ReturnType<typeof deriveEnvelope>): Adw.PreferencesGroup {
+    const group = new Adw.PreferencesGroup({
+      title: 'Weitere Bauteile',
+      description: 'Dach, oberste Geschossdecke, Kellerdecke und Fenster — sie zählen in Übersicht, Förderung und Fahrplan mit.',
+    });
+
+    for (const spec of COMPONENTS) {
+      const state = this.store.componentAnnotation(spec.key);
+      const area = spec.area(envelope);
+      if (spec.key === 'fenster') {
+        group.add(this.windowRow(state, area));
+        continue;
+      }
+      const presets = presetsFor(spec.key);
+      const layers = state?.assemblyLayers;
+      const row = new Adw.ComboRow({ title: spec.label });
+      const names = ['(Bestand)', ...presets.map((p) => p.name), 'Eigener Aufbau'];
+      row.set_model(Gtk.StringList.new(names));
+      const presetLayers = presets.map((p) => p.layers);
+      row.set_selected(indexForLayers(presetLayers, layers));
+      const u = layers?.length ? safeU(layers, spec.art) : null;
+      row.set_subtitle(`${fmtNum(area, 0)} m²${u != null ? ` · U ${fmtNum(u, 2)}` : ' · nicht gedämmt'}`);
+      row.connect('notify::selected', () => {
+        const picked = layersForIndex(presetLayers, row.get_selected());
+        if (!picked) return; // „Eigener Aufbau" describes what is there; it selects nothing.
+        this.store.setComponentAnnotation(spec.key, picked.length > 0 ? { assemblyLayers: picked } : null);
+      });
+      row.add_suffix(
+        this.editButton(
+          `Aufbau — ${spec.label}`,
+          adoptPresetFlags(presetLayers, layers ?? []),
+          (l) => this.store.setComponentAnnotation(spec.key, l.length > 0 ? { assemblyLayers: l } : null),
+          spec.art,
+          area,
+        ),
+      );
+      group.add(row);
+    }
+    return group;
+  }
+
+  /**
+   * Windows: a U-value, not a layer stack.
+   *
+   * U_w depends on frame, glazing, spacer and the size of the very unit you buy — there is no
+   * stack to assemble, and offering one would invite a made-up number where the datasheet has a
+   * real one.
+   */
+  private windowRow(state: { uValue?: number } | undefined, area: number): Adw.EntryRow {
+    const row = new Adw.EntryRow({ title: 'Fenster — U-Wert laut Datenblatt (W/(m²·K))' });
+    row.set_show_apply_button(true);
+    row.set_text(state?.uValue != null ? String(state.uValue).replace('.', ',') : '');
+    row.connect('apply', () => {
+      const text = (row.get_text() ?? '').trim();
+      if (!text) {
+        this.store.setComponentAnnotation('fenster', null);
+        return;
+      }
+      const u = parseGermanNumber(text);
+      if (u == null || u <= 0 || u > 10) {
+        // A U-value outside 0…10 is a typo, not a window: passive-house glazing is ~0,6, single
+        // glazing ~5,8. Refusing beats storing a number that silently rewrites the whole screening.
+        row.add_css_class('error');
+        return;
+      }
+      row.remove_css_class('error');
+      this.store.setComponentAnnotation('fenster', { uValue: u });
+    });
+    row.set_tooltip_text(`Fensterfläche des Modells: ${fmtNum(area, 1)} m²`);
+    return row;
   }
 
   /**
@@ -432,7 +550,13 @@ export class BauteileView extends Gtk.Box {
   }
 
   /** The „Bearbeiten" button that opens the layer editor on `layers` and stores the result. */
-  private editButton(title: string, layers: AssemblyLayers | undefined, apply: (l: AssemblyLayers) => void): Gtk.Button {
+  private editButton(
+    title: string,
+    layers: AssemblyLayers | undefined,
+    apply: (l: AssemblyLayers) => void,
+    art: BauteilArt = 'wall',
+    areaM2?: number,
+  ): Gtk.Button {
     const button = new Gtk.Button({ label: 'Bearbeiten', valign: Gtk.Align.CENTER });
     button.add_css_class('flat');
     button.connect('clicked', () => {
@@ -442,8 +566,9 @@ export class BauteileView extends Gtk.Box {
         // every layer that does not carry `bestand`.
         title,
         layers: adoptPresetFlags(PRESET_LAYERS, layers ?? []),
-        areaM2: home ? Math.round(deriveEnvelope(home).wallAreaM2) : 100,
+        areaM2: areaM2 ?? (home ? Math.round(deriveEnvelope(home).wallAreaM2) : 100),
         priceOverrides: this.store.materialPrices,
+        art,
         onApply: apply,
       });
     });

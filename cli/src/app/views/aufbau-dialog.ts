@@ -27,6 +27,7 @@ import {
   estimateAssemblyCost,
   getMaterial,
   tauwasserBilanz,
+  type BauteilArt,
   type LayerSpec,
   type Price,
 } from '@bauplaner/materials';
@@ -61,6 +62,14 @@ export interface AufbauDialogOptions {
   areaM2: number;
   /** The project's own material prices, which beat the catalogue's. */
   priceOverrides?: Record<string, Price>;
+  /**
+   * Which component this is, for the surface resistances and the GEG threshold.
+   *
+   * The same layers give a DIFFERENT U-value on a wall and on a ceiling — heat rises, so R_si
+   * differs — and GEG Anlage 7 sets a different maximum for each. Defaulting everything to `wall`
+   * would quietly report a roof as a façade.
+   */
+  art?: BauteilArt;
   onApply: (layers: AssemblyLayers) => void;
 }
 
@@ -75,6 +84,10 @@ class AufbauDialog extends Adw.Dialog {
   }
 
   private readonly opts: AufbauDialogOptions;
+  /** Component type for the surface resistances and the GEG threshold; walls are the default. */
+  private get art(): BauteilArt {
+    return this.opts.art ?? 'wall';
+  }
   private draft: Draft;
   private readonly page = new Adw.PreferencesPage();
   private readonly banner = new Adw.Banner({ revealed: false });
@@ -267,7 +280,7 @@ class AufbauDialog extends Adw.Dialog {
 
     let assessment: ReturnType<typeof assessAssembly>;
     try {
-      assessment = assessAssembly(this.draft);
+      assessment = assessAssembly(this.draft, this.art);
     } catch (error) {
       // A material without λ/µ cannot be in the combo, so this is a stack loaded from a file that
       // names something this build does not know. Saying which is the only useful answer.
@@ -290,7 +303,7 @@ class AufbauDialog extends Adw.Dialog {
       ),
     );
 
-    const bilanz = tauwasserBilanz(computeAssembly(this.draft, { art: 'wall' }));
+    const bilanz = tauwasserBilanz(computeAssembly(this.draft, { art: this.art }));
     group.add(
       infoRow(
         'Tauwasser',
@@ -379,7 +392,7 @@ class AufbauDialog extends Adw.Dialog {
         const result = dimensioniereDaemmung(this.draft, {
           materialKey: pick.layer.materialKey,
           zielU,
-          art: 'wall',
+          art: this.art,
           index: pick.index,
         });
         if (!result.erreichbar) {

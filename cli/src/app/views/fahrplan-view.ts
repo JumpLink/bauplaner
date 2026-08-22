@@ -13,7 +13,6 @@ import Gtk from '@girs/gtk-4.0';
 import { computeRoadmap, type Massnahmenpaket, type PaketElement } from '@bauplaner/materials';
 
 import type { DocumentStore } from '../document-store.ts';
-import { buildEnergyScreenings } from '../../energy.ts';
 import { escapeMarkup, fmtEur } from '../../format.ts';
 
 export class FahrplanView extends Gtk.Box {
@@ -57,7 +56,7 @@ export class FahrplanView extends Gtk.Box {
 
   private buildPage(): Gtk.Widget {
     const home = this.store.home!;
-    const energy = buildEnergyScreenings(home, (id) => this.store.wallAssemblyLayers(id));
+    const energy = this.store.energy()!;
     const lossShares: Partial<Record<PaketElement, number>> = {};
     for (const s of energy.heute.shares) {
       if (s.kind === 'wall' || s.kind === 'roof' || s.kind === 'window' || s.kind === 'floor') {

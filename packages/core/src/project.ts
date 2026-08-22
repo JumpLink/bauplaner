@@ -201,6 +201,33 @@ export interface MaterialPrice {
   retrievedAt?: string;
 }
 
+/**
+ * The envelope components with their own build-up, besides the individual exterior walls.
+ *
+ * The same keys `@bauplaner/materials` uses for its presets (`BegBauteil`), minus `aussenwand`,
+ * which is per-wall, and `haustuer`, which has no area in the screening.
+ */
+export type EnvelopeComponent = 'dach' | 'oberste-geschossdecke' | 'kellerdecke' | 'fenster';
+
+/** What is known about one envelope component: a build-up, or — for windows — a bought U-value. */
+export interface ComponentAnnotation {
+  /**
+   * Layer stack inside→outside, like {@link WallAnnotation.assemblyLayers}. Absent for windows,
+   * which are products with a datasheet, not something you stack.
+   */
+  assemblyLayers?: { materialKey: string; thicknessM: number; bestand?: boolean; verdichtung?: number }[];
+  /**
+   * U-value in W/(m²·K), taken straight from the product datasheet.
+   *
+   * For windows this is the ONLY honest input: U_w depends on frame, glazing, spacer and size, and
+   * a layer stack cannot express it. Where both are present the stack wins — it is the more
+   * specific statement.
+   */
+  uValue?: number;
+  /** Free note (which product, which quote). */
+  note?: string;
+}
+
 export interface EcoProject {
   schemaVersion: number;
   /** Project-specific material prices (material key → price), overriding the catalogue. */
@@ -224,6 +251,17 @@ export interface EcoProject {
   /** Per-SH3D-entity annotations, keyed by id. */
   annotations?: {
     walls?: Record<string, WallAnnotation>;
+    /**
+     * The envelope components that are NOT individual walls: roof, top-floor ceiling, basement
+     * ceiling, windows.
+     *
+     * Keyed by component rather than by entity id because the geometry has no entity for them —
+     * `deriveEnvelope` computes their areas from the levels and rooms. Without this the energy
+     * screening had no choice but to hold roof, floor and windows at their Bestand U-value forever:
+     * insulating the top-floor ceiling is among the cheapest measures there is, and the model could
+     * not represent that it had happened.
+     */
+    bauteile?: Partial<Record<EnvelopeComponent, ComponentAnnotation>>;
   };
   /** Our own works (earthworks etc.). */
   works?: RetrofitWork[];

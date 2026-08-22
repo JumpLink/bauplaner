@@ -167,6 +167,7 @@ export const reportCommand: CommandModule<object, ReportArgs> = {
       const energie = buildEnergyScreenings(
         doc.home,
         (id) => doc.project.annotations?.walls?.[id]?.assemblyLayers,
+        (component) => doc.project.annotations?.bauteile?.[component],
       );
       gebaeude = {
         envelope: energie.envelope,
