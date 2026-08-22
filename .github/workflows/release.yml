@@ -1,0 +1,124 @@
+name: Release
+
+# Tag-triggered, plus a manual run so the whole chain can be exercised without cutting a release.
+#
+# The point is NOT that a package is produced — `gjsify ship` does that in seconds and a package
+# that builds proves nothing. The point is the two steps after it: INSTALL the package with the
+# system package manager, and START what it installed. Both packaging findings that cost this
+# project the most were invisible until then — `ship` staged the test bundles beside the app, and
+# `gi://Gwebgl` (the whole 3D view) has no distro package at all, so it had to be carried in the
+# payload with the launcher pointing GI at it.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:44
+    steps:
+      - name: Install build prerequisites
+        run: >
+          dnf install -y --setopt=install_weak_deps=False
+          git tar xz findutils gjs pango libsoup3 json-glib
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Bootstrap the gjsify CLI
+        run: |
+          VERSION=$(node -p "require('./cli/package.json').devDependencies['@gjsify/cli']")
+          npm install -g "@gjsify/cli@$VERSION"
+
+      - name: Install dependencies
+        run: gjsify install --immutable
+
+      # Not `--skip-build`: a release packages what a clean build produces, not whatever happens to
+      # be lying in dist/ from an earlier step.
+      - name: Build the app bundle
+        run: cd cli && gjsify run build:app
+
+      - name: Third-party licences are all decided
+        run: cd cli && gjsify run check:licenses
+
+      - name: Pack deb and rpm
+        run: cd cli && gjsify ship --skip-build
+
+      # The package must contain the APP and nothing else. `ship` stages every file beside the
+      # bundle, so a stray build output next to it silently becomes part of the release.
+      - name: No test or CLI bundle in the package
+        run: |
+          set -eu
+          LIST=$(rpm -qlp cli/ship/out/*.rpm)
+          echo "$LIST"
+          for stray in test. bauplaner.gjs.mjs bauplaner.node.mjs; do
+            if echo "$LIST" | grep -q "$stray"; then
+              echo "::error::$stray is in the package"; exit 1
+            fi
+          done
+
+      # The 3D view imports gi://Gwebgl, which no distribution ships. The payload carries it — if
+      # that ever silently stops, the package installs and the 3D view dies at the first import.
+      - name: The bundled Gwebgl typelib is in the package
+        run: |
+          set -eu
+          rpm -qlp cli/ship/out/*.rpm | grep -q "gi/Gwebgl-0.1.typelib" \
+            || { echo "::error::the Gwebgl typelib is not in the package"; exit 1; }
+          rpm -qlp cli/ship/out/*.rpm | grep -q "gi/libgwebgl.so" \
+            || { echo "::error::libgwebgl.so is not in the package — the typelib alone is useless"; exit 1; }
+
+      # THE step. `dnf install` resolves every `Requires:` the package declares — an undeclared
+      # runtime dependency fails here instead of on a user's machine after the download.
+      - name: Install the package
+        run: dnf install -y --setopt=install_weak_deps=False ./cli/ship/out/*.rpm
+
+      - name: Install the runtime the start proof needs
+        run: dnf install -y --setopt=install_weak_deps=False xorg-x11-server-Xvfb dbus-daemon
+
+      # And the step after that: what was installed has to START. Under Xvfb because a GTK app needs
+      # a display, and inside `dbus-run-session` because the devtools control plane — the only way
+      # to ask a running GUI whether it is alive — speaks over the session bus.
+      - name: The installed app starts
+        run: |
+          set -eu
+          cat > /tmp/prove.sh <<'SH'
+          set -eu
+          export GJSIFY_DEVTOOLS=1 BP_APP_ID=eu.jumplink.Bauplaner.CI
+          export HOME=/tmp/fresh XDG_DATA_HOME=/tmp/fresh/data XDG_CONFIG_HOME=/tmp/fresh/config
+          mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME"
+          bauplaner &
+          APP=$!
+          for _ in $(seq 1 60); do
+            if gdbus call --session --dest eu.jumplink.Bauplaner.CI \
+                 --object-path /eu/jumplink/Bauplaner/CI/devtools \
+                 --method org.gjsify.Devtools.GetStatus >/tmp/status.json 2>/dev/null; then
+              echo "the installed app answered:"; cat /tmp/status.json
+              kill "$APP" 2>/dev/null || true
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the installed app never answered GetStatus — it did not start"
+          kill "$APP" 2>/dev/null || true
+          exit 1
+          SH
+          chmod +x /tmp/prove.sh
+          # A fresh HOME on purpose: this is the first launch a stranger gets.
+          xvfb-run -a dbus-run-session -- /tmp/prove.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: cli/ship/out/*
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" cli/ship/out/* --clobber
