@@ -82,8 +82,14 @@ system (GJS uses the real libraries via GObject-Introspection).
   one you already have open (used for devtools screenshots — see below).
 - `BP_APP_MODELTAB=<grundriss|ansicht3d|3d>` — the Modell view's initial
   projection (default `grundriss`).
-- `BP_APP_EDIT=1` — start the Grundriss in Gewerke edit mode.
+- `BP_APP_EDIT=<geometrie|gewerke|erdarbeiten>` — start the Grundriss in that edit
+  mode (any other truthy value → Gewerke, for back-compat).
 - `BP_APP_EDITSEL=<node-id>` — pre-select that TGA node (shows the selection ring).
+- `BP_APP_OPENING="<x> <z>"` — select the Grundriss **Öffnung** tool and put a window
+  into the wall nearest that point (world metres). The tool's whole gesture is a click
+  on a canvas point and no headless transport can deliver one, so without this the
+  placement would be the one part of the tool that ships unseen. It runs the real
+  placement path, so a screenshot shows what a click does.
 - `BP_APP_COLORMODE=<neutral|uwert|feuchte>` — the Modell view's initial wall
   colouring mode (default `uwert`).
 - `BP_APP_PICKWALL=<wall-id>` — open the Modell click-inspector for that wall on
