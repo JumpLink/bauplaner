@@ -195,6 +195,16 @@ export class AufmassView extends Gtk.Box {
       warn.add_suffix(badge);
       group.add(warn);
     }
+    if (r.hoeheAngenommenCount > 0) {
+      const warn = new Adw.ActionRow({
+        title: `${r.hoeheAngenommenCount} Räume mit angenommener Höhe`,
+        subtitle: 'Raumhöhe unbekannt, 2,50 m unterstellt — volle Anrechnung ist dort Annahme, keine Messung.',
+      });
+      const badge = new Gtk.Label({ label: '⚠', valign: Gtk.Align.CENTER });
+      badge.add_css_class('warning');
+      warn.add_suffix(badge);
+      group.add(warn);
+    }
     return group;
   }
 }
@@ -213,8 +223,10 @@ function roomLabel(room: WohnflaecheRow): string {
   if (room.abzugM2 > 0) parts.push(`− ${fmtNum(room.abzugM2, 1)} m² Abzug`);
   if (room.hoehenFaktor !== 1) parts.push(`Höhe × ${fmtNum(room.hoehenFaktor, 2)}`);
   // Shown whenever the nutzung is not plain Wohnfläche — a capped Balkon at
-  // factor 1 must not read like an ordinary living room.
+  // factor 1 must not read like an ordinary living room. A declared faktor is
+  // annotated even on plain Wohnfläche.
   if (room.nutzung !== 'wohnflaeche') parts.push(`${room.nutzung} × ${fmtNum(room.nutzungsFaktor, 2)}`);
+  else if (room.faktorErklaert) parts.push(`Faktor × ${fmtNum(room.nutzungsFaktor, 2)} (erklärt)`);
   for (const w of room.warnungen ?? []) parts.push(`⚠ ${w}`);
   return parts.length > 0 ? `${name} (${parts.join(', ')})` : name;
 }
