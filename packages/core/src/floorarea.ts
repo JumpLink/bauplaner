@@ -56,12 +56,17 @@ function round(n: number, digits = 2): number {
 }
 
 /**
- * Display name of a room in the overlap report. Unnamed rooms carry their UUID
- * as a parser fallback — a UUID tells a human nothing, the level name (also in
- * the report) is the useful anchor.
+ * Unnamed rooms carry their UUID as a parser fallback — a UUID tells a human
+ * nothing. Exported so every surface renders the same "(ohne Namen)" instead
+ * of each inventing its own UUID test.
  */
+export function isUnnamedRoom(name: string): boolean {
+  return /^[0-9a-f][0-9a-f-]{30,}$/i.test(name);
+}
+
+/** Display name of a room in the overlap report. */
 function displayName(name: string): string {
-  return /^[0-9a-f][0-9a-f-]{30,}$/i.test(name) ? '(ohne Namen)' : name;
+  return isUnnamedRoom(name) ? '(ohne Namen)' : name;
 }
 
 /**

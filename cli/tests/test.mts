@@ -45,6 +45,7 @@ import aufmass from './unit/aufmass.test.ts';
 import budget from './unit/budget.test.ts';
 import floorarea from './unit/floorarea.test.ts';
 import roofs from './unit/roofs.test.ts';
+import wohnflaeche from './unit/wohnflaeche.test.ts';
 
 run({
   bauphysik,
@@ -85,6 +86,7 @@ run({
   budget,
   floorarea,
   roofs,
+  wohnflaeche,
   assemblySelection,
   roadmapPlan,
   foerderungProfil,

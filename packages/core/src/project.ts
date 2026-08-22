@@ -24,6 +24,7 @@ import { parseSh3dBytes } from './sh3d/parser.ts';
 import type { TgaNetwork } from './tga.ts';
 import type { DocEntry } from './doc.ts';
 import type { RoofConfig } from './roofs.ts';
+import type { WohnflaecheConfig } from './wohnflaeche.ts';
 import type { HomeData } from './sh3d/types.ts';
 
 export const PROJECT_SCHEMA_VERSION = 3;
@@ -342,6 +343,12 @@ export interface EcoProject {
    * pitched roofs). Flat roofs are derived automatically; see `deriveRoofs`.
    */
   roofs?: RoofConfig;
+  /**
+   * WoFlV declarations per room — like the roofs, only what geometry cannot
+   * tell us (Zubehörraum vs Wohnraum, Treppenabzug, Wohnungs-Zuordnung).
+   * See `computeWohnflaeche`.
+   */
+  wohnflaeche?: WohnflaecheConfig;
   /** Raumklima config — room id → Home Assistant sensor entity per metric. */
   raumklima?: {
     entities?: Record<string, { temperature?: string; humidity?: string; co2?: string }>;
