@@ -9,6 +9,8 @@
  */
 
 import { mkdtempSync, readFileSync } from 'node:fs';
+
+import { buildEnergyScreenings, type BuildingEnergy } from '../energy.ts';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -37,6 +39,7 @@ import {
   removeCostCommand,
   removeWorkCommand,
   setAllWallAssembliesCommand,
+  setComponentAnnotationCommand,
   setMaterialPriceCommand,
   setWallAssemblyCommand,
   setWallFeuchteCommand,
@@ -52,6 +55,8 @@ import {
   type EcoProject,
   type GeometryEdit,
   type HomeData,
+  type ComponentAnnotation,
+  type EnvelopeComponent,
   type LoadedDocument,
   type MaterialPrice,
   type ModelCatalog,
@@ -343,6 +348,36 @@ export class DocumentStore {
 
   wallAssemblyLayers(wallId: string): AssemblyLayers | undefined {
     return this._doc?.project.annotations?.walls?.[wallId]?.assemblyLayers;
+  }
+
+  /**
+   * The three energy screenings for the current model — the ONE place that knows which lookups
+   * feed them.
+   *
+   * Five views and the export dialog each built these themselves from
+   * `(id) => wallAssemblyLayers(id)`. Adding the envelope components meant a second lookup at every
+   * one of those, and the sixth would have been forgotten — silently, because a missing lookup does
+   * not fail, it just holds the roof at its Bestand U-value and reports a worse house.
+   */
+  energy(): BuildingEnergy | null {
+    const home = this.home;
+    if (!home) return null;
+    return buildEnergyScreenings(
+      home,
+      (id) => this.wallAssemblyLayers(id),
+      (component) => this.componentAnnotation(component),
+    );
+  }
+
+  /** Set (or, with `null`, clear) the annotation of one envelope component (undoable). */
+  setComponentAnnotation(component: EnvelopeComponent, annotation: ComponentAnnotation | null): void {
+    if (!this._doc) return;
+    this.commands.execute(setComponentAnnotationCommand(this._doc.project, component, annotation));
+  }
+
+  /** What is known about one envelope component (roof, ceilings, windows). */
+  componentAnnotation(component: EnvelopeComponent): ComponentAnnotation | undefined {
+    return this._doc?.project.annotations?.bauteile?.[component];
   }
 
   /** Set (or, with `null`, clear) this project's own price for one material (undoable). */

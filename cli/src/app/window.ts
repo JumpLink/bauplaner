@@ -304,6 +304,14 @@ export class MainWindow extends Adw.ApplicationWindow {
     const preload = globalThis.process?.env?.BP_APP_FILE;
     if (preload) this.store.load(preload);
 
+    // Dev hook: scroll the visible view (`BP_APP_SCROLL=end|0..1`) before the screenshot.
+    //
+    // Several views are taller than any window a headless compositor grants, so their lower half
+    // is not capturable at all otherwise — the Bauteile page's new component group sat below the
+    // fold in every shot. Applied here rather than per view: it walks down to whatever
+    // ScrolledWindow the visible child contains, so no view has to know about it.
+    applyScrollHook(this.stack);
+
     // Dev hook: export the plan to BP_APP_EXPORT=<path> and report on stderr.
     // Runs the real app export path (minus the file chooser), so a headless run
     // verifies what the button does, not a parallel copy of it.
@@ -680,4 +688,45 @@ function shotSize(): [number, number] | null {
   if (!raw) return null;
   const [w, h] = raw.trim().split(/\s+/).map((n) => Number.parseInt(n, 10));
   return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 ? [w, h] : null;
+}
+
+/**
+ * `BP_APP_SCROLL=end|0..1` (dev/testing hook): scroll the first ScrolledWindow inside `root`.
+ *
+ * On a LOW-priority idle, twice: the content has only just been built, and an adjustment reports a
+ * meaningful upper bound after allocation — scrolling before that silently lands at 0, which reads
+ * exactly like „the hook does not work".
+ */
+function applyScrollHook(root: Gtk.Widget): void {
+  const raw = globalThis.process?.env?.BP_APP_SCROLL;
+  if (!raw) return;
+  const fraction = raw === 'end' ? 1 : Number.parseFloat(raw);
+  if (!Number.isFinite(fraction)) {
+    printerr(`[app] BP_APP_SCROLL="${raw}" ist weder "end" noch eine Zahl zwischen 0 und 1.`);
+    return;
+  }
+  const scrollOnce = (): void => {
+    const scroller = findScroller(root);
+    if (!scroller) return;
+    const adj = scroller.get_vadjustment();
+    adj.set_value(Math.max(0, Math.min(1, fraction)) * (adj.get_upper() - adj.get_page_size()));
+  };
+  GLib.idle_add(GLib.PRIORITY_LOW, () => {
+    scrollOnce();
+    GLib.timeout_add(GLib.PRIORITY_LOW, 400, () => {
+      scrollOnce();
+      return GLib.SOURCE_REMOVE;
+    });
+    return GLib.SOURCE_REMOVE;
+  });
+}
+
+/** Depth-first search for the first mapped Gtk.ScrolledWindow under `widget`. */
+function findScroller(widget: Gtk.Widget): Gtk.ScrolledWindow | null {
+  if (widget instanceof Gtk.ScrolledWindow && widget.get_mapped()) return widget;
+  for (let child = widget.get_first_child(); child; child = child.get_next_sibling()) {
+    const found = findScroller(child);
+    if (found) return found;
+  }
+  return null;
 }

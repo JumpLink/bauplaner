@@ -2,7 +2,9 @@ import { describe, it, expect } from '@gjsify/unit';
 import { zipSync, strToU8 } from 'fflate';
 
 import { deriveEnvelope, parseSh3dBytes } from '@bauplaner/core';
-import { computeEnergyScreening, energieklasseFor } from '@bauplaner/materials';
+import { BESTAND_U, computeEnergyScreening, energieklasseFor } from '@bauplaner/materials';
+
+import { buildEnergyScreenings } from '../../src/energy.ts';
 
 // A 6 m × 4 m house on one level: four exterior walls + one interior partition
 // at x = 2 m splitting it into two rooms (8 m² + 16 m² = 24 m²). Walls h=250 cm,
@@ -98,6 +100,51 @@ export default async () => {
       expect(s.shares[0].kind).toBe('wall');
       expect(s.shares[1].kind).toBe('ventilation');
       expect(Math.round(s.shares[0].fraction * 1000)).toBe(702);
+    });
+  });
+
+  await describe('envelope components in the heute screening', async () => {
+    // The defect this covers: roof, windows and floor were pinned to BESTAND_U in EVERY screening,
+    // so „heute" could not differ from „start" for them. Insulating the top-floor ceiling is among
+    // the cheapest measures there is, and the model had no way to say it had happened — which the
+    // dashboard, the funding view, the roadmap and the exported report all inherited.
+    const none = () => undefined;
+
+    await it('leaves everything at Bestand when no component is annotated', async () => {
+      const e = buildEnergyScreenings(homeWithWindows(), none);
+      expect(e.heute.transmissionWPerK > 0).toBe(true);
+      const withoutLookup = buildEnergyScreenings(homeWithWindows(), none, none);
+      expect(withoutLookup.heute.transmissionWPerK).toBe(e.heute.transmissionWPerK);
+    });
+
+    await it('an insulated top-floor ceiling lowers the heute transmission', async () => {
+      const bestand = buildEnergyScreenings(homeWithWindows(), none, none);
+      const gedaemmt = buildEnergyScreenings(homeWithWindows(), none, (c) =>
+        c === 'oberste-geschossdecke'
+          ? { assemblyLayers: [{ materialKey: 'holzfaser', thicknessM: 0.24 }] }
+          : undefined,
+      );
+      expect(gedaemmt.heute.transmissionWPerK < bestand.heute.transmissionWPerK).toBe(true);
+      // …and only „heute": the baseline and the target are definitions, not measurements.
+      expect(gedaemmt.start.transmissionWPerK).toBe(bestand.start.transmissionWPerK);
+      expect(gedaemmt.ziel.transmissionWPerK).toBe(bestand.ziel.transmissionWPerK);
+    });
+
+    await it('takes a window U-value from the datasheet, since a window has no layer stack', async () => {
+      const bestand = buildEnergyScreenings(homeWithWindows(), none, none);
+      const neu = buildEnergyScreenings(homeWithWindows(), none, (c) =>
+        c === 'fenster' ? { uValue: 0.9 } : undefined,
+      );
+      expect(BESTAND_U.window > 0.9).toBe(true);
+      expect(neu.heute.transmissionWPerK < bestand.heute.transmissionWPerK).toBe(true);
+    });
+
+    await it('falls back to Bestand for an unknown material instead of flattering the house', async () => {
+      const bestand = buildEnergyScreenings(homeWithWindows(), none, none);
+      const kaputt = buildEnergyScreenings(homeWithWindows(), none, (c) =>
+        c === 'kellerdecke' ? { assemblyLayers: [{ materialKey: 'gibtsnicht', thicknessM: 0.2 }] } : undefined,
+      );
+      expect(kaputt.heute.transmissionWPerK).toBe(bestand.heute.transmissionWPerK);
     });
   });
 };

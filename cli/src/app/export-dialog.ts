@@ -22,7 +22,6 @@ import {
 } from '@bauplaner/report';
 
 import type { DocumentStore } from './document-store.ts';
-import { buildEnergyScreenings } from '../energy.ts';
 
 /**
  * The build-ups that belong to an exterior wall. Everything here compares or
@@ -67,7 +66,7 @@ export function buildPlanForStore(store: DocumentStore): ReturnType<typeof build
   const home = store.home;
   if (!home) return null;
 
-  const energie = buildEnergyScreenings(home, (id) => store.wallAssemblyLayers(id));
+  const energie = store.energy()!;
   const gebaeude: GebaeudeTeil = {
     envelope: energie.envelope,
     start: energie.start,

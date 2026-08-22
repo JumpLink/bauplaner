@@ -25,7 +25,6 @@ import { VERLUST_FARBE } from '@bauplaner/report';
 
 import type { DocumentStore } from '../document-store.ts';
 import { buildWelcome } from '../welcome.ts';
-import { buildEnergyScreenings } from '../../energy.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
 import { setHex } from '../paint.ts';
 import { escapeMarkup, fmtEur } from '../../format.ts';
@@ -112,7 +111,7 @@ export class UebersichtView extends Gtk.Box {
   }
 
   private buildDashboard(home: HomeData): Gtk.Widget {
-    const { start, heute, ziel } = buildEnergyScreenings(home, (id) => this.store.wallAssemblyLayers(id));
+    const { start, heute, ziel } = this.store.energy()!;
 
     const column = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL,

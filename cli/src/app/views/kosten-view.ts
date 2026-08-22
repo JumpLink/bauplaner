@@ -27,7 +27,6 @@ import {
 } from '@bauplaner/materials';
 
 import type { DocumentStore } from '../document-store.ts';
-import { buildEnergyScreenings } from '../../energy.ts';
 import { escapeMarkup, fmtEur } from '../../format.ts';
 
 const CATEGORIES = (Object.keys(COST_CATEGORY_LABEL) as CostCategory[]).map((key) => ({
@@ -204,7 +203,7 @@ export class KostenView extends Gtk.Box {
    * (Gesamtplan Eigenanteil — the Fahrplan's total, not just the logged costs).
    */
   private buildAmortisation(home: HomeData): Adw.PreferencesGroup {
-    const energy = buildEnergyScreenings(home, (id) => this.store.wallAssemblyLayers(id));
+    const energy = this.store.energy()!;
     const roadmap = computeRoadmap(energy.envelope, { foerderung: true, isfpBonus: this.isfp });
     const a = computeAmortisation({
       endenergieHeuteKwhM2a: energy.heute.endenergieKwhM2a,
