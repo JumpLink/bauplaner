@@ -461,6 +461,10 @@ export function parseProject(json: string): EcoProject {
     tga: isTgaNetwork(r.tga) ? (r.tga as TgaNetwork) : undefined,
     docs: Array.isArray(r.docs) ? (r.docs as DocEntry[]) : undefined,
     roofs: typeof r.roofs === 'object' && r.roofs !== null ? (r.roofs as RoofConfig) : undefined,
+    wohnflaeche:
+      typeof r.wohnflaeche === 'object' && r.wohnflaeche !== null
+        ? (r.wohnflaeche as WohnflaecheConfig)
+        : undefined,
     materialPrices:
       typeof r.materialPrices === 'object' && r.materialPrices !== null
         ? (r.materialPrices as Record<string, MaterialPrice>)

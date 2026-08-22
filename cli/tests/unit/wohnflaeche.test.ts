@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@gjsify/unit';
 
-import { computeWohnflaeche, parseSh3dBytes, DEFAULT_WOHNUNG } from '@bauplaner/core';
+import { computeWohnflaeche, parseProject, parseSh3dBytes, DEFAULT_WOHNUNG } from '@bauplaner/core';
 import { zipSync, strToU8 } from 'fflate';
 
 /** Synthetic homes on a 100 cm grid — see aufmass.test.ts for the conventions. */
@@ -115,6 +115,20 @@ export default async () => {
       expect(w2?.anrechenbarM2).toBeCloseTo(18, 2);
       expect(w2?.raumCount).toBe(2);
       expect(r.wohnungen.find((w) => w.wohnung === DEFAULT_WOHNUNG)?.anrechenbarM2).toBeCloseTo(12, 2);
+    });
+
+    await it('survives the project-file round trip', async () => {
+      // parseProject builds the project from an explicit field list — a new
+      // sidecar section that is not added there is silently dropped, and every
+      // declaration a user wrote stops working without any error.
+      const p = parseProject(
+        JSON.stringify({
+          schemaVersion: 3,
+          wohnflaeche: { raeume: { a: { nutzung: 'balkon', wohnung: 'Wohnung 2' } } },
+        }),
+      );
+      expect(p.wohnflaeche?.raeume?.a?.nutzung).toBe('balkon');
+      expect(p.wohnflaeche?.raeume?.a?.wohnung).toBe('Wohnung 2');
     });
 
     await it('reports double-drawn floors instead of hiding them', async () => {
