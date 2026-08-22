@@ -10,7 +10,8 @@
 #   BP_SHOT_SIZE="W H"      window size via devtools AFTER mapping
 #   BP_SHOT_SETTLE=s        seconds to settle before capturing (default 2.5)
 #   BP_APP_DIALOG=          open a dialog on start: "kosten-add", "aufbau" (layer editor on the
-#                           wall’s own stack) or "aufbau-daemmung" (on a retrofit build-up)
+#                           wall’s own stack), "aufbau-daemmung" (on a retrofit build-up) or
+#                           "materialpreis" (eigenen Materialpreis setzen)
 #   BP_SHOT_ACTIVATE=       press a widget first, e.g. "GtkButton:suggested-action"
 #                           (type[:css-class]); the capture FAILS if it is missing or inert
 #

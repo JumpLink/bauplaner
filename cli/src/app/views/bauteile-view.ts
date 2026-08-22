@@ -95,6 +95,7 @@ export class BauteileView extends Gtk.Box {
             title: 'Aufbau — Wand 1',
             layers: hook === 'aufbau-daemmung' ? gedaemmt : adoptPresetFlags(PRESET_LAYERS, stored),
             areaM2: Math.round(deriveEnvelope(home!).wallAreaM2),
+            priceOverrides: this.store.materialPrices,
             onApply: (l) => this.store.setWallAssembly(wall.id, l),
           });
         }
@@ -242,6 +243,9 @@ export class BauteileView extends Gtk.Box {
       varianten: WAND_PRESETS.filter((p) => p.key !== REFERENZ_KEY),
       areaM2: area,
       isfpBonus: true,
+      // The project's own prices rank the variants. Without them the comparison ordered build-ups
+      // by a national average while the user was holding a quote that said otherwise.
+      priceOverrides: this.store.materialPrices,
     });
 
     group.add(this.variantRow(vergleich.referenz, true));
@@ -439,6 +443,7 @@ export class BauteileView extends Gtk.Box {
         title,
         layers: adoptPresetFlags(PRESET_LAYERS, layers ?? []),
         areaM2: home ? Math.round(deriveEnvelope(home).wallAreaM2) : 100,
+        priceOverrides: this.store.materialPrices,
         onApply: apply,
       });
     });

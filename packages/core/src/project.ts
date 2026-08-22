@@ -184,8 +184,27 @@ export function summarizeCosts(costs: CostItem[]): CostSummary {
   return { count: costs.length, net, vat: round2(gross - net), gross, byCategory, byStatus };
 }
 
+/**
+ * A price this project pays for one material, overriding the catalogue's sourced price.
+ *
+ * Structurally the materials package's `Price` (core stays free of that dep). It belongs in the
+ * PROJECT rather than in a separate plan file because a real quote is a fact about this building
+ * site — the catalogue price is a national average, and the variant comparison ranks build-ups by
+ * cost, so a wrong price does not merely display wrong, it reorders the recommendation.
+ */
+export interface MaterialPrice {
+  amount: number;
+  per: 'm3' | 't' | 'kg' | 'm2';
+  /** Where the price comes from (supplier + product), for traceability. */
+  source?: string;
+  /** ISO date (YYYY-MM-DD) the price was obtained — quotes expire. */
+  retrievedAt?: string;
+}
+
 export interface EcoProject {
   schemaVersion: number;
+  /** Project-specific material prices (material key → price), overriding the catalogue. */
+  materialPrices?: Record<string, MaterialPrice>;
   /**
    * The imported `.sh3d` this project annotates — **absent for a native document**
    * (ADR 0001 Stage A), where `geometry.json` inside the `.bauplan` is authoritative
@@ -331,6 +350,10 @@ export function parseProject(json: string): EcoProject {
     tga: isTgaNetwork(r.tga) ? (r.tga as TgaNetwork) : undefined,
     docs: Array.isArray(r.docs) ? (r.docs as DocEntry[]) : undefined,
     roofs: typeof r.roofs === 'object' && r.roofs !== null ? (r.roofs as RoofConfig) : undefined,
+    materialPrices:
+      typeof r.materialPrices === 'object' && r.materialPrices !== null
+        ? (r.materialPrices as Record<string, MaterialPrice>)
+        : undefined,
     raumklima: typeof r.raumklima === 'object' && r.raumklima !== null ? (r.raumklima as EcoProject['raumklima']) : undefined,
   };
 }

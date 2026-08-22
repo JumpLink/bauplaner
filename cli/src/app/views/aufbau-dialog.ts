@@ -28,6 +28,7 @@ import {
   getMaterial,
   tauwasserBilanz,
   type LayerSpec,
+  type Price,
 } from '@bauplaner/materials';
 
 import { escapeMarkup, fmtEur, fmtNum } from '../../format.ts';
@@ -58,6 +59,8 @@ export interface AufbauDialogOptions {
   layers: AssemblyLayers;
   /** Exterior wall area of the model, for the money and CO₂ figures. */
   areaM2: number;
+  /** The project's own material prices, which beat the catalogue's. */
+  priceOverrides?: Record<string, Price>;
   onApply: (layers: AssemblyLayers) => void;
 }
 
@@ -305,7 +308,7 @@ class AufbauDialog extends Adw.Dialog {
       ),
     );
 
-    const cost = estimateAssemblyCost(this.draft, this.opts.areaM2);
+    const cost = estimateAssemblyCost(this.draft, this.opts.areaM2, this.opts.priceOverrides ?? {});
     group.add(
       infoRow(
         'Material (netto)',

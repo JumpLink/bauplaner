@@ -17,7 +17,7 @@
 
 import type { Command } from './commands.ts';
 import { nextId } from './ids.ts';
-import type { CostItem, EcoProject, RetrofitWork, WallAnnotation } from './project.ts';
+import type { CostItem, EcoProject, RetrofitWork, WallAnnotation, MaterialPrice } from './project.ts';
 
 /** The mutable annotation map, created on demand. */
 function wallsOf(project: EcoProject): Record<string, WallAnnotation> {
@@ -36,6 +36,38 @@ function restore(project: EcoProject, wallId: string, previous: WallAnnotation |
     const walls = wallsOf(project);
     if (previous) walls[wallId] = previous;
     else delete walls[wallId];
+}
+
+// --- Material prices -------------------------------------------------------------------------
+
+/**
+ * Set (or, with `null`, clear) this project's price for one material.
+ *
+ * Undoable like every other project edit, and a real quote is worth undoing: it changes the ranking
+ * of the variant comparison, not just a displayed number.
+ */
+export function setMaterialPriceCommand(
+    project: EcoProject,
+    materialKey: string,
+    price: MaterialPrice | null,
+): Command {
+    let previous: MaterialPrice | undefined;
+    let existed = false;
+    return {
+        label: price ? 'Materialpreis setzen' : 'Materialpreis entfernen',
+        do() {
+            const prices = (project.materialPrices ??= {});
+            existed = materialKey in prices;
+            previous = prices[materialKey];
+            if (price) prices[materialKey] = { ...price };
+            else delete prices[materialKey];
+        },
+        undo() {
+            const prices = (project.materialPrices ??= {});
+            if (existed && previous) prices[materialKey] = previous;
+            else delete prices[materialKey];
+        },
+    };
 }
 
 // --- Wall annotations ------------------------------------------------------------------------
