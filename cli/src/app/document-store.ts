@@ -26,6 +26,7 @@ import {
   createNativeDocument,
   createStackedLevels,
   deleteDocCommand,
+  deriveRoofs,
   deleteTgaEdgeCommand,
   deleteTgaNodeCommand,
   diffGeometryEdits,
@@ -41,6 +42,7 @@ import {
   setAllWallAssembliesCommand,
   removeRoadmapPaketCommand,
   setFoerderProfilCommand,
+  setPitchedRoofCommand,
   setComponentAnnotationCommand,
   setRoadmapOptionsCommand,
   upsertRoadmapPaketCommand,
@@ -64,6 +66,7 @@ import {
   type LoadedDocument,
   type FoerderProfil,
   type MaterialPrice,
+  type PitchedRoofSpec,
   type RoadmapPaket,
   type RoadmapPlan,
   type ModelCatalog,
@@ -369,10 +372,15 @@ export class DocumentStore {
   energy(): BuildingEnergy | null {
     const home = this.home;
     if (!home) return null;
+    // The roof's TRUE surface where a pitch is declared: `deriveEnvelope` can only report the plan
+    // projection, and a 45° gable roof loses heat through 41 % more area than that.
+    const pitched = this.pitchedRoofs;
+    const roofArea = pitched.length > 0 ? deriveRoofs(home, { pitched }).surfaceM2 : undefined;
     return buildEnergyScreenings(
       home,
       (id) => this.wallAssemblyLayers(id),
       (component) => this.componentAnnotation(component),
+      roofArea,
     );
   }
 
@@ -386,6 +394,17 @@ export class DocumentStore {
   get foerderProfil(): FoerderProfil {
     const stored = this._doc?.project.foerderung ?? {};
     return { isfpBonus: true, ...stored };
+  }
+
+  /** The pitched roofs declared for this project, one per level that has one. */
+  get pitchedRoofs(): PitchedRoofSpec[] {
+    return this._doc?.project.roofs?.pitched ?? [];
+  }
+
+  /** Declare (or, with `null`, withdraw) the pitched roof over one level (undoable). */
+  setPitchedRoof(level: string, spec: PitchedRoofSpec | null): void {
+    if (!this._doc) return;
+    this.commands.execute(setPitchedRoofCommand(this._doc.project, level, spec));
   }
 
   /** Merge fields into the building's funding profile (undoable). */

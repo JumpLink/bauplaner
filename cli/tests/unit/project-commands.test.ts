@@ -27,6 +27,7 @@ import {
     removeWorkCommand,
     setAllWallAssembliesCommand,
     setMaterialPriceCommand,
+    setPitchedRoofCommand,
     setWallAssemblyCommand,
     setWallFeuchteCommand,
     updateCostCommand,
@@ -191,6 +192,51 @@ export default async () => {
 
             s.execute(removeWorkCommand(p, a.id));
             expect((p.costs ?? [])[0].workId).toBe(b.id);
+        });
+    });
+
+    await describe('pitched roofs', async () => {
+        await it('declares a roof over a level and undoes back to flat', async () => {
+            const p = project();
+            const s = store();
+            s.execute(setPitchedRoofCommand(p, 'level-1', { level: 'level-1', form: 'sattel', pitchDeg: 35 }));
+            expect(p.roofs?.pitched?.length).toBe(1);
+            expect(p.roofs?.pitched?.[0].form).toBe('sattel');
+            s.undo();
+            // No declaration at all, not a declaration with no form: „flat" IS the absence of one.
+            expect(p.roofs).toBe(undefined);
+        });
+
+        await it('replaces the declaration for the same level instead of stacking one', async () => {
+            const p = project();
+            const s = store();
+            s.execute(setPitchedRoofCommand(p, 'level-1', { level: 'level-1', form: 'sattel' }));
+            s.execute(setPitchedRoofCommand(p, 'level-1', { level: 'level-1', form: 'walm' }));
+            expect(p.roofs?.pitched?.length).toBe(1);
+            expect(p.roofs?.pitched?.[0].form).toBe('walm');
+            s.undo();
+            expect(p.roofs?.pitched?.[0].form).toBe('sattel');
+        });
+
+        await it('leaves other levels alone', async () => {
+            const p = project();
+            const s = store();
+            s.execute(setPitchedRoofCommand(p, 'level-1', { level: 'level-1', form: 'sattel' }));
+            s.execute(setPitchedRoofCommand(p, 'level-2', { level: 'level-2', form: 'pult' }));
+            expect(p.roofs?.pitched?.length).toBe(2);
+            s.execute(setPitchedRoofCommand(p, 'level-1', null));
+            expect(p.roofs?.pitched?.map((r) => r.level)).toStrictEqual(['level-2']);
+            s.undo();
+            expect(p.roofs?.pitched?.length).toBe(2);
+        });
+
+        await it('forces the level onto the spec, whatever the caller passed', async () => {
+            // The level is the key. A spec whose own `level` disagreed would be filtered out by the
+            // next edit to that level and silently vanish.
+            const p = project();
+            const s = store();
+            s.execute(setPitchedRoofCommand(p, 'level-1', { level: 'irgendwas', form: 'sattel' }));
+            expect(p.roofs?.pitched?.[0].level).toBe('level-1');
         });
     });
 
