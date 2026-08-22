@@ -60,8 +60,9 @@ export interface WohnflaecheRaumConfig {
   /** Dwelling this room belongs to; {@link DEFAULT_WOHNUNG} when absent. */
   wohnung?: string;
   /**
-   * Grundflächen-Abzug in m² (§ 3 Abs. 3): Treppen mit über drei Steigungen
-   * samt Absätzen, Schornsteine/Pfeiler > 1,5 m Höhe und > 0,1 m², …
+   * Grundflächen-Abzug in m² (§ 3 Abs. 3): stairs with more than three risers
+   * including their landings, chimneys and piers taller than 1,5 m and larger
+   * than 0,1 m², …
    * Deducted BEFORE the § 4 factors.
    */
   abzugM2?: number;
