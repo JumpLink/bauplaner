@@ -22,6 +22,15 @@ const HOME_XML = `<?xml version="1.0"?><home version="7000">` +
   `<doorOrWindow id="dw-1" level="L0" name="Fenster" x="200" y="0" elevation="85" angle="0" width="120" depth="24" height="140"/>` +
   `</home>`;
 
+// An opening Sweet Home 3D saved as a plain catalog piece rather than `<doorOrWindow>`. The parser
+// folds `furniture` / `pieceOfFurniture` / `doorOrWindow` into one list, so a serializer that
+// matched only `doorOrWindow` would move it in memory and fail to persist it — on these files only.
+const HOME_XML_PIECE = `<?xml version="1.0"?><home version="7000">` +
+  `<level id="L0" name="EG" elevation="0" height="250" floorThickness="12"/>` +
+  `<wall id="shared-id" level="L0" xStart="0" yStart="0" xEnd="400" yEnd="0" height="250" thickness="24"/>` +
+  `<furniture id="piece-1" level="L0" name="Tuer" x="100" y="0" elevation="0" angle="0" width="90" depth="24" height="200"/>` +
+  `</home>`;
+
 /** A minimal in-memory `.sh3d`: Home.xml plus a fake model entry to prove passthrough. */
 function fixture(): Uint8Array {
   return zipSync({ 'Home.xml': strToU8(HOME_XML), '3': strToU8('v 0 0 0\nv 1 0 0\n') });
@@ -126,6 +135,100 @@ export default async () => {
         threw = true;
       }
       expect(threw).toBe(true);
+    });
+  });
+
+  await describe('sh3d serializer — openings (doors and windows)', async () => {
+    /** The single `<doorOrWindow>`/`<furniture>` element of a patched XML, as an attribute map. */
+    const opening = (xml: string, id: string): Record<string, string> => {
+      const m = xml.match(new RegExp(`<(?:doorOrWindow|furniture|pieceOfFurniture)\\b[^>]*id="${id}"[^>]*/?>`));
+      if (!m) return {};
+      const at: Record<string, string> = {};
+      for (const a of m[0].matchAll(/(\w+)="([^"]*)"/g)) at[a[1]] = a[2];
+      return at;
+    };
+
+    await it('adds an opening as a <doorOrWindow> the parser reads back', async () => {
+      const edit: GeometryEdit = {
+        op: 'addOpening',
+        id: 'dw-new',
+        level: 'L0',
+        name: 'Fenster Nord',
+        x: 320,
+        y: 0,
+        angle: 0,
+        width: 100,
+        depth: 24,
+        height: 130,
+        elevation: 90,
+      };
+      const xml = applyGeometryEdits(HOME_XML, [edit]);
+      expect(xml.includes('<doorOrWindow')).toBe(true);
+
+      const bytes = zipSync({ 'Home.xml': strToU8(xml) });
+      const added = parseSh3dBytes(bytes).furniture.find((f) => f.id === 'dw-new');
+      expect(added !== undefined).toBe(true);
+      expect(added?.kind).toBe('doorOrWindow');
+      expect(added?.width).toBe(100);
+      expect(added?.height).toBe(130);
+      expect(added?.elevation).toBe(90);
+
+      // No model attribute is written when the edit names none: an entry name the archive does not
+      // contain makes the file fail to LOAD, which is worse than an opening with no 3D model.
+      expect('model' in opening(xml, 'dw-new')).toBe(false);
+    });
+
+    await it('moves and resizes an opening, and removes it', async () => {
+      const moved = applyGeometryEdits(HOME_XML, [
+        { op: 'moveOpening', id: 'dw-1', x: 260, y: 0, angle: 1.5 },
+      ]);
+      expect(opening(moved, 'dw-1').x).toBe('260');
+      expect(opening(moved, 'dw-1').angle).toBe('1.5');
+
+      const resized = applyGeometryEdits(HOME_XML, [
+        { op: 'setOpeningSize', id: 'dw-1', width: 80, height: 110, elevation: 100 },
+      ]);
+      expect(opening(resized, 'dw-1').width).toBe('80');
+      expect(opening(resized, 'dw-1').height).toBe('110');
+      expect(opening(resized, 'dw-1').elevation).toBe('100');
+
+      const removed = applyGeometryEdits(HOME_XML, [{ op: 'removeOpening', id: 'dw-1' }]);
+      expect(removed.includes('dw-1')).toBe(false);
+      // Removing an opening must not disturb the walls around it.
+      expect(removed.includes('wall-1')).toBe(true);
+      expect(removed.includes('wall-2')).toBe(true);
+    });
+
+    await it('patches an opening stored as <furniture>, not only <doorOrWindow>', async () => {
+      const xml = applyGeometryEdits(HOME_XML_PIECE, [
+        { op: 'moveOpening', id: 'piece-1', x: 150, y: 0, angle: 0 },
+      ]);
+      expect(opening(xml, 'piece-1').x).toBe('150');
+      expect(xml.includes('<furniture')).toBe(true);
+    });
+
+    // The dispatch classifies any unrecognised op as a WALL edit, so an opening op that fell
+    // through would rewrite a wall's geometry instead of failing. Same id on both elements makes
+    // that confusion observable.
+    await it('never patches a wall that shares the opening id', async () => {
+      const xml = applyGeometryEdits(HOME_XML_PIECE, [
+        { op: 'moveOpening', id: 'shared-id', x: 999, y: 999, angle: 0 },
+      ]);
+      expect(xml.includes('xStart="0"')).toBe(true);
+      expect(xml.includes('999')).toBe(false);
+    });
+
+    await it('keeps the in-memory home and the XML in lock-step', async () => {
+      const edits: GeometryEdit[] = [
+        { op: 'setOpeningSize', id: 'dw-1', width: 80, height: 110, elevation: 100 },
+      ];
+      const bytes = zipSync({ 'Home.xml': strToU8(applyGeometryEdits(HOME_XML, edits)) });
+      const fromXml = parseSh3dBytes(bytes).furniture.find((f) => f.id === 'dw-1');
+      const inMemory = applyEditsToHome(
+        parseSh3dBytes(zipSync({ 'Home.xml': strToU8(HOME_XML) })),
+        edits,
+      ).furniture.find((f) => f.id === 'dw-1');
+      expect(json(fromXml)).toBe(json(inMemory));
     });
   });
 };

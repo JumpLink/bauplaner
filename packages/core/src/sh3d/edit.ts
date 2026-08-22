@@ -14,7 +14,7 @@
  * machinery of the serializer.
  */
 
-import type { HomeData, Room, Wall } from './types.ts';
+import type { Furniture, HomeData, Room, Wall } from './types.ts';
 
 /** Which end of a wall an endpoint edit moves. */
 export type WallEnd = 'start' | 'end';
@@ -42,7 +42,42 @@ export type GeometryEdit =
       height: number;
     }
   | { op: 'removeWall'; id: string }
-  | { op: 'setRoomPoints'; id: string; points: readonly (readonly [number, number])[] };
+  | { op: 'setRoomPoints'; id: string; points: readonly (readonly [number, number])[] }
+  // Openings — doors and windows. Sweet Home 3D stores them as furniture-like elements
+  // (`<doorOrWindow>`), so they live in `home.furniture` with `kind: 'doorOrWindow'`, but they are
+  // GEOMETRY for our purposes: an opening's width x height and its host wall are what the energy
+  // screening needs, which is why they are edits here and not a furniture concern.
+  | {
+      op: 'addOpening';
+      id: string;
+      level: string;
+      name: string;
+      x: number;
+      y: number;
+      angle: number;
+      width: number;
+      depth: number;
+      height: number;
+      elevation: number;
+      /**
+       * Catalog model to reference. Optional because Sweet Home 3D opens a `<doorOrWindow>`
+       * without one, and inventing an entry name that the archive does not contain would produce
+       * a file that fails to LOAD rather than one that merely looks wrong.
+       */
+      model?: string;
+      /**
+       * The model's base orientation and mirroring, carried so that UNDOING a removal restores the
+       * opening exactly. The parser defaults `mirrored` to false (the attribute is absent on most
+       * elements), so omitting these here made a re-added opening structurally different from a
+       * parsed one — which silently drops the mirror flag on undo and shows up later as a spurious
+       * diff against the file.
+       */
+      modelRotation?: readonly number[];
+      mirrored?: boolean;
+    }
+  | { op: 'moveOpening'; id: string; x: number; y: number; angle: number }
+  | { op: 'setOpeningSize'; id: string; width: number; height: number; elevation: number }
+  | { op: 'removeOpening'; id: string };
 
 /** Shoelace area (cm² → m²), matching the parser's room-area convention. */
 function polygonAreaM2(vertices: readonly (readonly [number, number])[]): number {
@@ -95,6 +130,43 @@ function wallFromEdit(edit: Extract<GeometryEdit, { op: 'addWall' }>): Wall {
   };
 }
 
+/** The `kind` a newly added opening carries — the `.sh3d` element the serializer writes for it. */
+const OPENING_KIND = 'doorOrWindow';
+
+/** Build a fresh opening from an `addOpening` edit. */
+function openingFromEdit(edit: Extract<GeometryEdit, { op: 'addOpening' }>): Furniture {
+  return {
+    id: edit.id,
+    kind: OPENING_KIND,
+    level: edit.level,
+    name: edit.name,
+    x: edit.x,
+    y: edit.y,
+    elevation: edit.elevation,
+    angle: edit.angle,
+    width: edit.width,
+    depth: edit.depth,
+    height: edit.height,
+    model: edit.model ?? '',
+    // Mirrors `parser.ts`'s furniture shape exactly, including its `mirrored: false` default: an
+    // opening that came back from an undo must be indistinguishable from one that was parsed.
+    modelRotation: edit.modelRotation ? [...edit.modelRotation] : undefined,
+    mirrored: edit.mirrored ?? false,
+  };
+}
+
+/** Apply an opening-targeting edit, returning a new {@link Furniture}. */
+function editOpening(piece: Furniture, edit: GeometryEdit): Furniture {
+  switch (edit.op) {
+    case 'moveOpening':
+      return { ...piece, x: edit.x, y: edit.y, angle: edit.angle };
+    case 'setOpeningSize':
+      return { ...piece, width: edit.width, height: edit.height, elevation: edit.elevation };
+    default:
+      return piece;
+  }
+}
+
 /**
  * Apply one geometry edit to a home, returning a **new** {@link HomeData}
  * (immutable — the input is untouched). Unknown ids are a no-op.
@@ -107,6 +179,18 @@ export function applyEditToHome(home: HomeData, edit: GeometryEdit): HomeData {
       return { ...home, walls: home.walls.filter((w) => w.id !== edit.id) };
     case 'moveRoomVertex':
       return { ...home, rooms: home.rooms.map((r) => (r.id === edit.id ? editRoomVertex(r, edit) : r)) };
+    // Openings are matched EXPLICITLY, never left to the default branch: that branch treats an
+    // unrecognised op as a wall edit, so a missing case here would silently rewrite a wall.
+    case 'addOpening':
+      return { ...home, furniture: [...home.furniture, openingFromEdit(edit)] };
+    case 'removeOpening':
+      return { ...home, furniture: home.furniture.filter((f) => f.id !== edit.id) };
+    case 'moveOpening':
+    case 'setOpeningSize':
+      return {
+        ...home,
+        furniture: home.furniture.map((f) => (f.id === edit.id ? editOpening(f, edit) : f)),
+      };
     case 'setRoomPoints': {
       const points = edit.points.map(([x, y]): [number, number] => [x, y]);
       return {
@@ -151,6 +235,41 @@ export function invertEdit(home: HomeData, edit: GeometryEdit): GeometryEdit | n
             thickness: w.thickness,
             height: w.height,
           }
+        : null;
+    }
+    case 'addOpening':
+      // Undo of adding an opening is removing it (no lookup needed).
+      return { op: 'removeOpening', id: edit.id };
+    case 'removeOpening': {
+      const f = home.furniture.find((x) => x.id === edit.id);
+      if (!f) return null;
+      return {
+        op: 'addOpening',
+        id: f.id,
+        level: f.level,
+        name: f.name,
+        x: f.x,
+        y: f.y,
+        angle: f.angle,
+        width: f.width,
+        depth: f.depth,
+        height: f.height,
+        elevation: f.elevation,
+        // Carried only when the original had one, so a re-add cannot invent a model reference
+        // the archive does not contain.
+        ...(f.model ? { model: f.model } : {}),
+        ...(f.modelRotation ? { modelRotation: f.modelRotation } : {}),
+        ...(f.mirrored ? { mirrored: true } : {}),
+      };
+    }
+    case 'moveOpening': {
+      const f = home.furniture.find((x) => x.id === edit.id);
+      return f ? { op: 'moveOpening', id: f.id, x: f.x, y: f.y, angle: f.angle } : null;
+    }
+    case 'setOpeningSize': {
+      const f = home.furniture.find((x) => x.id === edit.id);
+      return f
+        ? { op: 'setOpeningSize', id: f.id, width: f.width, height: f.height, elevation: f.elevation }
         : null;
     }
     case 'setRoomPoints': {

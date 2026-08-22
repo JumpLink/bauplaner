@@ -127,6 +127,59 @@ function makeWallNode(edit: Extract<GeometryEdit, { op: 'addWall' }>): RawNode {
 }
 
 /**
+ * The `.sh3d` elements an opening may be stored under.
+ *
+ * A door or window is normally `<doorOrWindow>`, but Sweet Home 3D also writes openings that came
+ * from a plain catalog piece as `<furniture>` / `<pieceOfFurniture>`, and the parser folds all
+ * three into `home.furniture`. Matching only `doorOrWindow` here would make a move silently fail
+ * to persist on exactly those files — the in-memory plan would move and the saved archive would
+ * not.
+ */
+const OPENING_TAGS = ['doorOrWindow', 'furniture', 'pieceOfFurniture'] as const;
+
+const isOpeningTag = (node: RawNode): boolean => OPENING_TAGS.some((tag) => isTag(node, tag));
+
+/** Build a fresh self-closing `<doorOrWindow …/>` raw node from an `addOpening` edit. */
+function makeOpeningNode(edit: Extract<GeometryEdit, { op: 'addOpening' }>): RawNode {
+  const at: Record<string, string> = {
+    '@_id': edit.id,
+    '@_name': edit.name,
+    '@_x': fmtNum(edit.x),
+    '@_y': fmtNum(edit.y),
+    '@_elevation': fmtNum(edit.elevation),
+    '@_angle': fmtNum(edit.angle),
+    '@_width': fmtNum(edit.width),
+    '@_depth': fmtNum(edit.depth),
+    '@_height': fmtNum(edit.height),
+  };
+  if (edit.level) at['@_level'] = edit.level; // omit for level-less models
+  if (edit.model) at['@_model'] = edit.model;
+  // Written back in the parser's own encodings, so a removal followed by an undo produces the same
+  // element it removed rather than one that has quietly lost its orientation.
+  if (edit.modelRotation && edit.modelRotation.length === 9) {
+    at['@_modelRotation'] = edit.modelRotation.map((n) => fmtNum(n)).join(' ');
+  }
+  if (edit.mirrored) at['@_modelMirrored'] = 'true';
+  return { doorOrWindow: [], ':@': at };
+}
+
+/** Patch an opening node's geometry attributes in place. */
+function patchOpening(node: RawNode, edit: GeometryEdit): void {
+  switch (edit.op) {
+    case 'moveOpening':
+      setAttr(node, 'x', edit.x);
+      setAttr(node, 'y', edit.y);
+      setAttr(node, 'angle', edit.angle);
+      break;
+    case 'setOpeningSize':
+      setAttr(node, 'width', edit.width);
+      setAttr(node, 'height', edit.height);
+      setAttr(node, 'elevation', edit.elevation);
+      break;
+  }
+}
+
+/**
  * Apply one geometry edit to the raw tree. Positional edits match an element by
  * `id` and patch it in place; `addWall`/`removeWall` insert/remove a `<wall>`;
  * `setRoomPoints` replaces a room's points. Returns true if the edit applied.
@@ -142,6 +195,24 @@ export function applyGeometryEditToTree(tree: RawNode[], edit: GeometryEdit): bo
     if (i < 0) return false;
     kids.splice(i, 1);
     return true;
+  }
+  if (edit.op === 'addOpening') {
+    kids.push(makeOpeningNode(edit));
+    return true;
+  }
+  if (edit.op === 'removeOpening') {
+    const i = kids.findIndex((n) => isOpeningTag(n) && attr(n, 'id') === edit.id);
+    if (i < 0) return false;
+    kids.splice(i, 1);
+    return true;
+  }
+  if (edit.op === 'moveOpening' || edit.op === 'setOpeningSize') {
+    for (const node of kids) {
+      if (attr(node, 'id') !== edit.id || !isOpeningTag(node)) continue;
+      patchOpening(node, edit);
+      return true;
+    }
+    return false;
   }
   const wantWall = edit.op !== 'moveRoomVertex' && edit.op !== 'setRoomPoints';
   for (const node of kids) {
