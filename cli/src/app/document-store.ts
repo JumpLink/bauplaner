@@ -37,6 +37,7 @@ import {
   removeCostCommand,
   removeWorkCommand,
   setAllWallAssembliesCommand,
+  setMaterialPriceCommand,
   setWallAssemblyCommand,
   setWallFeuchteCommand,
   updateCostCommand,
@@ -52,6 +53,7 @@ import {
   type GeometryEdit,
   type HomeData,
   type LoadedDocument,
+  type MaterialPrice,
   type ModelCatalog,
   type RetrofitWork,
   type TgaEdge,
@@ -341,6 +343,22 @@ export class DocumentStore {
 
   wallAssemblyLayers(wallId: string): AssemblyLayers | undefined {
     return this._doc?.project.annotations?.walls?.[wallId]?.assemblyLayers;
+  }
+
+  /** Set (or, with `null`, clear) this project's own price for one material (undoable). */
+  setMaterialPrice(materialKey: string, price: MaterialPrice | null): void {
+    if (!this._doc) return;
+    this.commands.execute(setMaterialPriceCommand(this._doc.project, materialKey, price));
+  }
+
+  /**
+   * This project's material prices, ready to hand to `estimateAssemblyCost` / `vergleicheVarianten`.
+   *
+   * Always an object, never undefined: every caller would otherwise write `?? {}` and one of them
+   * would forget, silently costing the whole comparison at catalogue prices.
+   */
+  get materialPrices(): Record<string, MaterialPrice> {
+    return this._doc?.project.materialPrices ?? {};
   }
 
   /** Store a damp-wall diagnosis on a wall (undoable). */

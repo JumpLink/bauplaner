@@ -26,6 +26,7 @@ import {
     removeCostCommand,
     removeWorkCommand,
     setAllWallAssembliesCommand,
+    setMaterialPriceCommand,
     setWallAssemblyCommand,
     setWallFeuchteCommand,
     updateCostCommand,
@@ -190,6 +191,48 @@ export default async () => {
 
             s.execute(removeWorkCommand(p, a.id));
             expect((p.costs ?? [])[0].workId).toBe(b.id);
+        });
+    });
+
+    await describe('material prices', async () => {
+        await it('sets a project price and undoes back to no price at all', async () => {
+            const p = project();
+            const s = store();
+            s.execute(setMaterialPriceCommand(p, 'holzfaser', { amount: 89.5, per: 'm3' }));
+            expect(p.materialPrices?.holzfaser?.amount).toBe(89.5);
+            s.undo();
+            // Deleted, not set to zero: „no own price" means the catalogue applies, and a stored 0
+            // would mean the material is free.
+            expect(p.materialPrices?.holzfaser).toBe(undefined);
+        });
+
+        await it('undoes a CHANGED price back to the previous one', async () => {
+            const p = project();
+            const s = store();
+            s.execute(setMaterialPriceCommand(p, 'holzfaser', { amount: 89.5, per: 'm3', source: 'Angebot A' }));
+            s.execute(setMaterialPriceCommand(p, 'holzfaser', { amount: 102, per: 'm3', source: 'Angebot B' }));
+            s.undo();
+            expect(p.materialPrices?.holzfaser?.amount).toBe(89.5);
+            expect(p.materialPrices?.holzfaser?.source).toBe('Angebot A');
+        });
+
+        await it('clears a price with null and restores it on undo', async () => {
+            const p = project();
+            const s = store();
+            s.execute(setMaterialPriceCommand(p, 'holzfaser', { amount: 89.5, per: 'm3' }));
+            s.execute(setMaterialPriceCommand(p, 'holzfaser', null));
+            expect(p.materialPrices?.holzfaser).toBe(undefined);
+            s.undo();
+            expect(p.materialPrices?.holzfaser?.amount).toBe(89.5);
+        });
+
+        await it('stores a copy, so the caller cannot mutate the project afterwards', async () => {
+            const p = project();
+            const s = store();
+            const price = { amount: 89.5, per: 'm3' as const };
+            s.execute(setMaterialPriceCommand(p, 'holzfaser', price));
+            price.amount = 1;
+            expect(p.materialPrices?.holzfaser?.amount).toBe(89.5);
         });
     });
 
