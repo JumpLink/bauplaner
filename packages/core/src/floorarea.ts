@@ -2,7 +2,7 @@
  * Floor-area report over all drawn room polygons — with **double-draw
  * detection**. These models routinely spread one physical storey across several
  * Sweet Home 3D levels (main floor, annex, garage, Sockel), and the same floor
- * sometimes ends up drawn on two of them: the Bei-der-Kirche baseline had the
+ * sometimes ends up drawn on two of them: a real-world baseline model had the
  * garage floor once on its own "Garage" level and once, near-identically, on the
  * main ground-floor level — a plain `rooms.reduce(area)` then reports ~28 m² of
  * house that does not exist. This module computes the honest total (overlap

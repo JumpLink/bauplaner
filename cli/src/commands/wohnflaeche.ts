@@ -40,8 +40,13 @@ function factorNote(row: WohnflaecheRow): string {
   const parts: string[] = [];
   if (row.abzugM2 > 0) parts.push(`Abzug ${fmt(row.abzugM2)} m²`);
   if (row.hoehenFaktor !== 1) parts.push(`Höhe ×${fmt(row.hoehenFaktor)}`);
-  if (row.nutzungsFaktor !== 1 && row.nutzungsFaktor !== 0) parts.push(`${row.nutzung} ×${fmt(row.nutzungsFaktor)}`);
+  // The nutzung is shown whenever it is not plain Wohnfläche — hiding it at
+  // factor 1 would print a (capped) Balkon like an ordinary living room.
+  if (row.nutzung !== 'wohnflaeche' && row.nutzungsFaktor !== 0) {
+    parts.push(`${row.nutzung} ×${fmt(row.nutzungsFaktor)}`);
+  }
   if (row.note) parts.push(row.note);
+  for (const w of row.warnungen ?? []) parts.push(`⚠ ${w}`);
   return parts.join(' · ');
 }
 

@@ -55,7 +55,45 @@ export default async () => {
       // 40 % half + 20 % zero + 40 % full = 0.6
       expect(r.rows[0]?.hoehenFaktor).toBeCloseTo(0.6, 2);
       expect(r.gesamtM2).toBeCloseTo(7.2, 2);
-      expect(r.rows[0]?.quelle).toBe('erklaert');
+      // Height shares position the room, but its NUTZUNG is still the heuristic.
+      expect(r.rows[0]?.quelle).toBe('standard');
+      expect(r.angenommenCount).toBe(1);
+    });
+
+    await it('normalises contradictory height shares instead of inventing a factor', async () => {
+      const r = computeWohnflaeche(
+        home(level('OG', 280) + room('a', 'OG', 'Schlafen', 0, 0, 400, 300)),
+        { raeume: { a: { anteilUnter2m: 0.8, anteilUnter1m: 0.8 } } },
+      );
+      // 0.8 + 0.8 → normalised to 0.5/0.5 → factor 0.25, with a warning.
+      expect(r.rows[0]?.hoehenFaktor).toBeCloseTo(0.25, 2);
+      expect(r.rows[0]?.warnungen?.length).toBe(1);
+    });
+
+    await it('counts an Abstellraum without a declaration — inside the dwelling it is Wohnfläche', async () => {
+      // § 2 Abs. 3 Nr. 1 excludes only Abstellräume AUSSERHALB der Wohnung; a
+      // name cannot tell inside from outside, so the heuristic must not zero it.
+      const r = computeWohnflaeche(home(level('EG', 0) + room('a', 'EG', 'Abstellraum', 0, 0, 200, 100)));
+      expect(r.gesamtM2).toBeCloseTo(2, 2);
+      expect(r.rows[0]?.nutzung).toBe('wohnflaeche');
+    });
+
+    await it('caps a declared faktor at the legal maximum and warns', async () => {
+      const r = computeWohnflaeche(
+        home(level('OG', 280) + room('a', 'OG', 'Balkon', 0, 0, 400, 100)),
+        { raeume: { a: { nutzung: 'balkon', faktor: 1 } } },
+      );
+      // § 4 Nr. 4: höchstens zur Hälfte — 4 m² × 0.5, never 4 m² × 1.
+      expect(r.rows[0]?.nutzungsFaktor).toBeCloseTo(0.5, 2);
+      expect(r.gesamtM2).toBeCloseTo(2, 2);
+      expect(r.rows[0]?.warnungen?.some((w) => w.includes('gekappt'))).toBe(true);
+    });
+
+    await it('marks an assumed room height instead of passing it off as measured', async () => {
+      const r = computeWohnflaeche(home(room('a', '', 'Wohnen', 0, 0, 400, 300)));
+      expect(r.rows[0]?.hoehenFaktor).toBeCloseTo(1, 2);
+      expect(r.rows[0]?.hoeheAngenommen).toBe(true);
+      expect(r.rows[0]?.warnungen?.length).toBe(1);
     });
 
     await it('deducts § 3 Abs. 3 areas before the factors', async () => {
@@ -115,6 +153,10 @@ export default async () => {
       expect(w2?.anrechenbarM2).toBeCloseTo(18, 2);
       expect(w2?.raumCount).toBe(2);
       expect(r.wohnungen.find((w) => w.wohnung === DEFAULT_WOHNUNG)?.anrechenbarM2).toBeCloseTo(12, 2);
+      // A wohnung-only line does NOT confirm the classification — the
+      // assumption warning must survive a full dwelling split.
+      expect(r.rows.find((x) => x.roomId === 'b')?.quelle).toBe('standard');
+      expect(r.angenommenCount).toBe(3);
     });
 
     await it('survives the project-file round trip', async () => {
