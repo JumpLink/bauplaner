@@ -263,8 +263,37 @@ export interface RoadmapPlan {
   pakete?: RoadmapPaket[];
 }
 
+/**
+ * What this building can claim, beyond the one switch the app used to offer.
+ *
+ * `computeFoerderung` takes six inputs; the app passed one (`isfpBonus`) and hardcoded the rest.
+ * The others are not fine print: the application date decides whether the WPB rule exists at all
+ * (from Q1 2027), and a Worst Performing Building earns five further percentage points on
+ * insulation — real money, on a house that qualifies for it precisely because it is in bad shape.
+ *
+ * The evidence is the ENERGIEAUSWEIS, never this app's own screening: the KfW asks for a
+ * Bedarfsausweis, and a modelled class is not one. Hence two stated fields rather than a derived
+ * verdict.
+ */
+export interface FoerderProfil {
+  /** A funded iSFP covers the measures (Nr. 8.4.2). */
+  isfpBonus?: boolean;
+  /** Antragseingang, ISO `YYYY-MM-DD` — the rules are dated, so the date is an input. */
+  antragsdatum?: string;
+  /** Jahres-Endenergiebedarf laut Energiebedarfsausweis, kWh/(m²·a). */
+  endenergiebedarfKwhM2a?: number;
+  /** Energieeffizienzklasse laut Energiebedarfsausweis (`A+`…`H`). */
+  energieklasse?: string;
+  /** WPB-bonus applications already granted for this building (at most three exist). */
+  wpbAntraegeBisher?: number;
+  /** The work is done by the owner where the package allows it. */
+  eigenleistung?: boolean;
+}
+
 export interface EcoProject {
   schemaVersion: number;
+  /** What this building can claim in funding (v3+); absent means „iSFP ja, sonst nichts erklärt". */
+  foerderung?: FoerderProfil;
   /** The retrofit roadmap as a plan (v3+); absent means „whatever the generator proposes". */
   roadmap?: RoadmapPlan;
   /** Project-specific material prices (material key → price), overriding the catalogue. */
@@ -430,6 +459,8 @@ export function parseProject(json: string): EcoProject {
         ? (r.materialPrices as Record<string, MaterialPrice>)
         : undefined,
     roadmap: typeof r.roadmap === 'object' && r.roadmap !== null ? (r.roadmap as RoadmapPlan) : undefined,
+    foerderung:
+      typeof r.foerderung === 'object' && r.foerderung !== null ? (r.foerderung as FoerderProfil) : undefined,
     raumklima: typeof r.raumklima === 'object' && r.raumklima !== null ? (r.raumklima as EcoProject['raumklima']) : undefined,
   };
 }

@@ -17,7 +17,7 @@
 
 import type { Command } from './commands.ts';
 import { nextId } from './ids.ts';
-import type { CostItem, EcoProject, RetrofitWork, WallAnnotation, MaterialPrice, ComponentAnnotation, EnvelopeComponent, RoadmapPaket, RoadmapPlan } from './project.ts';
+import type { CostItem, EcoProject, RetrofitWork, WallAnnotation, MaterialPrice, ComponentAnnotation, EnvelopeComponent, FoerderProfil, RoadmapPaket, RoadmapPlan } from './project.ts';
 
 /** The mutable annotation map, created on demand. */
 function wallsOf(project: EcoProject): Record<string, WallAnnotation> {
@@ -36,6 +36,24 @@ function restore(project: EcoProject, wallId: string, previous: WallAnnotation |
     const walls = wallsOf(project);
     if (previous) walls[wallId] = previous;
     else delete walls[wallId];
+}
+
+// --- Funding profile -------------------------------------------------------------------------
+
+/** Merge fields into the building's funding profile. Undoable. */
+export function setFoerderProfilCommand(project: EcoProject, patch: Partial<FoerderProfil>): Command {
+    let previous: FoerderProfil | undefined;
+    return {
+        label: 'Foerderprofil',
+        do() {
+            previous = project.foerderung ? { ...project.foerderung } : undefined;
+            project.foerderung = { ...project.foerderung, ...patch };
+        },
+        undo() {
+            if (previous) project.foerderung = previous;
+            else delete project.foerderung;
+        },
+    };
 }
 
 // --- Retrofit roadmap ------------------------------------------------------------------------
