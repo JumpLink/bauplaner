@@ -6,9 +6,11 @@
 #     out  : output PNG path
 #     sh3d : model to load (default: the bundled demo cli/demo/beispielhaus.sh3d)
 #
-#   BP_SHOT_SIZE="W H"      window size before capture
+#   BP_APP_SIZE="W H"       window size, applied BEFORE the window is mapped (preferred)
+#   BP_SHOT_SIZE="W H"      window size via devtools AFTER mapping
 #   BP_SHOT_SETTLE=s        seconds to settle before capturing (default 2.5)
-#   BP_APP_DIALOG=          open a dialog on start, e.g. "kosten-add"
+#   BP_APP_DIALOG=          open a dialog on start: "kosten-add", "aufbau" (layer editor on the
+#                           wall’s own stack) or "aufbau-daemmung" (on a retrofit build-up)
 #   BP_SHOT_ACTIVATE=       press a widget first, e.g. "GtkButton:suggested-action"
 #                           (type[:css-class]); the capture FAILS if it is missing or inert
 #
@@ -51,6 +53,7 @@ export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}" DISPLAY="${DISPLAY:-:0}"
 # orphan the gjs child, which then lingers and blocks future single-instance runs.
 setsid env GJSIFY_DEVTOOLS=1 BP_APP_ID="$APP_ID" BP_APP_FILE="$SH3D" BP_APP_VIEW="$VIEW" \
     BP_APP_DIALOG="${BP_APP_DIALOG:-}" \
+    BP_APP_SIZE="${BP_APP_SIZE:-}" \
     bash -c "cd \"$CLI\" && exec \"$GJSIFY\" run start:app" >/tmp/bauplaner-shot.log 2>&1 &
 APP_PID=$!
 trap 'kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true' EXIT
@@ -60,8 +63,12 @@ for _ in $(seq 1 40); do
        --method org.gjsify.Devtools.GetStatus >/dev/null 2>&1; then break; fi
   sleep 0.5
 done
-# Optional: resize before capturing (BP_SHOT_SIZE="<width> <height>") so a tall
-# view (e.g. the dashboard) fits into one shot instead of being scroll-clipped.
+# Optional: resize after mapping (BP_SHOT_SIZE="<width> <height>").
+#
+# Both paths work here (measured: 1180×1050 asked, 1180×1050 in the file). BP_APP_SIZE is preferred
+# only because it avoids a relayout after mapping. What ResizeWindow cannot do is report its OWN
+# failure — it answers with the size it was asked for either way — so dbus-shot.js prints the PNG
+# header's real dimensions. That is the number to compare against, whichever path was used.
 if [ -n "${BP_SHOT_SIZE:-}" ]; then
   gdbus call --session --dest "$APP_ID" --object-path "$OBJ" \
     --method org.gjsify.Devtools.ResizeWindow ${BP_SHOT_SIZE} >/dev/null 2>&1 || true

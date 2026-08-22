@@ -44,7 +44,7 @@ function restore(project: EcoProject, wallId: string, previous: WallAnnotation |
 export function setWallAssemblyCommand(
     project: EcoProject,
     wallId: string,
-    layers: { materialKey: string; thicknessM: number }[],
+    layers: { materialKey: string; thicknessM: number; bestand?: boolean; verdichtung?: number }[],
 ): Command {
     let previous: WallAnnotation | undefined;
     return {
@@ -69,7 +69,7 @@ export function setWallAssemblyCommand(
 export function setAllWallAssembliesCommand(
     project: EcoProject,
     wallIds: readonly string[],
-    layers: { materialKey: string; thicknessM: number }[],
+    layers: { materialKey: string; thicknessM: number; bestand?: boolean; verdichtung?: number }[],
 ): Command {
     const previous = new Map<string, WallAnnotation | undefined>();
     return {

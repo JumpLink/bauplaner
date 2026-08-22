@@ -3,6 +3,7 @@
 // Node and GJS. Keep this list in sync when adding a test file.
 import { run } from '@gjsify/unit';
 
+import assemblySelection from './unit/assembly-selection.test.ts';
 import bauphysik from './unit/bauphysik.test.ts';
 import lehmgraben from './unit/lehmgraben.test.ts';
 import kosten from './unit/kosten.test.ts';
@@ -81,4 +82,5 @@ run({
   budget,
   floorarea,
   roofs,
+  assemblySelection,
 });
