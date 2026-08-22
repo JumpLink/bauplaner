@@ -39,7 +39,10 @@ import {
   removeCostCommand,
   removeWorkCommand,
   setAllWallAssembliesCommand,
+  removeRoadmapPaketCommand,
   setComponentAnnotationCommand,
+  setRoadmapOptionsCommand,
+  upsertRoadmapPaketCommand,
   setMaterialPriceCommand,
   setWallAssemblyCommand,
   setWallFeuchteCommand,
@@ -59,6 +62,8 @@ import {
   type EnvelopeComponent,
   type LoadedDocument,
   type MaterialPrice,
+  type RoadmapPaket,
+  type RoadmapPlan,
   type ModelCatalog,
   type RetrofitWork,
   type TgaEdge,
@@ -367,6 +372,29 @@ export class DocumentStore {
       (id) => this.wallAssemblyLayers(id),
       (component) => this.componentAnnotation(component),
     );
+  }
+
+  /** The retrofit roadmap as stored — an empty plan when the project has none. */
+  get roadmap(): RoadmapPlan {
+    return this._doc?.project.roadmap ?? {};
+  }
+
+  /** Set the roadmap's planning options (funding, Eigenleistung), undoable. */
+  setRoadmapOptions(options: Partial<RoadmapPlan>): void {
+    if (!this._doc) return;
+    this.commands.execute(setRoadmapOptionsCommand(this._doc.project, options));
+  }
+
+  /** Merge one package's decisions into the plan (undoable). */
+  upsertRoadmapPaket(paket: RoadmapPaket): void {
+    if (!this._doc) return;
+    this.commands.execute(upsertRoadmapPaketCommand(this._doc.project, paket));
+  }
+
+  /** Drop one package's decisions, back to the generator's proposal (undoable). */
+  removeRoadmapPaket(id: string): void {
+    if (!this._doc) return;
+    this.commands.execute(removeRoadmapPaketCommand(this._doc.project, id));
   }
 
   /** Set (or, with `null`, clear) the annotation of one envelope component (undoable). */

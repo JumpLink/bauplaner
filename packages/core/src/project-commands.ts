@@ -17,7 +17,7 @@
 
 import type { Command } from './commands.ts';
 import { nextId } from './ids.ts';
-import type { CostItem, EcoProject, RetrofitWork, WallAnnotation, MaterialPrice, ComponentAnnotation, EnvelopeComponent } from './project.ts';
+import type { CostItem, EcoProject, RetrofitWork, WallAnnotation, MaterialPrice, ComponentAnnotation, EnvelopeComponent, RoadmapPaket, RoadmapPlan } from './project.ts';
 
 /** The mutable annotation map, created on demand. */
 function wallsOf(project: EcoProject): Record<string, WallAnnotation> {
@@ -36,6 +36,69 @@ function restore(project: EcoProject, wallId: string, previous: WallAnnotation |
     const walls = wallsOf(project);
     if (previous) walls[wallId] = previous;
     else delete walls[wallId];
+}
+
+// --- Retrofit roadmap ------------------------------------------------------------------------
+
+/** Set the roadmap's planning options (funding, Eigenleistung). Undoable. */
+export function setRoadmapOptionsCommand(project: EcoProject, options: Partial<RoadmapPlan>): Command {
+    let previous: RoadmapPlan | undefined;
+    return {
+        label: 'Fahrplan-Optionen',
+        do() {
+            previous = project.roadmap ? { ...project.roadmap } : undefined;
+            project.roadmap = { ...project.roadmap, ...options };
+        },
+        undo() {
+            if (previous) project.roadmap = previous;
+            else delete project.roadmap;
+        },
+    };
+}
+
+/**
+ * Merge one package's decisions into the plan (create it if the id is new). Undoable.
+ *
+ * Merged rather than replaced: the view edits one field at a time, and a replace would drop the
+ * note when the year is changed.
+ */
+export function upsertRoadmapPaketCommand(project: EcoProject, paket: RoadmapPaket): Command {
+    let previous: RoadmapPaket[] | undefined;
+    return {
+        label: 'Fahrplan-Paket',
+        do() {
+            const plan = (project.roadmap ??= {});
+            previous = plan.pakete ? plan.pakete.map((p) => ({ ...p })) : undefined;
+            const pakete = plan.pakete ?? [];
+            const index = pakete.findIndex((p) => p.id === paket.id);
+            if (index >= 0) pakete[index] = { ...pakete[index], ...paket };
+            else pakete.push({ ...paket });
+            plan.pakete = pakete;
+        },
+        undo() {
+            const plan = (project.roadmap ??= {});
+            if (previous) plan.pakete = previous;
+            else delete plan.pakete;
+        },
+    };
+}
+
+/** Drop one package's decisions entirely, back to whatever the generator proposes. Undoable. */
+export function removeRoadmapPaketCommand(project: EcoProject, id: string): Command {
+    let previous: RoadmapPaket[] | undefined;
+    return {
+        label: 'Fahrplan-Paket zuruecksetzen',
+        do() {
+            const plan = (project.roadmap ??= {});
+            previous = plan.pakete ? plan.pakete.map((p) => ({ ...p })) : undefined;
+            plan.pakete = (plan.pakete ?? []).filter((p) => p.id !== id);
+        },
+        undo() {
+            const plan = (project.roadmap ??= {});
+            if (previous) plan.pakete = previous;
+            else delete plan.pakete;
+        },
+    };
 }
 
 // --- Envelope components ---------------------------------------------------------------------
