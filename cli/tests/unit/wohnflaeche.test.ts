@@ -94,6 +94,22 @@ export default async () => {
       expect(r.rows[0]?.hoehenFaktor).toBeCloseTo(1, 2);
       expect(r.rows[0]?.hoeheAngenommen).toBe(true);
       expect(r.rows[0]?.warnungen?.length).toBe(1);
+      expect(r.hoeheAngenommenCount).toBe(1);
+    });
+
+    await it('treats a level with zero height the same as a missing one', async () => {
+      const r = computeWohnflaeche(home(level('EG', 0, 0) + room('a', 'EG', 'Wohnen', 0, 0, 400, 300)));
+      expect(r.rows[0]?.hoeheAngenommen).toBe(true);
+      expect(r.hoeheAngenommenCount).toBe(1);
+    });
+
+    await it('flags a declared faktor on plain Wohnfläche instead of hiding the shrink', async () => {
+      const r = computeWohnflaeche(
+        home(level('EG', 0) + room('a', 'EG', 'Wohnen', 0, 0, 400, 300)),
+        { raeume: { a: { faktor: 0.8, note: 'anteilige Nutzung' } } },
+      );
+      expect(r.rows[0]?.anrechenbarM2).toBeCloseTo(9.6, 2);
+      expect(r.rows[0]?.faktorErklaert).toBe(true);
     });
 
     await it('deducts § 3 Abs. 3 areas before the factors', async () => {

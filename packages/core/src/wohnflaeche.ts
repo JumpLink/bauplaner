@@ -129,6 +129,13 @@ export interface WohnflaecheRow {
   hoeheAngenommen: boolean;
   /** § 4 usage factor (the declared override is capped at the legal maximum), 0..1. */
   nutzungsFaktor: number;
+  /**
+   * True when `nutzungsFaktor` comes from a declared `faktor` override. The
+   * surfaces annotate such rooms even at factor values that look ordinary — a
+   * declared 0,8 on a living room must not be indistinguishable from a fully
+   * counted one.
+   */
+  faktorErklaert: boolean;
   /** (Grundfläche − Abzug) × Höhenfaktor × Nutzungsfaktor, m². */
   anrechenbarM2: number;
   note?: string;
@@ -157,6 +164,8 @@ export interface WohnflaecheReport {
    * still counts here.
    */
   angenommenCount: number;
+  /** Rooms counted on an ASSUMED 2,50-m height (missing/zero level height). */
+  hoeheAngenommenCount: number;
   /**
    * Double-drawn floor area found by {@link computeFloorAreas} — if > 0 the
    * sums above are inflated by up to this amount and the model needs fixing.
@@ -201,6 +210,7 @@ export function computeWohnflaeche(home: HomeData, config?: WohnflaecheConfig): 
 
   const rows: WohnflaecheRow[] = [];
   let angenommen = 0;
+  let hoehenAngenommen = 0;
 
   for (const room of home.rooms) {
     const cfg = declared[room.id] ?? declared[room.name];
@@ -250,6 +260,7 @@ export function computeWohnflaeche(home: HomeData, config?: WohnflaecheConfig): 
         // Full counting on an ASSUMED 2,50 m is the non-conservative direction;
         // it must be distinguishable from a measured level.
         hoeheAngenommen = true;
+        hoehenAngenommen++;
         warnungen.push('Raumhöhe unbekannt — 2,50 m angenommen');
       }
     }
@@ -280,6 +291,7 @@ export function computeWohnflaeche(home: HomeData, config?: WohnflaecheConfig): 
       hoehenFaktor,
       hoeheAngenommen,
       nutzungsFaktor,
+      faktorErklaert: cfg?.faktor !== undefined,
       anrechenbarM2,
       ...(cfg?.note ? { note: cfg.note } : {}),
       ...(warnungen.length > 0 ? { warnungen } : {}),
@@ -307,6 +319,7 @@ export function computeWohnflaeche(home: HomeData, config?: WohnflaecheConfig): 
     gesamtM2: round2(gesamt),
     ausgeschlossenM2: round2(ausgeschlossen),
     angenommenCount: angenommen,
+    hoeheAngenommenCount: hoehenAngenommen,
     overlapM2: computeFloorAreas(home).overlapM2,
   };
 }

@@ -41,9 +41,13 @@ function factorNote(row: WohnflaecheRow): string {
   if (row.abzugM2 > 0) parts.push(`Abzug ${fmt(row.abzugM2)} m²`);
   if (row.hoehenFaktor !== 1) parts.push(`Höhe ×${fmt(row.hoehenFaktor)}`);
   // The nutzung is shown whenever it is not plain Wohnfläche — hiding it at
-  // factor 1 would print a (capped) Balkon like an ordinary living room.
+  // factor 1 would print a (capped) Balkon like an ordinary living room. A
+  // declared faktor is annotated even on plain Wohnfläche: a room silently
+  // shrunk to 0,8 must not read like a fully counted one.
   if (row.nutzung !== 'wohnflaeche' && row.nutzungsFaktor !== 0) {
     parts.push(`${row.nutzung} ×${fmt(row.nutzungsFaktor)}`);
+  } else if (row.faktorErklaert && row.nutzungsFaktor !== 0) {
+    parts.push(`Faktor ×${fmt(row.nutzungsFaktor)} (erklärt)`);
   }
   if (row.note) parts.push(row.note);
   for (const w of row.warnungen ?? []) parts.push(`⚠ ${w}`);
@@ -84,6 +88,12 @@ function printReport(r: WohnflaecheReport): void {
         'eingestuft — Erklärungen gehören in die Projektdatei (`wohnflaeche.raeume`, Schlüssel = Raum-Id ' +
         'oder exakter Name): nutzung, wohnung, abzugM2 (Treppen > 3 Steigungen, § 3 Abs. 3), ' +
         'anteilUnter2m/anteilUnter1m (Schrägen, § 4), faktor, note.',
+    );
+  }
+  if (r.hoeheAngenommenCount > 0) {
+    console.log(
+      `\nHinweis: Bei ${r.hoeheAngenommenCount} Raum/Räumen ist die Raumhöhe UNBEKANNT und mit 2,50 m ` +
+        'angenommen — volle Anrechnung ist dort eine Annahme, keine Messung.',
     );
   }
   if (r.overlapM2 >= 0.5) {
