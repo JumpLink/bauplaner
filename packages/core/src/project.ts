@@ -26,7 +26,7 @@ import type { DocEntry } from './doc.ts';
 import type { RoofConfig } from './roofs.ts';
 import type { HomeData } from './sh3d/types.ts';
 
-export const PROJECT_SCHEMA_VERSION = 2;
+export const PROJECT_SCHEMA_VERSION = 3;
 export const PROJECT_FILE_SUFFIX = '.ecoretrofit.json';
 
 /** Our retrofit data for one SH3D wall (keyed by the wall id). Minimal for v1. */
@@ -36,8 +36,16 @@ export interface WallAnnotation {
    * Layer stack inside→outside (material key + thickness in m), for the
    * U-value/Glaser assessment in @bauplaner/materials. Same shape as its
    * `LayerSpec` (kept structural so core stays free of the materials dep).
+   *
+   * `bestand` and `verdichtung` are carried because dropping them produces a
+   * WRONG number, not a missing one: a layer without `bestand` is priced and
+   * carbon-counted as newly built, so a wall assigned the standard build-up
+   * would be billed for the 36,5 cm of masonry that has stood there for
+   * decades. That is also why v2 → v3 is a version bump rather than a silently
+   * additive field — a reader that ignores these should refuse the file, not
+   * quote it.
    */
-  assemblyLayers?: { materialKey: string; thicknessM: number }[];
+  assemblyLayers?: { materialKey: string; thicknessM: number; bestand?: boolean; verdichtung?: number }[];
   /**
    * Damp-wall diagnosis anchored to this wall. Structural (matches
    * @bauplaner/diagnose) so core stays free of the diagnose dep.

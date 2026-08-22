@@ -68,11 +68,26 @@ export default async () => {
       expect(back.annotations?.walls?.w1?.assemblyLayers?.[0].materialKey).toBe('holzfaser');
     });
 
-    await it('createProjectForSh3d starts with an empty cost register (v2)', async () => {
+    await it('createProjectForSh3d starts with an empty cost register', async () => {
       const p = createProjectForSh3d('/d/plan.sh3d');
-      expect(p.schemaVersion).toBe(2);
+      // Against the constant, not a literal: the version is already pinned one test above, and a
+      // second copy of it here only means every bump edits a test about the COST REGISTER.
+      expect(p.schemaVersion).toBe(PROJECT_SCHEMA_VERSION);
       expect(Array.isArray(p.costs)).toBe(true);
       expect(p.costs?.length).toBe(0);
+    });
+
+    await it('loads a v2 file whose layers carry no bestand flag', async () => {
+      // v3 added `bestand`/`verdichtung` to the stored layers. A v2 file has neither, and must
+      // still load: the flag being ABSENT is what a v2 file means, and re-reading it as `false`
+      // is the correct reading of it — the wrong one would be refusing the file.
+      const back = parseProject(
+        '{"schemaVersion":2,"sh3d":{"path":"x.sh3d"},"annotations":{"walls":{"w1":{"assemblyLayers":[{"materialKey":"vollziegel","thicknessM":0.365}]}}}}',
+      );
+      expect(back.schemaVersion).toBe(2);
+      const layer = back.annotations?.walls?.w1?.assemblyLayers?.[0];
+      expect(layer?.materialKey).toBe('vollziegel');
+      expect(layer?.bestand).toBe(undefined);
     });
 
     await it('loads a v1 file (no costs) unchanged', async () => {

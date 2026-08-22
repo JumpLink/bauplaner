@@ -103,7 +103,19 @@ export class MainWindow extends Adw.ApplicationWindow {
   private lastSaveUs = 0;
 
   constructor(app: Adw.Application) {
-    super({ application: app, title: APP_NAME, defaultWidth: 1000, defaultHeight: 680 });
+    // The screenshot rig's size, applied before the window is mapped, so a capture never contains
+    // a post-resize relayout. Devtools' ResizeWindow also works here (measured: 1180×1050 asked,
+    // 1180×1050 in the file) — but it answers with the size it was ASKED for either way, and
+    // `default-width` reads back that same value, so it cannot report its own failure. In the
+    // sibling app that gap hid a 1280→1100 discrepancy behind four green checks. Whichever path is
+    // used, dbus-shot.js prints the PNG header's real dimensions; that is the number to trust.
+    const shot = shotSize();
+    super({
+        application: app,
+        title: APP_NAME,
+        defaultWidth: shot?.[0] ?? 1000,
+        defaultHeight: shot?.[1] ?? 680,
+    });
 
     this.stack.add_named(new UebersichtView(this, this.store), 'uebersicht');
     this.stack.add_named(new ModellView(this, this.store), 'modell');
@@ -660,4 +672,12 @@ export class MainWindow extends Adw.ApplicationWindow {
     this.contentTitle.set_subtitle(item?.subtitle ?? '');
     if (this.splitView.get_collapsed()) this.splitView.set_show_content(true);
   }
+}
+
+/** `BP_APP_SIZE="<width> <height>"` for the screenshot rig, or null when unset/unparseable. */
+function shotSize(): [number, number] | null {
+  const raw = globalThis.process?.env?.BP_APP_SIZE;
+  if (!raw) return null;
+  const [w, h] = raw.trim().split(/\s+/).map((n) => Number.parseInt(n, 10));
+  return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 ? [w, h] : null;
 }

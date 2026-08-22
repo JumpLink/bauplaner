@@ -9,6 +9,7 @@
  */
 
 import Adw from '@girs/adw-1';
+import GLib from '@girs/glib-2.0';
 import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
@@ -26,6 +27,8 @@ import {
 import { escapeMarkup, fmtEur, fmtNum } from '../../format.ts';
 import type { AssemblyLayers, DocumentStore } from '../document-store.ts';
 import { setHex } from '../paint.ts';
+import { openAufbauDialog } from './aufbau-dialog.ts';
+import { adoptPresetFlags, indexForLayers, layersForIndex } from './assembly-selection.ts';
 
 /** The build-up the comparison measures every candidate against. */
 const REFERENZ_KEY = 'bestand-vollziegel-365';
@@ -45,7 +48,19 @@ const RISIKO_CSS = { gering: 'success', mittel: 'warning', hoch: 'error' } as co
  */
 const WAND_PRESETS = presetsFor('aussenwand');
 
-const PRESET_NAMES = ['(keiner)', ...WAND_PRESETS.map((p) => p.name)];
+/**
+ * Combo entries: „(keiner)", the presets, and — last — „Eigener Aufbau".
+ *
+ * The custom entry has to EXIST as a state, not be inferred from „matches no preset". Without it a
+ * hand-built stack displayed as „(keiner)", and the first touch of the combo wrote `[]` over it:
+ * the screen denied the assembly existed and then deleted it. The entry is never selectable by
+ * hand — picking it would beg the question which custom stack — it is what the row SHOWS while one
+ * is assigned, and „Bearbeiten" is how you get one.
+ */
+const PRESET_NAMES = ['(keiner)', ...WAND_PRESETS.map((p) => p.name), 'Eigener Aufbau'];
+
+/** The presets' layer stacks, in combo order — the input to the pure selection helpers. */
+const PRESET_LAYERS = WAND_PRESETS.map((p) => p.layers);
 
 export class BauteileView extends Gtk.Box {
   static {
@@ -62,6 +77,30 @@ export class BauteileView extends Gtk.Box {
     this.store = store;
     store.subscribe(() => this.render());
     this.render();
+
+    // Dev hook: open the layer editor straight away (for screenshots), same shape as the other
+    // BP_APP_* hooks. `aufbau` opens on what the model's first wall actually has; `aufbau-daemmung`
+    // opens on a retrofit build-up instead, because the dimensioning section only exists when the
+    // stack HAS an insulation layer — and the demo house's wall is bare masonry, so the one state
+    // worth a picture is unreachable from the other value.
+    const hook = globalThis.process?.env?.BP_APP_DIALOG;
+    if (hook === 'aufbau' || hook === 'aufbau-daemmung') {
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        const home = this.store.home;
+        const wall = home?.walls[0];
+        if (wall) {
+          const gedaemmt = WAND_PRESETS.find((p) => p.key !== REFERENZ_KEY)?.layers ?? [];
+          const stored = this.store.wallAssemblyLayers(wall.id) ?? [];
+          openAufbauDialog(this, {
+            title: 'Aufbau — Wand 1',
+            layers: hook === 'aufbau-daemmung' ? gedaemmt : adoptPresetFlags(PRESET_LAYERS, stored),
+            areaM2: Math.round(deriveEnvelope(home!).wallAreaM2),
+            onApply: (l) => this.store.setWallAssembly(wall.id, l),
+          });
+        }
+        return GLib.SOURCE_REMOVE;
+      });
+    }
   }
 
   private setChild(widget: Gtk.Widget): void {
@@ -70,16 +109,12 @@ export class BauteileView extends Gtk.Box {
     this.append(widget);
   }
 
-  /** Combo index for a stored layer stack: 0 = "(keiner)", else preset index + 1. */
   private indexForLayers(layers?: AssemblyLayers): number {
-    if (!layers || layers.length === 0) return 0;
-    const json = JSON.stringify(layers);
-    const idx = WAND_PRESETS.findIndex((p) => JSON.stringify(p.layers) === json);
-    return idx >= 0 ? idx + 1 : 0;
+    return indexForLayers(PRESET_LAYERS, layers);
   }
 
-  private layersForIndex(idx: number): AssemblyLayers {
-    return idx === 0 ? [] : WAND_PRESETS[idx - 1].layers;
+  private layersForIndex(idx: number): AssemblyLayers | null {
+    return layersForIndex(PRESET_LAYERS, idx);
   }
 
   private render(): void {
@@ -113,10 +148,14 @@ export class BauteileView extends Gtk.Box {
       description: 'Aufbau für alle Wände wählen — die 3D-Ansicht färbt nach U-Wert.',
     });
     const firstLayers = home.walls.length > 0 ? this.store.wallAssemblyLayers(home.walls[0].id) : undefined;
-    const globalCombo = this.combo(this.indexForLayers(firstLayers), (idx) =>
-      this.store.setAllWallAssemblies(this.layersForIndex(idx)),
-    );
+    const globalCombo = this.combo(this.indexForLayers(firstLayers), (idx) => {
+      const layers = this.layersForIndex(idx);
+      if (layers) this.store.setAllWallAssemblies(layers);
+    });
     globalCombo.set_title('Aufbau (alle Wände)');
+    globalCombo.add_suffix(
+      this.editButton('Aufbau — alle Wände', firstLayers, (l) => this.store.setAllWallAssemblies(l)),
+    );
     globalGroup.add(globalCombo);
 
     const globalLayers = firstLayers && firstLayers.length > 0 ? firstLayers : null;
@@ -150,10 +189,14 @@ export class BauteileView extends Gtk.Box {
       for (const { wall, index } of walls) {
         const layers = this.store.wallAssemblyLayers(wall.id);
         const u = layers && layers.length > 0 ? assessAssembly(layers).U : null;
-        const combo = this.combo(this.indexForLayers(layers), (idx) =>
-          this.store.setWallAssembly(wall.id, this.layersForIndex(idx)),
-        );
+        const combo = this.combo(this.indexForLayers(layers), (idx) => {
+          const picked = this.layersForIndex(idx);
+          if (picked) this.store.setWallAssembly(wall.id, picked);
+        });
         combo.set_title(`Wand ${index + 1}`);
+        combo.add_suffix(
+          this.editButton(`Aufbau — Wand ${index + 1}`, layers, (l) => this.store.setWallAssembly(wall.id, l)),
+        );
         combo.set_subtitle(`${wallLengthM(wall).toFixed(1)} m${u != null ? ` · U ${u.toFixed(2)}` : ''}`);
         expander.add_row(combo);
         this.wallRows.set(wall.id, { expander, row: combo });
@@ -382,6 +425,24 @@ export class BauteileView extends Gtk.Box {
     row.set_selected(selected);
     row.connect('notify::selected', () => onChange(row.selected));
     return row;
+  }
+
+  /** The „Bearbeiten" button that opens the layer editor on `layers` and stores the result. */
+  private editButton(title: string, layers: AssemblyLayers | undefined, apply: (l: AssemblyLayers) => void): Gtk.Button {
+    const button = new Gtk.Button({ label: 'Bearbeiten', valign: Gtk.Align.CENTER });
+    button.add_css_class('flat');
+    button.connect('clicked', () => {
+      const home = this.store.home;
+      openAufbauDialog(this, {
+        // Flags restored from the preset first: a pre-v3 file stored none, and the editor prices
+        // every layer that does not carry `bestand`.
+        title,
+        layers: adoptPresetFlags(PRESET_LAYERS, layers ?? []),
+        areaM2: home ? Math.round(deriveEnvelope(home).wallAreaM2) : 100,
+        onApply: apply,
+      });
+    });
+    return button;
   }
 
   private infoRow(title: string, value: string): Adw.ActionRow {

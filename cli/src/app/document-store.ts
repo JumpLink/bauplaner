@@ -60,7 +60,14 @@ import {
   type WallAnnotation,
 } from '@bauplaner/core';
 
-export type AssemblyLayers = { materialKey: string; thicknessM: number }[];
+/**
+ * A stored layer stack, inside→outside.
+ *
+ * Structurally the materials package's `LayerSpec`, INCLUDING `bestand`: a layer that loses that
+ * flag is priced and carbon-counted as if it were newly built, so the existing masonry a retrofit
+ * build-up sits on would be billed. See {@link WallAnnotation.assemblyLayers}.
+ */
+export type AssemblyLayers = { materialKey: string; thicknessM: number; bestand?: boolean; verdichtung?: number }[];
 export type WallFeuchte = NonNullable<WallAnnotation['feuchte']>;
 
 export type DocumentListener = () => void;
