@@ -54,6 +54,22 @@ export const NUTZUNG_FAKTOR: Record<WohnflaecheNutzung, number> = {
   balkon: 0.25,
 };
 
+/**
+ * Legal ceiling of the usage factor. A declared `faktor` may never exceed it:
+ * § 4 Nr. 4 allows balconies "höchstens zur Hälfte", § 4 Nr. 3 fixes unheated
+ * Wintergärten at half, and § 2 Abs. 3 rooms count zero, full stop. Without
+ * the cap a declaration `{nutzung: 'balkon', faktor: 1}` would print the
+ * balcony as an ordinary living room — silently, which is how a
+ * Wohnflächenberechnung stops being one.
+ */
+export const NUTZUNG_FAKTOR_MAX: Record<WohnflaecheNutzung, number> = {
+  wohnflaeche: 1,
+  zubehoer: 0,
+  'nicht-nutzbar': 0,
+  wintergarten: 0.5,
+  balkon: 0.5,
+};
+
 /** Declared WoFlV facts about one room (project sidecar). */
 export interface WohnflaecheRaumConfig {
   nutzung?: WohnflaecheNutzung;
@@ -73,6 +89,8 @@ export interface WohnflaecheRaumConfig {
   /**
    * Explicit usage factor overriding {@link NUTZUNG_FAKTOR} — for the § 4 Nr. 4
    * "höchstens zur Hälfte" balcony cases and comparable justified deviations.
+   * Capped at {@link NUTZUNG_FAKTOR_MAX}; an over-cap value is clamped and
+   * reported as a per-room warning, never silently honoured.
    */
   faktor?: number;
   /** Why the room is classified this way (shows up in the report). */
@@ -103,11 +121,19 @@ export interface WohnflaecheRow {
   abzugM2: number;
   /** § 4 Nr. 1–2 height factor, 0..1. */
   hoehenFaktor: number;
-  /** § 4 usage factor (or the declared override), 0..1. */
+  /**
+   * True when the height factor rests on the 2,50-m default because the room's
+   * level is missing or carries no height — an assumption in the
+   * non-conservative direction, not a measurement.
+   */
+  hoeheAngenommen: boolean;
+  /** § 4 usage factor (the declared override is capped at the legal maximum), 0..1. */
   nutzungsFaktor: number;
   /** (Grundfläche − Abzug) × Höhenfaktor × Nutzungsfaktor, m². */
   anrechenbarM2: number;
   note?: string;
+  /** Data problems of THIS room (capped faktor, normalised shares, assumed height). */
+  warnungen?: string[];
 }
 
 export interface WohnungSumme {
@@ -125,7 +151,11 @@ export interface WohnflaecheReport {
   gesamtM2: number;
   /** Grundfläche of rooms counting zero (Zubehör, nicht nutzbar), m². */
   ausgeschlossenM2: number;
-  /** Rooms classified by default heuristics, not by declaration. */
+  /**
+   * Rooms whose NUTZUNG rests on the name heuristics — a declaration that only
+   * assigns `wohnung` or an `abzugM2` does not confirm the classification and
+   * still counts here.
+   */
   angenommenCount: number;
   /**
    * Double-drawn floor area found by {@link computeFloorAreas} — if > 0 the
@@ -134,9 +164,16 @@ export interface WohnflaecheReport {
   overlapM2: number;
 }
 
-/** Obvious Zubehörraum names (§ 2 Abs. 3 Nr. 1) — a default, not a verdict. */
+/**
+ * Obvious Zubehörraum names (§ 2 Abs. 3 Nr. 1) — a default, not a verdict.
+ *
+ * Deliberately NOT matched: "Abstellraum". The law excludes only "Abstellräume
+ * und Kellerersatzräume AUSSERHALB der Wohnung" — a storage closet inside the
+ * dwelling counts in full, and a name cannot tell inside from outside. Such a
+ * room needs a declaration either way.
+ */
 const ZUBEHOER_NAME =
-  /(heizung|heizraum|keller|garage|werkstatt|waschküche|waschkueche|trockenraum|bodenraum|dachboden|dachraum|speicher|abstell)/i;
+  /(heizung|heizraum|keller|garage|werkstatt|waschküche|waschkueche|trockenraum|bodenraum|dachboden|dachraum|speicher)/i;
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -184,22 +221,49 @@ export function computeWohnflaeche(home: HomeData, config?: WohnflaecheConfig): 
       nutzung = 'wohnflaeche';
       quelle = 'standard';
     }
-    // A declaration without `nutzung` (only wohnung/abzug/…) still counts as
-    // reviewed — the room was looked at, the default was confirmed.
-    if (cfg) quelle = 'erklaert';
-    else angenommen++;
+    // Only a declared NUTZUNG makes a room "erklärt". A declaration carrying
+    // just `wohnung`/`abzugM2` positions the room but confirms nothing about
+    // its classification — treating it as reviewed would let a dwelling split
+    // (every room needs a `wohnung` line) silence every assumption warning
+    // while 100 % of the counted area still rests on name heuristics.
+    if (!cfg?.nutzung) angenommen++;
 
+    const warnungen: string[] = [];
     const level = levels.get(room.level);
     let hoehenFaktor: number;
+    let hoeheAngenommen = false;
     if (cfg?.anteilUnter2m !== undefined || cfg?.anteilUnter1m !== undefined) {
-      const halb = clamp01(cfg.anteilUnter2m ?? 0);
-      const entfaellt = clamp01(cfg.anteilUnter1m ?? 0);
+      let halb = clamp01(cfg.anteilUnter2m ?? 0);
+      let entfaellt = clamp01(cfg.anteilUnter1m ?? 0);
+      const summe = halb + entfaellt;
+      if (summe > 1) {
+        // Contradictory shares must not silently produce a fantasy factor —
+        // normalise to a whole room and say so.
+        halb /= summe;
+        entfaellt /= summe;
+        warnungen.push('Höhenanteile summieren über 1 — proportional normalisiert');
+      }
       hoehenFaktor = clamp01(1 - halb - entfaellt) + halb * 0.5;
     } else {
       hoehenFaktor = heightFactorForLevel(level);
+      if (!level || level.height <= 0) {
+        // Full counting on an ASSUMED 2,50 m is the non-conservative direction;
+        // it must be distinguishable from a measured level.
+        hoeheAngenommen = true;
+        warnungen.push('Raumhöhe unbekannt — 2,50 m angenommen');
+      }
     }
 
-    const nutzungsFaktor = cfg?.faktor !== undefined ? clamp01(cfg.faktor) : NUTZUNG_FAKTOR[nutzung];
+    let nutzungsFaktor: number;
+    if (cfg?.faktor !== undefined) {
+      const max = NUTZUNG_FAKTOR_MAX[nutzung];
+      nutzungsFaktor = Math.min(clamp01(cfg.faktor), max);
+      if (clamp01(cfg.faktor) > max) {
+        warnungen.push(`faktor ${cfg.faktor} über dem gesetzlichen Maximum ${max} — gekappt`);
+      }
+    } else {
+      nutzungsFaktor = NUTZUNG_FAKTOR[nutzung];
+    }
     const abzugM2 = Math.max(0, cfg?.abzugM2 ?? 0);
     const basis = Math.max(0, room.area - abzugM2);
     const anrechenbarM2 = round2(basis * hoehenFaktor * nutzungsFaktor);
@@ -214,9 +278,11 @@ export function computeWohnflaeche(home: HomeData, config?: WohnflaecheConfig): 
       grundflaecheM2: round2(room.area),
       abzugM2: round2(abzugM2),
       hoehenFaktor,
+      hoeheAngenommen,
       nutzungsFaktor,
       anrechenbarM2,
       ...(cfg?.note ? { note: cfg.note } : {}),
+      ...(warnungen.length > 0 ? { warnungen } : {}),
     });
   }
 

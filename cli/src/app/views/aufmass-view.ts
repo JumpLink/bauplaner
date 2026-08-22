@@ -212,7 +212,10 @@ function roomLabel(room: WohnflaecheRow): string {
   const parts: string[] = [];
   if (room.abzugM2 > 0) parts.push(`− ${fmtNum(room.abzugM2, 1)} m² Abzug`);
   if (room.hoehenFaktor !== 1) parts.push(`Höhe × ${fmtNum(room.hoehenFaktor, 2)}`);
-  if (room.nutzungsFaktor !== 1) parts.push(`× ${fmtNum(room.nutzungsFaktor, 2)}`);
+  // Shown whenever the nutzung is not plain Wohnfläche — a capped Balkon at
+  // factor 1 must not read like an ordinary living room.
+  if (room.nutzung !== 'wohnflaeche') parts.push(`${room.nutzung} × ${fmtNum(room.nutzungsFaktor, 2)}`);
+  for (const w of room.warnungen ?? []) parts.push(`⚠ ${w}`);
   return parts.length > 0 ? `${name} (${parts.join(', ')})` : name;
 }
 
