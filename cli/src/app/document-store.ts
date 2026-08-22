@@ -40,6 +40,7 @@ import {
   removeWorkCommand,
   setAllWallAssembliesCommand,
   removeRoadmapPaketCommand,
+  setFoerderProfilCommand,
   setComponentAnnotationCommand,
   setRoadmapOptionsCommand,
   upsertRoadmapPaketCommand,
@@ -61,6 +62,7 @@ import {
   type ComponentAnnotation,
   type EnvelopeComponent,
   type LoadedDocument,
+  type FoerderProfil,
   type MaterialPrice,
   type RoadmapPaket,
   type RoadmapPlan,
@@ -372,6 +374,24 @@ export class DocumentStore {
       (id) => this.wallAssemblyLayers(id),
       (component) => this.componentAnnotation(component),
     );
+  }
+
+  /**
+   * What this building can claim in funding — an empty profile when nothing is stated.
+   *
+   * `isfpBonus` defaults to TRUE here, which is what the views assumed all along: changing the
+   * default while moving the flag into the project would silently restate every existing plan's
+   * subsidy.
+   */
+  get foerderProfil(): FoerderProfil {
+    const stored = this._doc?.project.foerderung ?? {};
+    return { isfpBonus: true, ...stored };
+  }
+
+  /** Merge fields into the building's funding profile (undoable). */
+  setFoerderProfil(patch: Partial<FoerderProfil>): void {
+    if (!this._doc) return;
+    this.commands.execute(setFoerderProfilCommand(this._doc.project, patch));
   }
 
   /** The retrofit roadmap as stored — an empty plan when the project has none. */

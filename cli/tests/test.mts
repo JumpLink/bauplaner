@@ -5,6 +5,7 @@ import { run } from '@gjsify/unit';
 
 import assemblySelection from './unit/assembly-selection.test.ts';
 import roadmapPlan from './unit/roadmap-plan.test.ts';
+import foerderungProfil from './unit/foerderung-profil.test.ts';
 import bauphysik from './unit/bauphysik.test.ts';
 import lehmgraben from './unit/lehmgraben.test.ts';
 import kosten from './unit/kosten.test.ts';
@@ -85,4 +86,5 @@ run({
   roofs,
   assemblySelection,
   roadmapPlan,
+  foerderungProfil,
 });

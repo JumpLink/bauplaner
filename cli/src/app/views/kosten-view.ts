@@ -15,6 +15,7 @@ import {
   COST_STATUS_LABEL,
   type CostCategory,
   type CostStatus,
+  type FoerderProfil,
   type HomeData,
   parseGermanNumber,
 } from '@bauplaner/core';
@@ -23,10 +24,15 @@ import {
   computeAmortisation,
   computeFoerderung,
   computeRoadmap,
+  ENERGIEKLASSEN,
+  istWorstPerformingBuilding,
+  type Energieklasse,
   type FoerderResult,
 } from '@bauplaner/materials';
 
+
 import type { DocumentStore } from '../document-store.ts';
+import { foerderOptions } from '../../foerderung-profil.ts';
 import { escapeMarkup, fmtEur } from '../../format.ts';
 
 const CATEGORIES = (Object.keys(COST_CATEGORY_LABEL) as CostCategory[]).map((key) => ({
@@ -49,7 +55,6 @@ export class KostenView extends Gtk.Box {
   private readonly store: DocumentStore;
   private child?: Gtk.Widget;
   /** Whether to add the iSFP bonus to the BEG subsidy rate (view-local). */
-  private isfp = true;
 
   constructor(store: DocumentStore) {
     super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
@@ -113,7 +118,11 @@ export class KostenView extends Gtk.Box {
     const foerderfaehigNet = costs
       .filter((c) => BEG_FOERDERFAEHIG.includes(c.category))
       .reduce((s, c) => s + c.net, 0);
-    const foerder = computeFoerderung(foerderfaehigNet, { isfpBonus: this.isfp });
+    // The full model, not just the iSFP switch. Everything the KfW weighs comes from the project's
+    // funding profile — the application date (the WPB rule only exists from Q1 2027), the
+    // Energieausweis figures, and how many WPB applications this building has already used.
+    const profil = this.store.foerderProfil;
+    const foerder = computeFoerderung(foerderfaehigNet, foerderOptions(profil));
     const eigenanteil = Math.max(0, totalNet - foerder.foerderung);
     page.add(this.buildFoerderung(foerder, eigenanteil));
 
@@ -180,21 +189,104 @@ export class KostenView extends Gtk.Box {
       title: 'Förderung &amp; Eigenanteil',
       description: 'BEG-Einzelmaßnahmen (Gebäudehülle) — Schätzung, kein Bescheid.',
     });
+    const profil = this.store.foerderProfil;
     const isfpRow = new Adw.SwitchRow({
       title: 'iSFP-Bonus (+5 %)',
       subtitle: 'Maßnahme laut individuellem Sanierungsfahrplan',
     });
-    isfpRow.set_active(this.isfp);
-    isfpRow.connect('notify::active', () => {
-      this.isfp = isfpRow.get_active();
-      this.render();
-    });
+    isfpRow.set_active(profil.isfpBonus !== false);
+    isfpRow.connect('notify::active', () => this.store.setFoerderProfil({ isfpBonus: isfpRow.get_active() }));
     group.add(isfpRow);
+    group.add(this.buildWpbExpander(profil));
     group.add(this.valueRow('Förderfähige Kosten', fmtEur(foerder.foerderfaehigNet)));
     group.add(this.valueRow('Fördersatz', `${Math.round(foerder.rate * 100)} %`));
     group.add(this.valueRow('Förderung (erwartbar)', fmtEur(foerder.foerderung)));
     group.add(this.valueRow('Eigenanteil', fmtEur(eigenanteil), true));
     return group;
+  }
+
+  /**
+   * The Worst-Performing-Building bonus: five further percentage points on insulation from Q1 2027.
+   *
+   * Stated, not derived. The KfW asks for an Energie**bedarfs**ausweis; this app's own screening
+   * models a class from geometry and build-ups, and passing that off as the Ausweis would be the
+   * program vouching for a document it has never seen. So the two fields are what the certificate
+   * says, and the row reports whether that meets the definition — never whether the model does.
+   */
+  private buildWpbExpander(profil: FoerderProfil): Adw.ExpanderRow {
+    const wpb = istWorstPerformingBuilding({
+      ...(profil.endenergiebedarfKwhM2a != null
+        ? { endenergiebedarfKwhM2a: profil.endenergiebedarfKwhM2a }
+        : {}),
+      ...(profil.energieklasse ? { energieklasse: profil.energieklasse as Energieklasse } : {}),
+    });
+    const row = new Adw.ExpanderRow({
+      title: 'Worst Performing Building (+5 %)',
+      subtitle: wpb
+        ? 'Nachweis erfüllt die Definition — ab Antrag Q1 2027'
+        : 'Angaben laut Energiebedarfsausweis — nicht aus dem Modell',
+    });
+    const badge = new Gtk.Label({ label: wpb ? '✓ erfüllt' : 'offen', valign: Gtk.Align.CENTER });
+    badge.add_css_class(wpb ? 'success' : 'dim-label');
+    badge.add_css_class('caption-heading');
+    row.add_suffix(badge);
+
+    const datum = new Adw.EntryRow({ title: 'Antragseingang (JJJJ-MM-TT)' });
+    datum.set_show_apply_button(true);
+    datum.set_text(profil.antragsdatum ?? '');
+    datum.connect('apply', () => {
+      const text = (datum.get_text() ?? '').trim();
+      if (text && !/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+        datum.add_css_class('error');
+        return;
+      }
+      datum.remove_css_class('error');
+      this.store.setFoerderProfil({ antragsdatum: text || undefined });
+    });
+    row.add_row(datum);
+
+    const bedarf = new Adw.EntryRow({ title: 'Endenergiebedarf laut Ausweis (kWh/m²·a)' });
+    bedarf.set_show_apply_button(true);
+    bedarf.set_text(profil.endenergiebedarfKwhM2a != null ? String(profil.endenergiebedarfKwhM2a) : '');
+    bedarf.connect('apply', () => {
+      const text = (bedarf.get_text() ?? '').trim();
+      if (!text) {
+        this.store.setFoerderProfil({ endenergiebedarfKwhM2a: undefined });
+        return;
+      }
+      const value = parseGermanNumber(text);
+      if (value == null || value <= 0) {
+        bedarf.add_css_class('error');
+        return;
+      }
+      bedarf.remove_css_class('error');
+      this.store.setFoerderProfil({ endenergiebedarfKwhM2a: value });
+    });
+    row.add_row(bedarf);
+
+    const klasse = new Adw.ComboRow({ title: 'Energieeffizienzklasse laut Ausweis' });
+    klasse.set_model(Gtk.StringList.new(['(keine Angabe)', ...ENERGIEKLASSEN]));
+    // The stored value is a plain string (core carries no materials types), so the lookup is by
+    // string too — a class this build does not know reads as „keine Angabe" rather than throwing.
+    const klassen: readonly string[] = ENERGIEKLASSEN;
+    klasse.set_selected(Math.max(0, klassen.indexOf(profil.energieklasse ?? '') + 1));
+    klasse.connect('notify::selected', () => {
+      const index = klasse.get_selected();
+      this.store.setFoerderProfil({ energieklasse: index === 0 ? undefined : klassen[index - 1] });
+    });
+    row.add_row(klasse);
+
+    const antraege = new Adw.SpinRow({
+      title: 'Bisherige WPB-Anträge für dieses Gebäude',
+      subtitle: 'Der Bonus wird höchstens dreimal je Gebäude gewährt.',
+      adjustment: new Gtk.Adjustment({ value: profil.wpbAntraegeBisher ?? 0, lower: 0, upper: 3, stepIncrement: 1 }),
+      digits: 0,
+    });
+    antraege.connect('notify::value', () =>
+      this.store.setFoerderProfil({ wpbAntraegeBisher: Math.round(antraege.get_value()) }),
+    );
+    row.add_row(antraege);
+    return row;
   }
 
   /**
@@ -204,7 +296,10 @@ export class KostenView extends Gtk.Box {
    */
   private buildAmortisation(home: HomeData): Adw.PreferencesGroup {
     const energy = this.store.energy()!;
-    const roadmap = computeRoadmap(energy.envelope, { foerderung: true, isfpBonus: this.isfp });
+    const roadmap = computeRoadmap(energy.envelope, {
+      foerderung: true,
+      isfpBonus: this.store.foerderProfil.isfpBonus !== false,
+    });
     const a = computeAmortisation({
       endenergieHeuteKwhM2a: energy.heute.endenergieKwhM2a,
       endenergieZielKwhM2a: energy.ziel.endenergieKwhM2a,
