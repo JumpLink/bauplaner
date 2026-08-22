@@ -14,11 +14,13 @@ import GObject from '@girs/gobject-2.0';
 
 import type { DocumentStore } from '../document-store.ts';
 import { Ansicht3dView } from './ansicht3d-view.ts';
+import { AufmassView } from './aufmass-view.ts';
 import { GrundrissView } from './grundriss-view.ts';
 
 const TABS: { id: string; label: string }[] = [
   { id: 'grundriss', label: 'Grundriss' },
   { id: 'ansicht3d', label: '3D' },
+  { id: 'aufmass', label: 'Aufmaß' },
 ];
 
 export class ModellView extends Gtk.Box {
@@ -35,10 +37,14 @@ export class ModellView extends Gtk.Box {
     this.stack.set_vexpand(true);
     this.stack.add_named(new GrundrissView(window, store), 'grundriss');
     this.stack.add_named(new Ansicht3dView(window, store), 'ansicht3d');
+    // A third projection of the same model: not a picture of it, but its measurements — the numbers
+    // every quote is written against, and until now only `bauplaner envelope` could show them.
+    this.stack.add_named(new AufmassView(store), 'aufmass');
 
-    // Initial tab: BP_APP_MODELTAB ('grundriss' | 'ansicht3d' | '3d'), else plan.
+    // Initial tab: BP_APP_MODELTAB ('grundriss' | 'ansicht3d' | '3d' | 'aufmass'), else plan.
     const envTab = globalThis.process?.env?.BP_APP_MODELTAB;
-    const initial = envTab === 'ansicht3d' || envTab === '3d' ? 'ansicht3d' : 'grundriss';
+    const initial =
+      envTab === 'ansicht3d' || envTab === '3d' ? 'ansicht3d' : envTab === 'aufmass' ? 'aufmass' : 'grundriss';
     this.stack.set_visible_child_name(initial);
 
     this.append(this.buildSwitcher(initial));

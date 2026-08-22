@@ -8,6 +8,7 @@
 #
 #   BP_APP_SIZE="W H"       window size, applied BEFORE the window is mapped (preferred)
 #   BP_APP_SCROLL=          scroll the visible view: "end" or a fraction 0..1
+#   BP_APP_MODELTAB=        Modell tab: grundriss | ansicht3d | aufmass
 #   BP_SHOT_SIZE="W H"      window size via devtools AFTER mapping
 #   BP_SHOT_SETTLE=s        seconds to settle before capturing (default 2.5)
 #   BP_APP_DIALOG=          open a dialog on start: "kosten-add", "aufbau" (layer editor on the
@@ -57,6 +58,7 @@ setsid env GJSIFY_DEVTOOLS=1 BP_APP_ID="$APP_ID" BP_APP_FILE="$SH3D" BP_APP_VIEW
     BP_APP_DIALOG="${BP_APP_DIALOG:-}" \
     BP_APP_SIZE="${BP_APP_SIZE:-}" \
     BP_APP_SCROLL="${BP_APP_SCROLL:-}" \
+    BP_APP_MODELTAB="${BP_APP_MODELTAB:-}" \
     bash -c "cd \"$CLI\" && exec \"$GJSIFY\" run start:app" >/tmp/bauplaner-shot.log 2>&1 &
 APP_PID=$!
 trap 'kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true' EXIT
