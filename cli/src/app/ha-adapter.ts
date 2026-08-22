@@ -11,6 +11,7 @@
  */
 
 import type { DocumentStore } from './document-store.ts';
+import { loadHaConfig } from './ha-config.ts';
 
 export interface HaRefreshResult {
   recorded: number;
@@ -29,11 +30,14 @@ const METRIC_TITLE = { temperature: 'Raumtemperatur', humidity: 'Luftfeuchte', c
  * Returns how many readings were recorded, or an error string to show the user.
  */
 export async function refreshFromHomeAssistant(store: DocumentStore): Promise<HaRefreshResult> {
-  const env = globalThis.process?.env ?? {};
-  const url = (env.HA_URL || env.HOMEASSISTANT_URL || '').replace(/\/+$/, '');
-  const token = env.HA_TOKEN || env.HOMEASSISTANT_TOKEN || '';
+  // From the environment where set, else from the per-user config the app can actually write. The
+  // env-only version was unreachable from a packaged build, which is the only version a user has.
+  const config = loadHaConfig();
   const entities = store.raumklimaEntities;
-  if (!url || !token) return { recorded: 0, error: 'Home Assistant nicht konfiguriert — HA_URL und HA_TOKEN setzen.' };
+  if (!config) {
+    return { recorded: 0, error: 'Home Assistant nicht eingerichtet — Adresse und Token hinterlegen.' };
+  }
+  const { url, token } = config;
   if (!entities || Object.keys(entities).length === 0) {
     return { recorded: 0, error: 'Keine Raum-Sensor-Zuordnung (project.raumklima.entities).' };
   }

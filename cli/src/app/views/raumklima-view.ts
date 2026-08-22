@@ -6,6 +6,7 @@
  */
 
 import Adw from '@girs/adw-1';
+import GLib from '@girs/glib-2.0';
 import GObject from '@girs/gobject-2.0';
 import Gtk from '@girs/gtk-4.0';
 
@@ -13,6 +14,7 @@ import { assessRoomClimate, deriveRoomClimate, type ClimateStatus, type RoomClim
 
 import type { DocumentStore } from '../document-store.ts';
 import { refreshFromHomeAssistant } from '../ha-adapter.ts';
+import { haConfigPath, loadHaConfig, saveHaConfig } from '../ha-config.ts';
 import { escapeMarkup } from '../../format.ts';
 
 const STATUS_LABEL: Record<ClimateStatus, string> = { good: 'gut', warn: 'Warnung', bad: 'Alarm' };
@@ -30,6 +32,14 @@ export class RaumklimaView extends Gtk.Box {
     this.store = store;
     store.subscribe(() => this.render());
     this.render();
+
+    // Dev hook: open the Home Assistant setup dialog straight away (for screenshots).
+    if (globalThis.process?.env?.BP_APP_DIALOG === 'homeassistant') {
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        this.openHaDialog(new Gtk.Label({ label: '' }));
+        return GLib.SOURCE_REMOVE;
+      });
+    }
   }
 
   private setChild(widget: Gtk.Widget): void {
@@ -84,6 +94,14 @@ export class RaumklimaView extends Gtk.Box {
         .catch((e: unknown) => status.set_text(String(e)));
     });
     header.append(refresh);
+    const configure = new Gtk.Button({
+      iconName: 'emblem-system-symbolic',
+      tooltipText: 'Home Assistant einrichten',
+      valign: Gtk.Align.CENTER,
+    });
+    configure.add_css_class('flat');
+    configure.connect('clicked', () => this.openHaDialog(status));
+    header.append(configure);
     column.append(header);
 
     if (withReadings.length === 0) {
@@ -91,7 +109,9 @@ export class RaumklimaView extends Gtk.Box {
         new Adw.StatusPage({
           iconName: 'weather-few-clouds-symbolic',
           title: 'Keine Sensorwerte',
-          description: 'Räume mit Messwerten verknüpfen oder Home Assistant verbinden (HA_URL / HA_TOKEN + Raum-Sensor-Zuordnung).',
+          description:
+            'Räume mit Messwerten verknüpfen oder Home Assistant verbinden — Adresse und Token über das ' +
+            'Zahnrad oben, die Raum-Sensor-Zuordnung im Projekt.',
           vexpand: true,
         }),
       );
@@ -125,6 +145,87 @@ export class RaumklimaView extends Gtk.Box {
     pill.add_css_class(`climate-${assessment.status}`);
     row.add_suffix(pill);
     return row;
+  }
+
+  /**
+   * Home Assistant einrichten: Adresse und Token.
+   *
+   * They are stored per machine, outside the project — a `.bauplan` gets handed to an architect,
+   * and a long-lived token in it would travel with every copy.
+   */
+  private openHaDialog(status: Gtk.Label): void {
+    const dialog = new Adw.Dialog();
+    dialog.set_title('Home Assistant');
+    dialog.set_content_width(480);
+
+    const current = loadHaConfig();
+    const group = new Adw.PreferencesGroup({
+      title: 'Zugang',
+      description: `Wird auf diesem Rechner gespeichert (${haConfigPath()}), nicht im Projekt.`,
+    });
+    const urlRow = new Adw.EntryRow({ title: 'Adresse (z. B. http://homeassistant.local:8123)' });
+    urlRow.set_text(current?.url ?? '');
+    const tokenRow = new Adw.PasswordEntryRow({
+      title: current?.token ? 'Token (hinterlegt — leer lassen zum Beibehalten)' : 'Langlebiges Zugriffstoken',
+    });
+    group.add(urlRow);
+    group.add(tokenRow);
+
+    const banner = new Adw.Banner({ revealed: false });
+    const bannerGroup = new Adw.PreferencesGroup();
+    bannerGroup.add(banner);
+    const page = new Adw.PreferencesPage();
+    page.add(bannerGroup);
+    page.add(group);
+
+    const cancel = new Gtk.Button({ label: 'Abbrechen' });
+    cancel.connect('clicked', () => dialog.close());
+    const save = new Gtk.Button({ label: 'Speichern' });
+    save.add_css_class('suggested-action');
+    save.connect('clicked', () => {
+      const url = urlRow.get_text().trim().replace(/\/+$/, '');
+      // An empty token field KEEPS the stored one — otherwise correcting a typo in the URL would
+      // silently clear the token, and the next refresh would fail for a reason nobody typed.
+      const token = tokenRow.get_text().trim() || current?.token || '';
+      if (!url || !token) {
+        banner.set_title(!url ? 'Die Adresse fehlt.' : 'Das Token fehlt.');
+        banner.set_revealed(true);
+        return;
+      }
+      if (!/^https?:\/\//.test(url)) {
+        banner.set_title('Die Adresse braucht http:// oder https:// davor.');
+        banner.set_revealed(true);
+        return;
+      }
+      const error = saveHaConfig({ url, token });
+      if (error) {
+        banner.set_title(`Nicht gespeichert: ${error}`);
+        banner.set_revealed(true);
+        return;
+      }
+      status.set_text('Zugang gespeichert');
+      dialog.close();
+    });
+
+    const header = new Adw.HeaderBar({ showEndTitleButtons: false, showStartTitleButtons: false });
+    header.pack_start(cancel);
+    header.pack_end(save);
+    if (current) {
+      const clear = new Gtk.Button({ label: 'Entfernen' });
+      clear.add_css_class('destructive-action');
+      clear.connect('clicked', () => {
+        const error = saveHaConfig(null);
+        status.set_text(error ? `Nicht entfernt: ${error}` : 'Zugang entfernt');
+        dialog.close();
+      });
+      header.pack_end(clear);
+    }
+
+    const toolbar = new Adw.ToolbarView();
+    toolbar.add_top_bar(header);
+    toolbar.set_content(page);
+    dialog.set_child(toolbar);
+    dialog.present(this);
   }
 
   private scroll(column: Gtk.Widget): Gtk.Widget {
