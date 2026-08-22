@@ -6,6 +6,8 @@ import {
   applyEditToHome,
   diffGeometryEdits,
   homeToGeometryEdits,
+  computeEnvelope,
+  computeOpenings,
   invertEdit,
   parseSh3dBytes,
   writeSh3dBytes,
@@ -153,6 +155,128 @@ export default async () => {
       );
       const rounded = applyEditToHome(orig, { op: 'moveWall', id: 'w1', xStart: 10, yStart: 0, xEnd: 400, yEnd: 0 });
       expect(diffGeometryEdits(orig, rounded).length).toBe(0);
+    });
+  });
+
+  await describe('invertEdit — openings', async () => {
+    const OPEN_XML =
+      `<home>` +
+      `<level id="L0" name="EG" elevation="0" height="250" floorThickness="12"/>` +
+      `<wall id="w1" level="L0" xStart="0" yStart="0" xEnd="400" yEnd="0" height="250" thickness="24"/>` +
+      `<doorOrWindow id="dw1" level="L0" name="Fenster" x="200" y="0" elevation="85" angle="0" width="120" depth="24" height="140"/>` +
+      `</home>`;
+    const openHome = (): ReturnType<typeof parseSh3dBytes> =>
+      parseSh3dBytes(zipSync({ 'Home.xml': strToU8(OPEN_XML) }));
+
+    /** Apply an edit, then its inverse, and expect the original geometry back. */
+    const roundTrip = (edit: GeometryEdit): void => {
+      const before = openHome();
+      const inverse = invertEdit(before, edit);
+      expect(inverse !== null).toBe(true);
+      const after = applyEditToHome(applyEditToHome(before, edit), inverse as GeometryEdit);
+      expect(json(after.furniture)).toBe(json(before.furniture));
+      // Undo must restore the opening WITHOUT disturbing the walls.
+      expect(json(after.walls)).toBe(json(before.walls));
+    };
+
+    await it('undoes a move, a resize and a removal', () => {
+      roundTrip({ op: 'moveOpening', id: 'dw1', x: 300, y: 0, angle: 1 });
+      roundTrip({ op: 'setOpeningSize', id: 'dw1', width: 60, height: 90, elevation: 100 });
+      roundTrip({ op: 'removeOpening', id: 'dw1' });
+    });
+
+    await it('undoes an add by removing it', () => {
+      const home = openHome();
+      const add: GeometryEdit = {
+        op: 'addOpening',
+        id: 'dw2',
+        level: 'L0',
+        name: 'Tuer',
+        x: 50,
+        y: 0,
+        angle: 0,
+        width: 90,
+        depth: 24,
+        height: 200,
+        elevation: 0,
+      };
+      const added = applyEditToHome(home, add);
+      expect(added.furniture.length).toBe(home.furniture.length + 1);
+      const inverse = invertEdit(added, add);
+      expect(json(inverse)).toBe(json({ op: 'removeOpening', id: 'dw2' }));
+      expect(json(applyEditToHome(added, inverse as GeometryEdit).furniture)).toBe(json(home.furniture));
+    });
+
+    // A re-add must not invent a `model` the archive has no entry for — that is a file that fails
+    // to load, not one that merely renders without a 3D model.
+    await it('does not fabricate a model reference when re-adding', () => {
+      const home = openHome();
+      const inverse = invertEdit(home, { op: 'removeOpening', id: 'dw1' });
+      expect(inverse !== null).toBe(true);
+      expect('model' in (inverse as Record<string, unknown>)).toBe(false);
+    });
+
+    await it('returns null for an unknown opening id', () => {
+      expect(invertEdit(openHome(), { op: 'moveOpening', id: 'nope', x: 1, y: 2, angle: 0 })).toBe(null);
+      expect(invertEdit(openHome(), { op: 'removeOpening', id: 'nope' })).toBe(null);
+    });
+  });
+
+  // The point of an opening edit is not the XML — it is that placing a window immediately reaches
+  // the plan and the energy screening. Both derive openings from GEOMETRY (a piece is snapped onto
+  // the wall it projects into), so this asserts the placement actually lands on the wall rather
+  // than merely being appended to the furniture list.
+  await describe('a placed opening reaches the plan and the takeoff', async () => {
+    const WALLED =
+      `<home>` +
+      `<level id="L0" name="EG" elevation="0" height="250" floorThickness="12"/>` +
+      `<wall id="w1" level="L0" xStart="0" yStart="0" xEnd="400" yEnd="0" height="250" thickness="24"/>` +
+      `<wall id="w2" level="L0" xStart="400" yStart="0" xEnd="400" yEnd="300" height="250" thickness="24"/>` +
+      `<wall id="w3" level="L0" xStart="400" yStart="300" xEnd="0" yEnd="300" height="250" thickness="24"/>` +
+      `<wall id="w4" level="L0" xStart="0" yStart="300" xEnd="0" yEnd="0" height="250" thickness="24"/>` +
+      `<room id="r1" name="Raum" level="L0"><point x="0" y="0"/><point x="400" y="0"/><point x="400" y="300"/><point x="0" y="300"/></room>` +
+      `</home>`;
+    const walled = (): ReturnType<typeof parseSh3dBytes> =>
+      parseSh3dBytes(zipSync({ 'Home.xml': strToU8(WALLED) }));
+
+    const place: GeometryEdit = {
+      op: 'addOpening',
+      id: 'dw-new',
+      level: 'L0',
+      name: 'Fenster',
+      x: 200,
+      y: 0,
+      angle: 0,
+      width: 120,
+      depth: 24,
+      height: 140,
+      elevation: 85,
+    };
+
+    await it('cuts the opening into the wall it was placed on', () => {
+      const before = walled();
+      expect(computeOpenings(before).get('w1') === undefined).toBe(true);
+
+      const after = applyEditToHome(before, place);
+      const cut = computeOpenings(after).get('w1');
+      expect(cut !== undefined).toBe(true);
+      expect(cut?.length).toBe(1);
+    });
+
+    await it('adds its glazing area to the envelope takeoff', () => {
+      const before = computeEnvelope(walled());
+      const after = computeEnvelope(applyEditToHome(walled(), place));
+
+      expect(after.windowCount).toBe(before.windowCount + 1);
+      // 120 cm x 140 cm = 1.68 m2 of glazing, which is what the heat-loss screening consumes.
+      expect(Number((after.windowM2 - before.windowM2).toFixed(2))).toBe(1.68);
+    });
+
+    await it('takes the area back out again when the opening is removed', () => {
+      const placed = applyEditToHome(walled(), place);
+      const removed = applyEditToHome(placed, { op: 'removeOpening', id: 'dw-new' });
+      expect(computeEnvelope(removed).windowM2).toBe(computeEnvelope(walled()).windowM2);
+      expect(computeOpenings(removed).get('w1') === undefined).toBe(true);
     });
   });
 };

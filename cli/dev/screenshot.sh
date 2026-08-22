@@ -10,6 +10,8 @@
 #   BP_APP_SCROLL=          scroll the visible view: "end" or a fraction 0..1
 #   BP_APP_MODELTAB=        Modell tab: grundriss | ansicht3d | aufmass
 #   BP_APP_TAPE="x1 z1 x2 z2"  Messwerkzeug wählen und ein Maß legen (Weltmeter)
+#   BP_APP_OPENING="x z"    Öffnungswerkzeug wählen und ein Fenster in die nächste Wand setzen
+#                           (Weltmeter) — ein Klick auf die Leinwand ist headless nicht zustellbar
 #   BP_SHOT_SIZE="W H"      window size via devtools AFTER mapping
 #   BP_SHOT_SETTLE=s        seconds to settle before capturing (default 2.5)
 #   BP_APP_DIALOG=          open a dialog on start: "kosten-add", "aufbau" (layer editor on the

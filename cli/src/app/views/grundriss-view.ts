@@ -44,6 +44,7 @@ import {
 import type { DocumentStore } from '../document-store.ts';
 import { buildWelcome } from '../welcome.ts';
 import { buildLegend, buildLevelControl, buildModeControls } from '../model-overlays.ts';
+import { planOpeningPlacement } from '../../opening-placement.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
 import { KINDS_BY_TRADE, KIND_LABELS, TRADE_META } from '../tga.ts';
 import { renderInspector } from '../wall-inspector-card.ts';
@@ -190,7 +191,9 @@ export class GrundrissView extends Gtk.Box {
   private geomPreview: { x: number; z: number } | null = null;
   private selectedGeom: GeomCluster | null = null;
   // Geometry sub-tool: reshape existing (select), draw a new wall (draw), or measure (messen).
-  private geomTool: 'select' | 'draw' | 'messen' = 'select';
+  private geomTool: 'select' | 'draw' | 'messen' | 'opening' = 'select';
+  /** Set by BP_APP_OPENING; applied on the first render that has a model (see the hook below). */
+  private pendingOpening: { x: number; z: number } | null = null;
   /**
    * The measuring tape: two world points, or null.
    *
@@ -238,6 +241,22 @@ export class GrundrissView extends Gtk.Box {
         printerr(`[app] BP_APP_TAPE="${tapeHook}" braucht vier Zahlen: x1 z1 x2 z2`);
       }
     }
+    // Dev hook: BP_APP_OPENING="x z" (world metres) selects the Öffnung tool and puts a window
+    // into the wall nearest that point. Same reason BP_APP_TAPE exists: this tool's whole gesture
+    // is a CLICK on a canvas point, and no headless transport can click one — without the hook the
+    // placement would be the one part of the tool that ships unseen. It runs the REAL placement
+    // path, not a parallel copy, so what the screenshot shows is what a click does.
+    const openingHook = env?.BP_APP_OPENING;
+    if (openingHook) {
+      const [ox, oz] = openingHook.trim().split(/\s+/).map(Number);
+      if (Number.isFinite(ox) && Number.isFinite(oz)) {
+        this.editTarget = 'geometrie';
+        this.geomTool = 'opening';
+        this.pendingOpening = { x: ox, z: oz };
+      } else {
+        printerr(`[app] BP_APP_OPENING="${openingHook}" braucht zwei Zahlen: x z`);
+      }
+    }
     store.subscribe(() => this.render());
     this.render();
   }
@@ -253,6 +272,16 @@ export class GrundrissView extends Gtk.Box {
   }
 
   private render(): void {
+    // A BP_APP_OPENING placement waits for a model: BP_APP_FILE loads asynchronously, so at
+    // construction time there are no walls to put a window into. Cleared BEFORE placing, because
+    // the edit notifies the store and re-enters this method.
+    if (this.pendingOpening && this.store.home) {
+      const at = this.pendingOpening;
+      this.pendingOpening = null;
+      // No transform yet, and none needed: scale 1 with an unbounded pick radius means
+      // "the nearest wall, wherever it is", which is what a coordinate hook should mean.
+      this.placeOpening(at.x, at.z, 1, Number.POSITIVE_INFINITY);
+    }
     // Every render REPLACES the canvas widget, and a fresh widget has no focus. Without carrying
     // it over, a keyboard nudge would work exactly once: the commit rebuilds the view, focus is
     // gone, and the next arrow key goes nowhere — with no way to tell that from "the key does
@@ -378,6 +407,9 @@ export class GrundrissView extends Gtk.Box {
       if (this.editTarget === 'view') this.onClick(x, y);
       // Double-click a room edge in Geometrie/Auswählen inserts a vertex there.
       else if (this.editTarget === 'geometrie' && this.geomTool === 'select' && nPress >= 2) this.insertRoomVertexAt(x, y);
+      // A single click is the whole gesture for an opening: there is nothing to drag out, the wall
+      // supplies the position and the orientation.
+      else if (this.editTarget === 'geometrie' && this.geomTool === 'opening') this.insertOpeningAt(x, y);
     });
     area.add_controller(click);
 
@@ -816,9 +848,10 @@ export class GrundrissView extends Gtk.Box {
 
     // Sub-tool: reshape existing geometry vs. draw a new wall.
     const seg = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, cssClasses: ['linked'] });
-    const tools: { key: 'select' | 'draw' | 'messen'; label: string }[] = [
+    const tools: { key: 'select' | 'draw' | 'messen' | 'opening'; label: string }[] = [
       { key: 'select', label: 'Auswählen' },
       { key: 'draw', label: 'Wand zeichnen' },
+      { key: 'opening', label: 'Öffnung' },
       { key: 'messen', label: 'Messen' },
     ];
     let group: Gtk.ToggleButton | undefined;
@@ -853,7 +886,9 @@ export class GrundrissView extends Gtk.Box {
     box.append(row);
 
     const hint =
-      this.geomTool === 'messen'
+      this.geomTool === 'opening'
+        ? 'Klick auf eine Wand: Fenster einsetzen · rastet auf die Wandachse'
+        : this.geomTool === 'messen'
         ? 'Ziehen: Strecke messen · ohne Raster, das Maß bleibt stehen'
         : this.geomTool === 'draw'
           ? 'Ziehen: neue Wand · Raster 5 cm'
@@ -940,6 +975,57 @@ export class GrundrissView extends Gtk.Box {
     const points = room.vertices.map(([x, y]): [number, number] => [x, y]);
     points.splice(best.index, 0, [Math.round(snap(best.px) * 100), Math.round(snap(best.py) * 100)]);
     this.store.editGeometry([{ op: 'setRoomPoints', id: best.roomId, points }], 'Raumpunkt hinzufügen');
+  }
+
+  /**
+   * Place a window in the wall under the pointer (Öffnung tool).
+   *
+   * The geometry — snapping onto the wall centreline, clamping the centre so the opening stays
+   * inside the wall — lives in {@link planOpeningPlacement}, which is where it can be tested. This
+   * only converts the pointer to world coordinates and turns the answer into an undoable edit.
+   */
+  private insertOpeningAt(sx: number, sy: number): void {
+    const t = this.transform;
+    if (!t) return;
+    this.placeOpening((sx - t.offX) / t.s, (sy - t.offY) / t.s, t.s);
+  }
+
+  /**
+   * Put a window into the wall nearest (`xM`, `zM`), in world metres.
+   *
+   * `scale` is what turns the pick radius into a world distance, so a hook that has no transform
+   * passes a scale of 1 together with an unbounded radius — "the nearest wall, wherever it is".
+   */
+  private placeOpening(xM: number, zM: number, scale: number, pickPx?: number): void {
+    const home = this.store.home;
+    if (!home) return;
+    const placement = planOpeningPlacement({
+      walls: home.walls,
+      xM,
+      zM,
+      scale,
+      isolatedLevel: this.isolatedLevel || undefined,
+      ...(pickPx === undefined ? {} : { defaults: { pickPx } }),
+    });
+    if (!placement) return;
+    this.store.editGeometry(
+      [
+        {
+          op: 'addOpening',
+          id: this.nextId('window'),
+          level: placement.level,
+          name: 'Fenster',
+          x: placement.x,
+          y: placement.y,
+          angle: placement.angle,
+          width: placement.width,
+          depth: placement.depth,
+          height: placement.height,
+          elevation: placement.elevation,
+        },
+      ],
+      'Fenster einsetzen',
+    );
   }
 
   /** How many project references (assembly/diagnosis/docs) anchor to a wall id. */
