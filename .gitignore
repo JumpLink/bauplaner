@@ -16,3 +16,6 @@ dist/
 # ships ~4.5 MB of redistributable Adwaita fonts. The design deliverables we DO
 # track are the .dc.html sources + docs/ concept + app-ui screenshots.
 docs/entwurf_v3/_ds/
+
+# `gjsify ship` output — built artefacts, never committed.
+cli/ship/

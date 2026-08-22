@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Bauplaner — app icon.
+
+  The subject is the ecological retrofit of an old building, so the icon is the one thing that
+  work is actually about: a wall in section, with the insulation layer added to it. A house
+  outline alone would say "any building app"; the visible layer says which part of the building
+  this program has an opinion about.
+
+  Flat shapes and one accent, no gradients: an icon is read at 32 px far more often than at 128,
+  and a gradient is mud at that size.
+-->
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="house">
+      <path d="M64 16 118 60 118 112 10 112 10 60 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Ground shadow, so the house sits rather than floats. -->
+  <ellipse cx="64" cy="114" rx="52" ry="5" fill="#000" opacity="0.10"/>
+
+  <!-- Masonry: the existing building. -->
+  <path d="M64 16 118 60 118 112 10 112 10 60 Z" fill="#c9b8a4"/>
+
+  <!-- The added insulation layer, following the outer wall — the retrofit itself. -->
+  <g clip-path="url(#house)">
+    <path d="M64 16 118 60 118 112 10 112 10 60 Z" fill="none" stroke="#4a9e6f" stroke-width="14"/>
+  </g>
+
+  <!-- Roof line, drawn over both so the eaves read cleanly. -->
+  <path d="M64 12 124 61 118 68 64 24 10 68 4 61 Z" fill="#8c7a66"/>
+
+  <!-- One window: scale cue. Its warm fill is the only other colour, so it reads as "inhabited". -->
+  <rect x="52" y="66" width="24" height="26" rx="2" fill="#f2c063"/>
+  <path d="M64 66 64 92 M52 79 76 79" stroke="#8c7a66" stroke-width="3"/>
+</svg>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Bauplaner — symbolic icon (single colour, 16 px grid).
+
+  Symbolic icons are recoloured by the theme, so nothing but `currentColor`, and nothing thinner
+  than 1 px on the grid: at 16 px a hairline disappears on a HiDPI downscale.
+
+  `fill-rule="evenodd"` is what makes the house a hollow outline rather than a black blob — with
+  the default `nonzero` the inner contour is swallowed and the icon reads as a filled pentagon.
+-->
+<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+  <path fill="currentColor" fill-rule="evenodd" d="M8 1 0.8 7.4l1 1.1L2 8.4V15h12V8.4l0.2 0.1 1-1.1zM3 7.5 8 3l5 4.5V14H3zm2 1.5h6v1H5zm1.5 2h3v3h-3z"/>
+</svg>
