@@ -255,7 +255,7 @@ export default async () => {
       expect(heizung.foerdersatz).toBe(0.46);
       expect(heizung.mengeQuelle).toBe('ohne');
       expect(heizung.mengeM2).toBe(0);
-      // 20.000 € netto → 23.800 € brutto, unter dem Höchstbetrag von 28.000 €.
+      // 20.000 € net → 23.800 € gross, under the Höchstbetrag of 28.000 €.
       expect(heizung.bemessungsgrundlageEur).toBeCloseTo(23_800, 2);
       expect(heizung.foerderungEur).toBeCloseTo(10_948, 2);
       // The Nr. 5.3 ceiling is a different one and must not be the envelope's.
@@ -318,8 +318,8 @@ export default async () => {
         plan([...zwei(2026, 2026)].reverse(), { bemessung: 'netto', isfpBonus: true }),
       );
       expect(vorwaerts.foerderungEur).toBeCloseTo(rueckwaerts.foerderungEur, 2);
-      // 30.000 € zu 15 % + 10.000 € zu 20 % — der iSFP-Bonus greift nur oberhalb
-      // der Basis-Höchstgrenze, und er greift auf die Jahressumme.
+      // 30.000 € at 15 % + 10.000 € at 20 % — the iSFP bonus applies only above the
+      // base Höchstgrenze, and it applies to the year's total.
       expect(vorwaerts.foerderungEur).toBeCloseTo(6500, 2);
     });
   });
@@ -378,7 +378,7 @@ export default async () => {
       expect(knapp.posten[0].foerdersatz).toBe(0);
       expect(knapp.posten[0].eigenanteilEur).toBeCloseTo(knapp.posten[0].kostenBruttoEur, 2);
       expect(knapp.posten[0].hinweise.some((h) => h.includes('Keine Förderung'))).toBe(true);
-      // 2 cm mehr Dämmung, und dieselbe Wand wird gefördert.
+      // 2 cm more insulation, and the same wall qualifies for funding.
       const reicht = computeBudget(SCHMAL, plan([{ bauteil: 'aussenwand', aufbau: WAND_180 }]));
       expect(reicht.posten[0].foerderungEur > 0).toBe(true);
     });

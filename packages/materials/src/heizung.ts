@@ -138,7 +138,7 @@ export const KLIMAGESCHWINDIGKEITS_BONUS_PUNKTE: Zeitreihe<number> = [
 ];
 
 /**
- * Wertschöpfungs-Bonus in Prozentpunkten — Nr. 8.4.6, ab Quartal 1 2027, nur für
+ * Wertschöpfungs-Bonus in percentage points — Nr. 8.4.6, from Q1 2027, only for
  * Nr. 5.3 c, „wenn die geförderte Wärmepumpe ihren Ursprung in der Union hat".
  *
  * The value is what the Richtlinie states; whether a given pump earns it is a
@@ -173,8 +173,8 @@ export const WERTSCHOEPFUNG_UNKLAR =
  *   is a change against the earlier Fassung, where the wording was read as
  *   per-year, and it is exactly the kind of detail a staged retrofit plan is
  *   built on.
- * - it **shrinks**: 28 000 € bis 31.01.2027, danach alle sechs Monate 750 €
- *   weniger, bis 22 000 € ab 01.08.2030. Deferring the heat pump costs money
+ * - it **shrinks**: 28 000 € until 31.01.2027, then 750 € less every six months,
+ *   down to 22 000 € from 01.08.2030. Deferring the heat pump costs money
  *   twice over — a lower ceiling and a smaller Klimageschwindigkeits-Bonus.
  *
  * Applied as a ceiling on the **förderfähige Ausgaben**, not on the payout: the
@@ -304,7 +304,7 @@ export function heizungsHoechstbetragAm(datum: string): number {
   return reiheWert(HEIZUNG_HOECHSTBETRAG, datum, 'Förderhöchstbetrag Nr. 5.3');
 }
 
-/** Grundförderung für eine Wärmepumpe (Nr. 5.3 c) am Antragstag, Prozentpunkte. */
+/** Grundförderung for a heat pump (Nr. 5.3 c) on the application date, in percentage points. */
 export function waermepumpeGrundfoerderungPunkteAm(datum: string): number {
   return reiheWert(WAERMEPUMPE_GRUNDFOERDERUNG_PUNKTE, datum, 'Grundförderung Nr. 5.3 c');
 }
@@ -429,13 +429,13 @@ export interface HeizungsfoerderungInput {
   /** The heating being replaced, for the Klimageschwindigkeits-Bonus. */
   altanlage?: Altanlage;
   /**
-   * Eigenbauanlage oder Prototyp — „Anlagen, die in weniger als vier Exemplaren
+   * Self-built plant or prototype — „Anlagen, die in weniger als vier Exemplaren
    * betrieben werden oder betrieben worden sind". Excluded from funding
    * entirely (Nr. 5.3).
    */
   eigenbau?: boolean;
   /**
-   * Gebrauchte Anlage oder eine „mit wesentlich gebraucht erworbenen
+   * A used plant, or one „mit wesentlich gebraucht erworbenen
    * Anlagenteilen" — excluded from funding entirely (Nr. 5.3).
    */
   gebraucht?: boolean;
@@ -655,7 +655,7 @@ export function computeHeizungsfoerderung(input: HeizungsfoerderungInput): Heizu
     },
   ];
 
-  // Einkommens-Bonus (Nr. 8.4.5) — selbstnutzend, und nur mit bekanntem zvE.
+  // Einkommens-Bonus (Nr. 8.4.5) — owner-occupied, and only with a known zvE.
   const selbstnutzend = input.selbstnutzend ?? true;
   const kinder = Math.trunc(pruefeBetrag(input.kinderUnter18, 'kinderUnter18'));
   const massgeblich =

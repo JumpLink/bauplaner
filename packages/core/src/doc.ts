@@ -2,8 +2,8 @@
  * Documentation entries — the "Dokumentation" layer of the v3 concept: photos,
  * PDFs, measured readings and notes, each **anchored** to a building entity (a
  * wall, room, level, TGA node/edge, or the building itself) by its id. This is
- * how field evidence hangs off the model ("Foto aufnehmen → DocEntry mit Anker
- * wallId → erscheint in der Doku-Liste und im Inspektor der Wand").
+ * how field evidence hangs off the model ("take a photo → DocEntry anchored to a
+ * wallId → shows up in the Dokumentation list and in that wall's inspector").
  *
  * Our own layer with no Sweet Home 3D equivalent, so it rides in the project
  * sidecar. Pure data + derivations here; file I/O and rendering stay in the app.

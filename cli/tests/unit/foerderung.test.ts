@@ -54,8 +54,8 @@ export default async () => {
 
   await describe('die Höchstgrenze gilt pro Gebäude und Kalenderjahr', async () => {
     await it('leaves only the rest of the ceiling for a second measure', async () => {
-      // 20.000 € sind im selben Jahr schon verbraucht: von den nächsten 20.000 €
-      // sind nur 10.000 € anrechenbar, der Rest wird mit 0 % gefördert.
+      // 20.000 € of the same year are already used up: of the next 20.000 € only
+      // 10.000 € count, and the rest is funded at 0 %.
       const r = computeFoerderung(20000, { bereitsAusgeschoepftNet: 20000 });
       expect(r.foerderfaehigNet).toBe(10000);
       expect(r.foerderung).toBe(1500);
@@ -68,8 +68,8 @@ export default async () => {
       const ersteHaelfte = computeFoerderung(20000, { isfpBonus: true, bereitsAusgeschoepftNet: 0 });
       const zweiteHaelfte = computeFoerderung(25000, { isfpBonus: true, bereitsAusgeschoepftNet: 20000 });
       expect(ersteHaelfte.foerderung + zweiteHaelfte.foerderung).toBe(zusammen);
-      // Der iSFP-Bonus hängt am Jahresvolumen, nicht an der einzelnen Maßnahme:
-      // die erste Hälfte allein bliebe unter dem Mindestinvestitionsvolumen.
+      // The iSFP bonus hangs on the year's volume, not on the single measure: the
+      // first half alone would stay under the Mindestinvestitionsvolumen.
       expect(zweiteHaelfte.isfpBonusWirksam).toBe(true);
     });
 

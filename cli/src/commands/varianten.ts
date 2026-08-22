@@ -292,7 +292,7 @@ export const variantenCommand: CommandModule<object, VariantenArgs> = {
   handler: (args) => {
     const bauteil = args.bauteil;
 
-    // — Fläche: aus dem Aufmaß des Modells, mit --area als sichtbarem Override —
+    // — Area: from the model's Aufmaß, with --area as a visible override —
     let areaM2 = args.area;
     let flaechenQuelle = 'Fläche von Hand (--area)';
     if (args.file) {
