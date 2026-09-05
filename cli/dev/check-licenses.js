@@ -13,8 +13,16 @@
 // The counterpart in the Steuererklärung app (`app/dev/check-licenses.js`) does the same job for a
 // single workspace; this one walks the four `@bauplaner/*` packages plus `cli`. Two small copies
 // beat one shared package across two repositories that share no build.
+//
+// `--check` verifies the tracked NOTICE instead of writing it. NOTICE names every runtime
+// dependency WITH ITS VERSION, so a dependency bump invalidates it — and a generator that only
+// ever writes is silent about that: the 0.38.1 → 0.48.0 bump left three lines naming versions the
+// tree no longer contained, and nothing failed, because nothing compared. This is the comparing
+// half, and `check` runs it.
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+const CHECK_ONLY = process.argv.includes('--check');
 
 const ROOT = new URL('../..', import.meta.url).pathname;
 const WORKSPACES = ['cli', 'packages/core', 'packages/materials', 'packages/diagnose', 'packages/report'];
@@ -81,16 +89,33 @@ for (const e of entries) {
     if (ack?.note) lines.push(`      ${ack.note}`);
 }
 lines.push('');
-writeFileSync(NOTICE_FILE, lines.join('\n'), 'utf8');
+const notice = lines.join('\n');
 
 if (unresolved.length > 0) {
     console.error(`check-licenses: nicht auflösbar: ${unresolved.join(', ')} — erst \`gjsify install\`.`);
     process.exit(1);
 }
+if (!CHECK_ONLY) writeFileSync(NOTICE_FILE, notice, 'utf8');
 if (problems.length > 0) {
     console.error('check-licenses: Lizenz(en), die mehr als Namensnennung verlangen, ohne Entscheidung:');
     for (const p of problems) console.error(`  ${p.name}@${p.version} — ${p.license}`);
     console.error('Eintrag in licenses.acknowledged.json anlegen: { "<paket>": { "route": "…", "note": "…" } }.');
     process.exit(1);
 }
-console.log(`check-licenses: ${entries.length} Abhängigkeiten, alle Lizenzen geklärt. NOTICE geschrieben.`);
+
+// Compared LAST so an unacknowledged licence — the finding that matters more — is never hidden
+// behind a stale file.
+if (CHECK_ONLY) {
+    const tracked = existsSync(NOTICE_FILE) ? readFileSync(NOTICE_FILE, 'utf8') : '';
+    if (tracked !== notice) {
+        console.error('check-licenses: NOTICE ist veraltet — `gjsify run check:licenses` und das Ergebnis committen.');
+        const trackedLines = new Set(tracked.split('\n'));
+        const noticeLines = new Set(notice.split('\n'));
+        for (const line of noticeLines) if (line.trim() && !trackedLines.has(line)) console.error(`  + ${line.trim()}`);
+        for (const line of trackedLines) if (line.trim() && !noticeLines.has(line)) console.error(`  - ${line.trim()}`);
+        process.exit(1);
+    }
+}
+console.log(
+    `check-licenses: ${entries.length} Abhängigkeiten, alle Lizenzen geklärt. NOTICE ${CHECK_ONLY ? 'aktuell' : 'geschrieben'}.`,
+);
