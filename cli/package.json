@@ -89,7 +89,8 @@
                 "Energieberatung"
             ],
             "extraFiles": {
-                "share/icons/hicolor/symbolic/apps/eu.jumplink.Bauplaner-symbolic.svg": "data/icons/hicolor/symbolic/apps/eu.jumplink.Bauplaner-symbolic.svg"
+                "share/icons/hicolor/symbolic/apps/eu.jumplink.Bauplaner-symbolic.svg": "data/icons/hicolor/symbolic/apps/eu.jumplink.Bauplaner-symbolic.svg",
+                "share/doc/bauplaner/NOTICE": "../NOTICE"
             },
             "bundledTypelibs": [
                 "../node_modules/@gjsify/webgl-linux-x64/prebuilds/linux-x64"
