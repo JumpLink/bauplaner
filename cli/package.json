@@ -41,12 +41,12 @@
         "yargs": "^18.0.0"
     },
     "devDependencies": {
-        "@girs/adw-1": "^4.1.0",
-        "@girs/gio-2.0": "^4.1.0",
-        "@girs/glib-2.0": "^4.1.0",
-        "@girs/gobject-2.0": "^4.1.0",
-        "@girs/gtk-4.0": "^4.1.0",
-        "@girs/pango-1.0": "^4.1.0",
+        "@girs/adw-1": "4.6.0",
+        "@girs/gio-2.0": "4.6.0",
+        "@girs/glib-2.0": "4.6.0",
+        "@girs/gobject-2.0": "4.6.0",
+        "@girs/gtk-4.0": "4.6.0",
+        "@girs/pango-1.0": "4.6.0",
         "@gjsify/cli": "0.48.0",
         "@gjsify/node-globals": "0.48.0",
         "@gjsify/runtime": "0.48.0",
