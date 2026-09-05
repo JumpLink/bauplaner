@@ -16,7 +16,8 @@
 #   BP_SHOT_SETTLE=s        seconds to settle before capturing (default 2.5)
 #   BP_APP_DIALOG=          open a dialog on start: "kosten-add", "aufbau" (layer editor on the
 #                           wall’s own stack), "aufbau-daemmung" (on a retrofit build-up) or
-#                           "materialpreis" (eigenen Materialpreis setzen) oder "dachform"
+#                           "materialpreis" (eigenen Materialpreis setzen) oder "dachform".
+#                           The capture WAITS for the dialog and FAILS if it never opens
 #   BP_SHOT_ACTIVATE=       press a widget first, e.g. "GtkButton:suggested-action"
 #                           (type[:css-class]); the capture FAILS if it is missing or inert
 #
@@ -81,6 +82,20 @@ done
 if [ -n "${BP_SHOT_SIZE:-}" ]; then
   gdbus call --session --dest "$APP_ID" --object-path "$OBJ" \
     --method org.gjsify.Devtools.ResizeWindow ${BP_SHOT_SIZE} >/dev/null 2>&1 || true
+fi
+# A dialog opened by BP_APP_DIALOG is presented from an idle callback once its view has loaded, so
+# it appears some unknown time AFTER GetStatus first answers. `Screenshot` snapshots whatever frame
+# is on screen: taken during the fade-in it returns a half-transparent ghost of the dialog over the
+# page — measured twice, and it reads as a rendering bug rather than as the timing one it is. So
+# wait for the dialog to EXIST before settling, and refuse to produce a picture if it never does.
+# FindWidget does the walk inside the app (dbus-find.js).
+if [ -n "${BP_APP_DIALOG:-}" ]; then
+  DIALOG_UP=0
+  for _ in $(seq 1 40); do
+    if gjs -m "$HERE/dbus-find.js" "$APP_ID" "$OBJ" AdwDialog >/dev/null 2>&1; then DIALOG_UP=1; break; fi
+    sleep 0.5
+  done
+  [ "$DIALOG_UP" = 1 ] || { echo "BP_APP_DIALOG=$BP_APP_DIALOG opened no AdwDialog" >&2; exit 1; }
 fi
 sleep "${BP_SHOT_SETTLE:-2.5}"   # let the GSK renderer lay out a few frames
 
