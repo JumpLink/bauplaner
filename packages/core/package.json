@@ -1,6 +1,7 @@
 {
   "name": "@bauplaner/core",
   "version": "0.1.0",
+  "license": "AGPL-3.0-or-later",
   "private": true,
   "type": "module",
   "description": "Runtime-agnostic building model + importers (.sh3d parser). Pure TypeScript, runs on Node and GJS via gjsify.",
