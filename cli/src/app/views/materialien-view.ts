@@ -18,6 +18,7 @@ import { parseGermanNumber, type CostCategory, type CostStatus, type MaterialPri
 
 import type { DocumentStore } from '../document-store.ts';
 import { escapeMarkup, fmtEur } from '../../format.ts';
+import Template from './materialien-view.blp';
 
 const UNIT_LABEL: Record<Price['per'], string> = { m3: 'm³', t: 't', kg: 'kg', m2: 'm²' };
 
@@ -44,42 +45,28 @@ const nextStatus = (s: CostStatus): CostStatus =>
 
 export class MaterialienView extends Gtk.Box {
   static {
-    GObject.registerClass({ GTypeName: 'BauplanerMaterialienView' }, this);
+    GObject.registerClass(
+      {
+        GTypeName: 'BauplanerMaterialienView',
+        Template,
+        // Internal children arrive as `_<id>` — GJS's naming for an InternalChildren entry.
+        InternalChildren: ['view_stack', 'stamm_host', 'einkauf_host'],
+      },
+      this,
+    );
   }
 
+  declare private _view_stack: Adw.ViewStack;
+  declare private _stamm_host: Gtk.Box;
+  declare private _einkauf_host: Gtk.Box;
+
   private readonly store: DocumentStore;
-  private readonly stack = new Adw.ViewStack();
-  private readonly einkaufHost = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    hexpand: true,
-    vexpand: true,
-  });
   private einkaufChild?: Gtk.Widget;
-  /** Stamm lives in a host too, because its prices are now project data and change under it. */
-  private readonly stammHost = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    hexpand: true,
-    vexpand: true,
-  });
   private stammChild?: Gtk.Widget;
 
   constructor(store: DocumentStore) {
-    super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
+    super();
     this.store = store;
-
-    this.stack.add_titled(this.stammHost, 'stamm', 'Stamm');
-    this.stack.add_titled(this.einkaufHost, 'einkauf', 'Einkauf');
-    this.stack.set_vexpand(true);
-
-    const switcher = new Adw.ViewSwitcher({
-      stack: this.stack,
-      policy: Adw.ViewSwitcherPolicy.WIDE,
-      halign: Gtk.Align.CENTER,
-      marginTop: 12,
-      marginBottom: 4,
-    });
-    this.append(switcher);
-    this.append(this.stack);
 
     store.subscribe(() => {
       this.refreshStamm();
@@ -90,7 +77,7 @@ export class MaterialienView extends Gtk.Box {
 
     // Dev hook: open on a specific tab (for screenshots).
     const tab = globalThis.process?.env?.BP_APP_TAB;
-    if (tab === 'einkauf' || tab === 'stamm') this.stack.set_visible_child_name(tab);
+    if (tab === 'einkauf' || tab === 'stamm') this._view_stack.set_visible_child_name(tab);
 
     // Dev hook: open the price dialog on the one material that has no catalogue price — the case
     // the dialog exists for, and the one the variant comparison could previously only complain about.
@@ -107,9 +94,9 @@ export class MaterialienView extends Gtk.Box {
   // — Stamm: material master data —
 
   private refreshStamm(): void {
-    if (this.stammChild) this.stammHost.remove(this.stammChild);
+    if (this.stammChild) this._stamm_host.remove(this.stammChild);
     this.stammChild = this.buildStamm();
-    this.stammHost.append(this.stammChild);
+    this._stamm_host.append(this.stammChild);
   }
 
   private buildStamm(): Gtk.Widget {
@@ -271,9 +258,9 @@ export class MaterialienView extends Gtk.Box {
   // — Einkauf: cost register as a shopping list —
 
   private refreshEinkauf(): void {
-    if (this.einkaufChild) this.einkaufHost.remove(this.einkaufChild);
+    if (this.einkaufChild) this._einkauf_host.remove(this.einkaufChild);
     this.einkaufChild = this.buildEinkauf();
-    this.einkaufHost.append(this.einkaufChild);
+    this._einkauf_host.append(this.einkaufChild);
   }
 
   private buildEinkauf(): Gtk.Widget {
