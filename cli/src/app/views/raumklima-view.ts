@@ -16,19 +16,20 @@ import type { DocumentStore } from '../document-store.ts';
 import { refreshFromHomeAssistant } from '../ha-adapter.ts';
 import { haConfigPath, loadHaConfig, saveHaConfig } from '../ha-config.ts';
 import { escapeMarkup } from '../../format.ts';
+import Template from './raumklima-view.blp';
 
 const STATUS_LABEL: Record<ClimateStatus, string> = { good: 'gut', warn: 'Warnung', bad: 'Alarm' };
 
 export class RaumklimaView extends Gtk.Box {
   static {
-    GObject.registerClass({ GTypeName: 'BauplanerRaumklimaView' }, this);
+    GObject.registerClass({ GTypeName: 'BauplanerRaumklimaView', Template }, this);
   }
 
   private readonly store: DocumentStore;
   private child?: Gtk.Widget;
 
   constructor(store: DocumentStore) {
-    super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
+    super();
     this.store = store;
     store.subscribe(() => this.render());
     this.render();

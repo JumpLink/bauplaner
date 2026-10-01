@@ -1,0 +1,10 @@
+using Gtk 4.0;
+
+// The Raumklima page is a per-room list driven by readings from the document, and its
+// empty state is a different shape entirely — so the template declares the vertical,
+// expanding box both land in and nothing else.
+template $BauplanerRaumklimaView: Gtk.Box {
+  orientation: vertical;
+  hexpand: true;
+  vexpand: true;
+}
