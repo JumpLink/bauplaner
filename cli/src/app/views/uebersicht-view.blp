@@ -1,0 +1,10 @@
+using Gtk 4.0;
+
+// The dashboard is entirely document-dependent — welcome page, error page or five
+// stacked sections, all built in `uebersicht-view.ts` — so the template declares the
+// vertical, expanding box it all lands in and nothing else.
+template $BauplanerUebersichtView: Gtk.Box {
+  orientation: vertical;
+  hexpand: true;
+  vexpand: true;
+}
