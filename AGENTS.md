@@ -50,8 +50,12 @@ otherwise ship unchecked. It is `gjsify foreach … check`, so each package's ow
 bare relative path.
 
 Root scripts delegate into the `cli` workspace; `cd cli && gjsify run <script>`
-works too. (`gjsify run -w cli <script>` does **not** chdir into the workspace
-yet — a gjsify-core gap; the `cd cli` delegation sidesteps it.)
+works too. `gjsify run -w cli <script>` is the workspace-flag spelling of the
+same delegation and **does** chdir into the workspace: measured on 0.53.0,
+`packages/infra/cli/src/commands/run.ts` runs the script with `ws.location` as
+its cwd, and that file is byte-identical between gjsify v0.52.0 and v0.53.0. The
+note that used to call this a gjsify-core gap was wrong; the `cd cli` form stays
+because a root `npm run` must work from the root, not because the flag breaks.
 
 ## Verify UI work with SCREENSHOTS — do not just build-check
 
