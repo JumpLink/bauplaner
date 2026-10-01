@@ -5,6 +5,9 @@
  *   ├─ sidebar:  Adw.ToolbarView [ HeaderBar(title + open + menu) | Gtk.ListBox nav rows ]
  *   └─ content:  Adw.ToolbarView [ HeaderBar(view title) | ToastOverlay(Adw.ViewStack) ]
  *
+ * The chrome lives in `window.blp`; this file keeps what depends on the opened
+ * document (nav rows, badges, project card) and the actions.
+ *
  * Collapses to a single pane on narrow widths. A single shared DocumentStore
  * backs every view; "Projekt speichern" writes the sidecar next to the .sh3d.
  */
@@ -33,6 +36,7 @@ import { MaterialienView } from './views/materialien-view.ts';
 import { ModellView } from './views/modell-view.ts';
 import { RaumklimaView } from './views/raumklima-view.ts';
 import { UebersichtView } from './views/uebersicht-view.ts';
+import Template from './window.blp';
 
 interface NavItem {
   view: string;
@@ -79,22 +83,39 @@ const NAV_ITEMS: NavItem[] = [
 
 export class MainWindow extends Adw.ApplicationWindow {
   static {
-    GObject.registerClass({ GTypeName: 'BauplanerWindow' }, this);
+    GObject.registerClass(
+      {
+        GTypeName: 'BauplanerWindow',
+        Template,
+        InternalChildren: [
+          'split_view',
+          'menu_button',
+          'nav_list',
+          'project_header',
+          'sidebar_footer',
+          'content_title',
+          'toast_overlay',
+          'stack',
+        ],
+      },
+      this,
+    );
   }
+
+  // Internal children arrive as `_<id>` — GJS's naming for an `InternalChildren` entry.
+  declare private _split_view: Adw.NavigationSplitView;
+  declare private _menu_button: Gtk.MenuButton;
+  declare private _nav_list: Gtk.ListBox;
+  declare private _project_header: Gtk.Box;
+  declare private _sidebar_footer: Gtk.Box;
+  declare private _content_title: Adw.WindowTitle;
+  declare private _toast_overlay: Adw.ToastOverlay;
+  declare private _stack: Adw.ViewStack;
 
   private readonly store = new DocumentStore();
   private readonly bauteileView = new BauteileView(this.store);
   private readonly feuchteView = new FeuchteView(this.store);
-  private readonly splitView = new Adw.NavigationSplitView();
-  private readonly navList = new Gtk.ListBox({ cssClasses: ['navigation-sidebar'] });
-  private readonly projectHeader = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-  private readonly sidebarFooter = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
   private readonly navBadges = new Map<string, Gtk.Label>();
-  private readonly stack = new Adw.ViewStack();
-  private readonly contentTitle = new Adw.WindowTitle({ title: APP_NAME, subtitle: '' });
-  private readonly toastOverlay = new Adw.ToastOverlay();
-  private readonly undoButton = new Gtk.Button({ iconName: 'edit-undo-symbolic', tooltipText: 'Rückgängig (Strg+Z)' });
-  private readonly redoButton = new Gtk.Button({ iconName: 'edit-redo-symbolic', tooltipText: 'Wiederholen (Strg+Y)' });
   /** Watches the opened file on disk (live reload on external edits). */
   private fileMonitor: Gio.FileMonitor | null = null;
   private watchedPath: string | null = null;
@@ -103,29 +124,27 @@ export class MainWindow extends Adw.ApplicationWindow {
   private lastSaveUs = 0;
 
   constructor(app: Adw.Application) {
+    super({ application: app });
+
     // The screenshot rig's size, applied before the window is mapped, so a capture never contains
     // a post-resize relayout. Devtools' ResizeWindow also works here (measured: 1180×1050 asked,
     // 1180×1050 in the file) — but it answers with the size it was ASKED for either way, and
     // `default-width` reads back that same value, so it cannot report its own failure. In the
     // sibling app that gap hid a 1280→1100 discrepancy behind four green checks. Whichever path is
     // used, dbus-shot.js prints the PNG header's real dimensions; that is the number to trust.
+    // The template carries the 1000×680 default; this overrides it for the rig.
     const shot = shotSize();
-    super({
-        application: app,
-        title: APP_NAME,
-        defaultWidth: shot?.[0] ?? 1000,
-        defaultHeight: shot?.[1] ?? 680,
-    });
+    if (shot) this.set_default_size(shot[0], shot[1]);
 
-    this.stack.add_named(new UebersichtView(this, this.store), 'uebersicht');
-    this.stack.add_named(new ModellView(this, this.store), 'modell');
-    this.stack.add_named(new FahrplanView(this.store), 'fahrplan');
-    this.stack.add_named(this.bauteileView, 'bauteile');
-    this.stack.add_named(this.feuchteView, 'feuchte');
-    this.stack.add_named(new KostenView(this.store), 'kosten');
-    this.stack.add_named(new MaterialienView(this.store), 'material');
-    this.stack.add_named(new RaumklimaView(this.store), 'raumklima');
-    this.stack.add_named(new DokumentationView(this, this.store), 'dokumentation');
+    this._stack.add_named(new UebersichtView(this, this.store), 'uebersicht');
+    this._stack.add_named(new ModellView(this, this.store), 'modell');
+    this._stack.add_named(new FahrplanView(this.store), 'fahrplan');
+    this._stack.add_named(this.bauteileView, 'bauteile');
+    this._stack.add_named(this.feuchteView, 'feuchte');
+    this._stack.add_named(new KostenView(this.store), 'kosten');
+    this._stack.add_named(new MaterialienView(this.store), 'material');
+    this._stack.add_named(new RaumklimaView(this.store), 'raumklima');
+    this._stack.add_named(new DokumentationView(this, this.store), 'dokumentation');
     // Vorhaben (Lehmgraben/earthworks) is absorbed into the Modell view's
     // "Erdarbeiten" mode (2D + 3D), so it has no separate view or nav entry.
 
@@ -199,7 +218,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     this.store.subscribe(() => exportAction.set_enabled(this.store.hasDocument));
     exportAction.connect('activate', () => {
       exportPlanDialog(this, this.store, (message) => {
-        this.toastOverlay.add_toast(new Adw.Toast({ title: message }));
+        this._toast_overlay.add_toast(new Adw.Toast({ title: message }));
       });
     });
     this.add_action(exportAction);
@@ -210,7 +229,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     this.store.subscribe(() => grundrissAction.set_enabled(this.store.hasDocument));
     grundrissAction.connect('activate', () => {
       exportGrundrissDialog(this, this.store, (message) => {
-        this.toastOverlay.add_toast(new Adw.Toast({ title: message }));
+        this._toast_overlay.add_toast(new Adw.Toast({ title: message }));
       });
     });
     this.add_action(grundrissAction);
@@ -225,7 +244,7 @@ export class MainWindow extends Adw.ApplicationWindow {
       const target = payload.slice(0, sep);
       const wallId = payload.slice(sep + 1);
       const navIdx = NAV_ITEMS.findIndex((i) => i.view === target);
-      if (navIdx >= 0) this.navList.select_row(this.navList.get_row_at_index(navIdx));
+      if (navIdx >= 0) this._nav_list.select_row(this._nav_list.get_row_at_index(navIdx));
       if (target === 'bauteile') this.bauteileView.focusWall(wallId);
       else if (target === 'feuchte') this.feuchteView.focusWall(wallId);
     });
@@ -240,8 +259,6 @@ export class MainWindow extends Adw.ApplicationWindow {
     redoAction.set_enabled(false);
     redoAction.connect('activate', () => this.store.redo());
     this.add_action(redoAction);
-    this.undoButton.set_action_name('win.undo');
-    this.redoButton.set_action_name('win.redo');
     this.store.subscribe(() => {
       undoAction.set_enabled(this.store.canUndo);
       redoAction.set_enabled(this.store.canRedo);
@@ -275,30 +292,18 @@ export class MainWindow extends Adw.ApplicationWindow {
     showView.connect('activate', (_action, param) => {
       const view = param ? (param.deepUnpack() as string) : '';
       const idx = NAV_ITEMS.findIndex((i) => i.view === view);
-      if (idx >= 0) this.navList.select_row(this.navList.get_row_at_index(idx));
-      if (this.splitView.get_collapsed()) this.splitView.set_show_content(true);
+      if (idx >= 0) this._nav_list.select_row(this._nav_list.get_row_at_index(idx));
+      if (this._split_view.get_collapsed()) this._split_view.set_show_content(true);
     });
     this.add_action(showView);
 
-    this.splitView.set_max_sidebar_width(280);
-    this.splitView.set_sidebar(this.buildSidebar());
-    this.splitView.set_content(this.buildContent());
-    this.set_content(this.splitView);
-
-    // Collapse to a single pane on narrow widths.
-    const breakpoint = new Adw.Breakpoint({
-      condition: Adw.BreakpointCondition.parse('max-width: 720px'),
-    });
-    const collapsed = new GObject.Value();
-    collapsed.init(GObject.TYPE_BOOLEAN);
-    collapsed.set_boolean(true);
-    breakpoint.add_setter(this.splitView, 'collapsed', collapsed);
-    this.add_breakpoint(breakpoint);
+    this._menu_button.set_menu_model(this.buildMenu());
+    this.buildNavRows();
 
     // Select the initial entry (BP_APP_VIEW dev hook, else the first).
     const initialView = globalThis.process?.env?.BP_APP_VIEW;
     const initialIdx = initialView ? NAV_ITEMS.findIndex((i) => i.view === initialView) : 0;
-    this.navList.select_row(this.navList.get_row_at_index(initialIdx >= 0 ? initialIdx : 0));
+    this._nav_list.select_row(this._nav_list.get_row_at_index(initialIdx >= 0 ? initialIdx : 0));
 
     // Dev hook: auto-load a plan on startup.
     const preload = globalThis.process?.env?.BP_APP_FILE;
@@ -310,7 +315,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     // is not capturable at all otherwise — the Bauteile page's new component group sat below the
     // fold in every shot. Applied here rather than per view: it walks down to whatever
     // ScrolledWindow the visible child contains, so no view has to know about it.
-    applyScrollHook(this.stack);
+    applyScrollHook(this._stack);
 
     // Dev hook: export the plan to BP_APP_EXPORT=<path> and report on stderr.
     // Runs the real app export path (minus the file chooser), so a headless run
@@ -403,16 +408,16 @@ export class MainWindow extends Adw.ApplicationWindow {
         timeout: 0, // stays until answered; auto-hiding would silently drop the choice
       });
       toast.connect('button-clicked', () => this.store.load(p));
-      this.toastOverlay.add_toast(toast);
+      this._toast_overlay.add_toast(toast);
       return;
     }
     this.store.load(p);
-    this.toastOverlay.add_toast(new Adw.Toast({ title: 'Extern geändert — neu geladen' }));
+    this._toast_overlay.add_toast(new Adw.Toast({ title: 'Extern geändert — neu geladen' }));
   }
 
   /** One place for transient status, so every action reports the same way. */
   private toast(title: string): void {
-    this.toastOverlay.add_toast(new Adw.Toast({ title }));
+    this._toast_overlay.add_toast(new Adw.Toast({ title }));
   }
 
   /**
@@ -438,24 +443,11 @@ export class MainWindow extends Adw.ApplicationWindow {
     dialog.present(this);
   }
 
-  private buildSidebar(): Adw.NavigationPage {
-    const header = new Adw.HeaderBar();
-    header.set_title_widget(new Adw.WindowTitle({ title: APP_NAME, subtitle: 'Nativer Bauplaner' }));
-
-    const openButton = new Gtk.Button({
-      iconName: 'document-open-symbolic',
-      tooltipText: 'Projekt oder Sweet Home 3D-Datei öffnen',
-    });
-    openButton.set_action_name('win.open-project');
-    header.pack_start(openButton);
-
-    const exportButton = new Gtk.Button({
-      iconName: 'document-send-symbolic',
-      tooltipText: 'Sanierungsplan als PDF exportieren',
-    });
-    exportButton.set_action_name('win.export-pdf');
-    header.pack_start(exportButton);
-
+  /**
+   * The primary menu's model. A `Gio.Menu` is a model, not a widget, so it cannot be declared in
+   * `window.blp` — the template hands over the bare `Gtk.MenuButton` and the model goes on it here.
+   */
+  private buildMenu(): Gio.Menu {
     const menu = new Gio.Menu();
     menu.append('Neues Projekt', 'win.new-project');
     menu.append('Öffnen …', 'win.open-project');
@@ -467,9 +459,15 @@ export class MainWindow extends Adw.ApplicationWindow {
     menu.append('Grundriss als PDF …', 'win.export-grundriss');
     menu.append(`Über ${APP_NAME}`, 'app.about');
     menu.append('Beenden', 'app.quit');
-    header.pack_end(new Gtk.MenuButton({ iconName: 'open-menu-symbolic', primary: true, menuModel: menu }));
+    return menu;
+  }
 
-    this.navList.set_selection_mode(Gtk.SelectionMode.SINGLE);
+  /**
+   * One nav row per `NAV_ITEMS` entry, in order — the template's `nav_list` is empty, because a row
+   * set that comes from a TypeScript table cannot be one. The row's NAME is the view id: the
+   * `edit-wall`/`show-view` actions and `onNavRowSelected` read it back.
+   */
+  private buildNavRows(): void {
     for (const item of NAV_ITEMS) {
       const box = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
@@ -490,35 +488,16 @@ export class MainWindow extends Adw.ApplicationWindow {
       }
       const row = new Gtk.ListBoxRow({ child: box });
       row.set_name(item.view);
-      this.navList.append(row);
+      this._nav_list.append(row);
     }
     this.refreshBadges();
-    this.navList.connect('row-selected', (_list, row) => {
-      if (row) this.onNavRowSelected(row);
-    });
-
-    const scroller = new Gtk.ScrolledWindow({ child: this.navList, vexpand: true });
-    scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
-
-    const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-    content.append(this.projectHeader);
-    content.append(scroller);
-    content.append(this.sidebarFooter);
     this.refreshProjectHeader();
-
-    const toolbar = new Adw.ToolbarView();
-    toolbar.add_top_bar(header);
-    toolbar.set_content(content);
-
-    const page = new Adw.NavigationPage({ child: toolbar, title: APP_NAME });
-    page.set_tag('sidebar');
-    return page;
   }
 
   /** The v2 sidebar project card (name + area/levels) + a budget-spent bar. */
   private refreshProjectHeader(): void {
-    this.clearBox(this.projectHeader);
-    this.clearBox(this.sidebarFooter);
+    this.clearBox(this._project_header);
+    this.clearBox(this._sidebar_footer);
     if (!this.store.hasDocument) return;
 
     const home = this.store.home;
@@ -586,7 +565,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     inner.append(icon);
     inner.append(text);
     card.append(inner);
-    this.projectHeader.append(card);
+    this._project_header.append(card);
 
     // Sanierungsfortschritt bar. Proxy for now: paid / planned budget from the
     // cost register; refined to done / all measures once the Fahrplan lands.
@@ -615,7 +594,7 @@ export class MainWindow extends Adw.ApplicationWindow {
       const bar = new Gtk.ProgressBar({ fraction: frac });
       box.append(row);
       box.append(bar);
-      this.projectHeader.append(box);
+      this._project_header.append(box);
     }
 
     // Neutral format hint at the foot of the sidebar (no ".bauplan" claim yet).
@@ -629,7 +608,7 @@ export class MainWindow extends Adw.ApplicationWindow {
     });
     footer.add_css_class('caption');
     footer.add_css_class('dim-label');
-    this.sidebarFooter.append(footer);
+    this._sidebar_footer.append(footer);
   }
 
   /** Remove every child of a box (used to re-render sidebar sections). */
@@ -653,32 +632,20 @@ export class MainWindow extends Adw.ApplicationWindow {
     }
   }
 
-  private buildContent(): Adw.NavigationPage {
-    const header = new Adw.HeaderBar();
-    header.set_title_widget(this.contentTitle);
-    header.pack_start(this.undoButton);
-    header.pack_start(this.redoButton);
-
-    this.toastOverlay.set_child(this.stack);
-    this.stack.set_vexpand(true);
-
-    const toolbar = new Adw.ToolbarView();
-    toolbar.add_top_bar(header);
-    toolbar.set_content(this.toastOverlay);
-
-    const page = new Adw.NavigationPage({ child: toolbar, title: APP_NAME });
-    page.set_tag('content');
-    return page;
+  /** `nav_list.row-selected` from `window.blp` — show the row's view in the content pane. */
+  protected _onNavRowSelected(_list: Gtk.ListBox, row: Gtk.ListBoxRow | null): void {
+    if (!row) return;
+    this.onNavRowSelected(row);
   }
 
   private onNavRowSelected(row: Gtk.ListBoxRow): void {
     const view = row.get_name();
     if (!view) return;
-    this.stack.set_visible_child_name(view);
+    this._stack.set_visible_child_name(view);
     const item = NAV_ITEMS.find((i) => i.view === view);
-    this.contentTitle.set_title(item?.label ?? APP_NAME);
-    this.contentTitle.set_subtitle(item?.subtitle ?? '');
-    if (this.splitView.get_collapsed()) this.splitView.set_show_content(true);
+    this._content_title.set_title(item?.label ?? APP_NAME);
+    this._content_title.set_subtitle(item?.subtitle ?? '');
+    if (this._split_view.get_collapsed()) this._split_view.set_show_content(true);
   }
 }
 

@@ -1,0 +1,126 @@
+using Gtk 4.0;
+using Adw 1;
+
+// The main window's static chrome: sidebar (app header, project header, nav list,
+// footer) and content (view header with undo/redo, the view stack under a toast
+// overlay). Everything that depends on the opened document — the nav rows, their
+// badges, the project card — is built by `window.ts` into the ids below.
+//
+// `title:` mirrors `APP_NAME`; the window title is a construct property, so it
+// can only be declared here.
+template $BauplanerWindow: Adw.ApplicationWindow {
+  title: "Bauplaner";
+  default-width: 1000;
+  default-height: 680;
+
+  content: Adw.NavigationSplitView split_view {
+    max-sidebar-width: 280;
+
+    sidebar: Adw.NavigationPage {
+      title: "Bauplaner";
+      tag: "sidebar";
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          title-widget: Adw.WindowTitle {
+            title: "Bauplaner";
+            subtitle: _("Nativer Bauplaner");
+          };
+
+          [start]
+          Gtk.Button {
+            icon-name: "document-open-symbolic";
+            tooltip-text: _("Projekt oder Sweet Home 3D-Datei öffnen");
+            action-name: "win.open-project";
+          }
+
+          [start]
+          Gtk.Button {
+            icon-name: "document-send-symbolic";
+            tooltip-text: _("Sanierungsplan als PDF exportieren");
+            action-name: "win.export-pdf";
+          }
+
+          // The model behind this button is a Gio.Menu, not a widget, so
+          // `window.ts` builds it and hands it over.
+          [end]
+          Gtk.MenuButton menu_button {
+            icon-name: "open-menu-symbolic";
+            primary: true;
+          }
+        }
+
+        content: Gtk.Box {
+          orientation: vertical;
+
+          Gtk.Box project_header {
+            orientation: vertical;
+          }
+
+          Gtk.ScrolledWindow {
+            hscrollbar-policy: never;
+            vscrollbar-policy: automatic;
+            vexpand: true;
+
+            Gtk.ListBox nav_list {
+              selection-mode: single;
+              row-selected => $_onNavRowSelected();
+
+              styles ["navigation-sidebar"]
+            }
+          }
+
+          Gtk.Box sidebar_footer {
+            orientation: vertical;
+          }
+        };
+      };
+    };
+
+    content: Adw.NavigationPage {
+      title: "Bauplaner";
+      tag: "content";
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          // The title follows the selected nav row; `window.ts` writes both
+          // strings.
+          title-widget: Adw.WindowTitle content_title {
+            title: "Bauplaner";
+          };
+
+          [start]
+          Gtk.Button undo_button {
+            icon-name: "edit-undo-symbolic";
+            tooltip-text: _("Rückgängig (Strg+Z)");
+            action-name: "win.undo";
+          }
+
+          [start]
+          Gtk.Button redo_button {
+            icon-name: "edit-redo-symbolic";
+            tooltip-text: _("Wiederholen (Strg+Y)");
+            action-name: "win.redo";
+          }
+        }
+
+        content: Adw.ToastOverlay toast_overlay {
+          Adw.ViewStack stack {
+            vexpand: true;
+          }
+        };
+      };
+    };
+  };
+
+  // Collapse to a single pane on narrow widths.
+  Adw.Breakpoint {
+    condition ("max-width: 720px")
+
+    setters {
+      split_view.collapsed: true;
+    }
+  }
+}
