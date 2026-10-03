@@ -28,6 +28,7 @@ import { buildWelcome } from '../welcome.ts';
 import { openDocumentDialog } from '../open-dialog.ts';
 import { setHex } from '../paint.ts';
 import { escapeMarkup, fmtEur } from '../../format.ts';
+import Template from './uebersicht-view.blp';
 
 // The class letters, their colours, the scale position and the heat-loss bar
 // colours all live in the kernel, so this dashboard and the exported PDF cannot
@@ -41,7 +42,7 @@ function plural(n: number, one: string, many: string): string {
 
 export class UebersichtView extends Gtk.Box {
   static {
-    GObject.registerClass({ GTypeName: 'BauplanerUebersichtView' }, this);
+    GObject.registerClass({ GTypeName: 'BauplanerUebersichtView', Template }, this);
   }
 
   private readonly window: Gtk.Window;
@@ -49,7 +50,7 @@ export class UebersichtView extends Gtk.Box {
   private child?: Gtk.Widget;
 
   constructor(window: Gtk.Window, store: DocumentStore) {
-    super({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true });
+    super();
     this.window = window;
     this.store = store;
     store.subscribe(() => this.render());

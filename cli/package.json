@@ -42,12 +42,12 @@
         "yargs": "^18.0.0"
     },
     "devDependencies": {
-        "@girs/adw-1": "4.6.0",
-        "@girs/gio-2.0": "4.6.0",
-        "@girs/glib-2.0": "4.6.0",
-        "@girs/gobject-2.0": "4.6.0",
-        "@girs/gtk-4.0": "4.6.0",
-        "@girs/pango-1.0": "4.6.0",
+        "@girs/adw-1": "5.4.0",
+        "@girs/gio-2.0": "5.4.0",
+        "@girs/glib-2.0": "5.4.0",
+        "@girs/gobject-2.0": "5.4.0",
+        "@girs/gtk-4.0": "5.4.0",
+        "@girs/pango-1.0": "5.4.0",
         "@gjsify/cli": "0.54.0",
         "@gjsify/node-globals": "0.54.0",
         "@gjsify/runtime": "0.54.0",
@@ -58,7 +58,7 @@
         "fflate": "^0.8.2",
         "typescript": "~5.9.3",
         "@gjsify/rolldown-native": "0.54.0"
-    },
+},
     "optionalDependencies": {
         "@gjsify/node-gi": "0.54.0",
         "@gjsify/node-runtime-darwin-arm64": "0.54.0",

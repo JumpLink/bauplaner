@@ -1,0 +1,45 @@
+using Gtk 4.0;
+using Adw 1;
+
+// The tab chrome: the wide ViewSwitcher, the stack, and the two EMPTY hosts its pages
+// are named after. What lands in a host is project data (the material prices and the
+// cost register are both documents now), so `materialien-view.ts` fills them.
+template $BauplanerMaterialienView: Gtk.Box {
+  orientation: vertical;
+  hexpand: true;
+  vexpand: true;
+
+  Adw.ViewSwitcher {
+    stack: view_stack;
+    policy: wide;
+    halign: center;
+    margin-top: 12;
+    margin-bottom: 4;
+  }
+
+  Adw.ViewStack view_stack {
+    vexpand: true;
+
+    Adw.ViewStackPage {
+      name: "stamm";
+      title: _("Stamm");
+
+      child: Gtk.Box stamm_host {
+        orientation: vertical;
+        hexpand: true;
+        vexpand: true;
+      };
+    }
+
+    Adw.ViewStackPage {
+      name: "einkauf";
+      title: _("Einkauf");
+
+      child: Gtk.Box einkauf_host {
+        orientation: vertical;
+        hexpand: true;
+        vexpand: true;
+      };
+    }
+  }
+}
