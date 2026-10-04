@@ -397,6 +397,19 @@ jobs:
       - name: Package the app (.flatpak)
         run: cd cli && gjsify ship linux --skip-build --target flatpak --arch x64
 
+      # `appstreamcli compose` reports `file-read-error` without naming the file; the hint report
+      # does. Runs only when the package step failed, so a green build pays nothing for it.
+      - name: Name the file appstream could not read
+        if: failure()
+        run: |
+          root=cli/ship/flatpak/build/files
+          echo "--- dangling symlinks in the build root:"
+          find "$root" -xtype l | head -20
+          echo "--- appstream hint report:"
+          appstreamcli compose --prefix=/ --origin=flatpak --result-root=/tmp/as \
+            --components=eu.jumplink.Bauplaner --hints-dir=/tmp/as-hints "$root" || true
+          cat /tmp/as-hints/*/hints.yaml 2>/dev/null | head -40
+
       # `ship` writes nothing and still exits 0 when the target is filtered away, and a
       # Flatpak is the format where a filtered-away target is easiest to miss — the build
       # prints nothing that looks like a bundle.
