@@ -20,6 +20,7 @@
         "start:node": "node dist/bauplaner.node.mjs",
         "dev": "gjsify run build:gjs && gjsify run start",
         "build:app": "gjsify build src/app/main.ts --app gjs --outfile dist/app/bauplaner-app.gjs.mjs --globals auto,dom",
+        "build:app:node": "gjsify build src/app/main.ts --app node --outfile dist/app/bauplaner-app.node.mjs --globals auto,dom",
         "start:app": "gjsify run dist/app/bauplaner-app.gjs.mjs",
         "dev:app": "gjsify run build:app && gjsify run start:app",
         "build:test:gjs": "gjsify build tests/test.mts --app gjs --outfile dist/test.gjs.mjs --no-minify --exclude-globals document,navigator,HTMLElement,location,Image,HTMLCanvasElement,HTMLImageElement,FontFace,matchMedia,MutationObserver,ResizeObserver,IntersectionObserver",
@@ -57,10 +58,27 @@
         "fflate": "^0.8.2",
         "typescript": "~5.9.3",
         "@gjsify/rolldown-native": "0.54.0"
+},
+    "optionalDependencies": {
+        "@gjsify/node-gi": "0.54.0",
+        "@gjsify/node-runtime-darwin-arm64": "0.54.0",
+        "@gjsify/node-runtime-darwin-x64": "0.54.0",
+        "@gjsify/node-runtime-win32-x64": "0.54.0",
+        "@gjsify/gtk-runtime-darwin-arm64": "0.54.0",
+        "@gjsify/gtk-runtime-darwin-x64": "0.54.0",
+        "@gjsify/gtk-runtime-win32-x64": "0.54.0"
     },
     "gjsify": {
         "ship": {
-            "bundle": "dist/app/bauplaner-app.gjs.mjs",
+            "bundle": {
+                "linux": "dist/app/bauplaner-app.gjs.mjs",
+                "darwin": "dist/app/bauplaner-app.node.mjs",
+                "win32": "dist/app/bauplaner-app.node.mjs"
+            },
+            "app": {
+                "darwin": "node",
+                "win32": "node"
+            },
             "binaryName": "bauplaner",
             "appId": "eu.jumplink.Bauplaner",
             "summary": "Ökologische Altbausanierung planen",
@@ -94,7 +112,16 @@
             },
             "bundledTypelibs": [
                 "../node_modules/@gjsify/webgl-linux-x64/prebuilds/linux-x64"
-            ]
+            ],
+            "flatpak": {
+                "finishArgs": [
+                    "--device=dri",
+                    "--share=ipc",
+                    "--socket=fallback-x11",
+                    "--socket=wayland",
+                    "--share=network"
+                ]
+            }
         }
     },
     "license": "AGPL-3.0-or-later",
