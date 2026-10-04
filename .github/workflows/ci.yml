@@ -99,10 +99,13 @@ jobs:
       # needs it too, since it has no install step of its own); msitools adds `wixl`, the
       # Linux-side MSI compiler `gjsify ship windows --target msi` needs; appimagetool is
       # downloaded below because no distro packages it.
+      # `file` is appimagetool's own hard requirement and nothing else in this image pulls
+      # it in: it aborts with "file command is missing but required, please install file"
+      # before it ever looks at the AppDir, so the AppImage step failed here (2026-10-04).
       - name: Install packaging prerequisites
         run: >
           dnf install -y --setopt=install_weak_deps=False
-          glib2 msitools squashfs-tools
+          file glib2 msitools squashfs-tools
 
       - name: Build the app bundle (Node, for macOS + Windows)
         run: cd cli && gjsify run build:app:node
