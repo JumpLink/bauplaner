@@ -199,8 +199,12 @@ jobs:
       - name: Install the rpm package
         run: dnf install -y --setopt=install_weak_deps=False ./cli/ship/out/*.rpm
 
+      # libglvnd-gles: the bundled webgl prebuild links libGLESv2.so.2, which the rpm does not
+      # declare as a `Requires:` — on a bare container the app aborts at start. Installed here
+      # so the rest of the start proof can run; the missing `Requires:` itself belongs in
+      # `gjsify ship` (fixed upstream in gjsify: derive it for bundledTypelibs, then drop this).
       - name: Install the runtime the start proof needs
-        run: dnf install -y --setopt=install_weak_deps=False xorg-x11-server-Xvfb dbus-daemon
+        run: dnf install -y --setopt=install_weak_deps=False xorg-x11-server-Xvfb dbus-daemon libglvnd-gles
 
       # And the step after that: what was installed has to START. Under Xvfb because a GTK app
       # needs a display, and inside `dbus-run-session` because the devtools control plane — the
@@ -406,9 +410,10 @@ jobs:
           echo "--- dangling symlinks in the build root:"
           find "$root" -xtype l | head -20
           echo "--- appstream hint report:"
-          appstreamcli compose --prefix=/ --origin=flatpak --result-root=/tmp/as \
-            --components=eu.jumplink.Bauplaner --hints-dir=/tmp/as-hints "$root" || true
-          cat /tmp/as-hints/*/hints.yaml 2>/dev/null | head -40
+          appstreamcli --verbose compose --prefix=/ --origin=flatpak --result-root=/tmp/as \
+            --components=eu.jumplink.Bauplaner --hints-dir=/tmp/as-hints "$root" 2>&1 | tail -30 || true
+          find /tmp/as-hints -type f | head -5
+          find /tmp/as-hints -type f -exec cat {} + | head -40
 
       # `ship` writes nothing and still exits 0 when the target is filtered away, and a
       # Flatpak is the format where a filtered-away target is easiest to miss — the build
