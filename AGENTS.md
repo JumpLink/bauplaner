@@ -18,6 +18,11 @@ native app are thin adapters that reuse it in-process (never a second copy).
   builder (pure) and the cairo/Pango PDF renderer (`render.gjs.ts`; a stub on Node)
 - `cli` (`@bauplaner/cli`) — yargs CLI **and** the Adwaita app (`cli/src/app`)
 
+Licence: the apps (`cli`, repo root) are AGPL-3.0-or-later; the reusable packages
+under `packages/*` are LGPL-3.0-or-later (each carries `LICENSE` + `COPYING`). Never let an
+LGPL package depend on an AGPL one. All code is the author's own, including
+`sh3d/parser.ts` (a port of the earlier Deno version). No SPDX headers in sources.
+
 Build a feature in the core, then expose it through the CLI **and** the app — no
 per-surface duplication.
 

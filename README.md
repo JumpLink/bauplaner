@@ -131,7 +131,9 @@ Documents/datasheets are referenced via Paperless-ngx, not checked in as raw fil
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE) © Pascal Garber.
+[AGPL-3.0-or-later](LICENSE) © Pascal Garber for the app and the CLI.
+The reusable libraries under [`packages/`](packages/) are
+[LGPL-3.0-or-later](packages/core/LICENSE), so other programs may link them.
 
 Free to use, modify and share. The AGPL adds one condition to the GPL: anyone who
 runs this program **as a network service** must offer that service's users the
