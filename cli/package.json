@@ -67,7 +67,7 @@
             "description": "Bauplaner rechnet die diffusionsoffene Sanierung eines Altbaus durch: U-Werte und Tauwasser je Bauteil, Feuchte-Diagnose, Materialmengen und Kosten, Förderung und Amortisation.\n\nDas Gebäudemodell darf aus Sweet Home 3D kommen; gerechnet und geplant wird im nativen .bauplan-Format.",
             "icon": "data/icons/hicolor/scalable/apps/eu.jumplink.Bauplaner.svg",
             "license": {
-                "project": "MIT",
+                "project": "AGPL-3.0-or-later",
                 "file": "../LICENSE"
             },
             "developer": {
