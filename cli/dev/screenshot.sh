@@ -56,10 +56,37 @@ APP_ID="${BP_SHOT_APP_ID:-eu.jumplink.BauplanerShot$$}"
 OBJ="/$(printf '%s' "$APP_ID" | tr . /)/devtools"
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}" DISPLAY="${DISPLAY:-:0}"
 
+# macOS (and Windows) have no session bus — dbus-launch/dbus-daemon fail outright
+# under launchd. gjsify's own devtools already ships the fix for this (peer D-Bus
+# transport, gjsify docs/guides/devtools.md §4): pin an explicit socket address on
+# both sides instead of letting the app fall through to a bus that doesn't exist.
+# Linux keeps the session-bus path unchanged.
+PEER_ADDR=""
+if [ "$(uname -s)" != Linux ]; then
+  PEER_ADDR="unix:path=/tmp/${APP_ID}.sock"
+  export GJSIFY_DEVTOOLS_ADDRESS="$PEER_ADDR"
+else
+  unset GJSIFY_DEVTOOLS_ADDRESS
+fi
+# gdbus has no "whichever transport is configured" mode — route every call
+# through the same choice the app was launched with.
+gdbus_call() {
+  if [ -n "$PEER_ADDR" ]; then
+    gdbus call --address "$PEER_ADDR" "$@"
+  else
+    gdbus call --session "$@"
+  fi
+}
+
 # setsid puts the app in its own session/process group so the trap can reap the
 # whole tree (subshell → gjsify → gjs); killing the bare subshell PID would
 # orphan the gjs child, which then lingers and blocks future single-instance runs.
-setsid env GJSIFY_DEVTOOLS=1 BP_APP_ID="$APP_ID" BP_APP_FILE="$SH3D" BP_APP_VIEW="$VIEW" \
+# macOS ships no setsid; bash job control (`set -m`) gives a backgrounded job its
+# own process group the same way, so the same kill -- -"$APP_PID" still reaps it.
+SETSID=""
+command -v setsid >/dev/null 2>&1 && SETSID="setsid"
+[ -n "$SETSID" ] || set -m
+$SETSID env GJSIFY_DEVTOOLS=1 BP_APP_ID="$APP_ID" BP_APP_FILE="$SH3D" BP_APP_VIEW="$VIEW" \
     BP_APP_DIALOG="${BP_APP_DIALOG:-}" \
     BP_APP_SIZE="${BP_APP_SIZE:-}" \
     BP_APP_SCROLL="${BP_APP_SCROLL:-}" \
@@ -67,10 +94,11 @@ setsid env GJSIFY_DEVTOOLS=1 BP_APP_ID="$APP_ID" BP_APP_FILE="$SH3D" BP_APP_VIEW
     BP_APP_TAPE="${BP_APP_TAPE:-}" \
     bash -c "cd \"$CLI\" && exec \"$GJSIFY\" run start:app" >/tmp/bauplaner-shot.log 2>&1 &
 APP_PID=$!
+[ -n "$SETSID" ] || set +m
 trap 'kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true' EXIT
 
 for _ in $(seq 1 40); do
-  if gdbus call --session --dest "$APP_ID" --object-path "$OBJ" \
+  if gdbus_call --dest "$APP_ID" --object-path "$OBJ" \
        --method org.gjsify.Devtools.GetStatus >/dev/null 2>&1; then break; fi
   sleep 0.5
 done
@@ -81,7 +109,7 @@ done
 # failure — it answers with the size it was asked for either way — so dbus-shot.js prints the PNG
 # header's real dimensions. That is the number to compare against, whichever path was used.
 if [ -n "${BP_SHOT_SIZE:-}" ]; then
-  gdbus call --session --dest "$APP_ID" --object-path "$OBJ" \
+  gdbus_call --dest "$APP_ID" --object-path "$OBJ" \
     --method org.gjsify.Devtools.ResizeWindow ${BP_SHOT_SIZE} >/dev/null 2>&1 || true
 fi
 # A dialog opened by BP_APP_DIALOG is presented from an idle callback once its view has loaded, so
@@ -120,7 +148,7 @@ if [ -n "${BP_SHOT_ACTIVATE:-}" ]; then
     echo "no widget matches $BP_SHOT_ACTIVATE" >&2; exit 1;
   }
   echo "activating $BP_SHOT_ACTIVATE at $WPATH" >&2
-  RESULT="$(gdbus call --session --dest "$APP_ID" --object-path "$OBJ" \
+  RESULT="$(gdbus_call --dest "$APP_ID" --object-path "$OBJ" \
     --method org.gjsify.Devtools.ActivateWidget "$WPATH")"
   case "$RESULT" in
     *true*) : ;;

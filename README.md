@@ -123,6 +123,28 @@ The root scripts delegate into the `cli` workspace; you can also run them there
 directly with `cd cli && gjsify run <script>`. More detail — and the `BP_APP_*`
 dev hooks — in [`cli/src/app/README.md`](cli/src/app/README.md).
 
+## Releasing
+
+`git tag vX.Y.Z && git push --tags` runs the whole of CI — tests, type check, lint, packaging —
+and, if it passes, attaches every installable format to the tag's GitHub release:
+
+- Linux: `.deb`, `.rpm`, `.AppImage`
+- Flatpak: `.flatpak` (the app has a real App-ID + desktop entry; built in its own privileged job)
+- macOS: `.app.zip` (arm64 + x64)
+- Windows: a program-directory `.zip` and `.msi` (x64)
+
+All non-Linux packages carry the `--app node` bundle, since there is no relocatable GJS to put in
+a `.app`/program directory (`gjsify.ship.app.darwin`/`win32: "node"`); the Gwebgl typelib the 3D
+view needs is patched to the matching `@gjsify/webgl-<target>` prebuild per packaging step in
+`ci.yml`, since `gjsify.ship.bundledTypelibs` has no per-OS variant yet (an upstream gjsify gap,
+not fixed here — see the comment above those steps).
+
+All of it is **unsigned**, which is a legitimate deliverable rather than a placeholder (gjsify ADR
+0024 § A13) — see the comment above the "Attach everything to the release" step in
+[release.yml](.github/workflows/release.yml) for where `--sign`/`--notarize` would attach once a
+signing identity exists. `workflow_dispatch` re-cuts a tag's assets without moving the tag (`tag`,
+`publish` inputs).
+
 ## Privacy
 
 The **tool and methodology are open**; concrete object data (address, the real

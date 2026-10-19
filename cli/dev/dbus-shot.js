@@ -11,7 +11,12 @@ import GLib from 'gi://GLib';
 import system from 'system';
 
 const [dest, path, out] = ARGV;
-const bus = Gio.bus_get_sync(Gio.BusType.SESSION, null);
+// macOS/Windows have no session bus; screenshot.sh pins GJSIFY_DEVTOOLS_ADDRESS
+// on both the app and this caller, so dial that peer socket instead.
+const peerAddress = GLib.getenv('GJSIFY_DEVTOOLS_ADDRESS');
+const bus = peerAddress
+  ? Gio.DBusConnection.new_for_address_sync(peerAddress, Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT, null, null)
+  : Gio.bus_get_sync(Gio.BusType.SESSION, null);
 
 function shoot() {
   const reply = bus.call_sync(

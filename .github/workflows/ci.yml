@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Also callable, so release.yml's tag-triggered run builds through this exact job instead of
+  # a second copy of the toolchain kept in step with this one by hand.
+  workflow_call:
 
 # Node-free gjsify toolchain (mirrors the buchhaltung CI). Everything runs on the
 # gjsify stack pinned in cli/package.json: `gjsify install --immutable` (from
@@ -89,3 +92,346 @@ jobs:
 
       - name: Tests (GJS test bundle under gjs)
         run: npm run test --workspace cli
+
+      # ── Packaging (ADR 0024 in gjsify: assembly is not host-bound, only running the
+      # payload is) — built here, not in release.yml, so there is exactly one definition of
+      # the toolchain and "green". glib2 provides glib-compile-schemas (every non-Linux layout
+      # needs it too, since it has no install step of its own); msitools adds `wixl`, the
+      # Linux-side MSI compiler `gjsify ship windows --target msi` needs; appimagetool is
+      # downloaded below because no distro packages it.
+      # `file` is appimagetool's own hard requirement and nothing else in this image pulls
+      # it in: it aborts with "file command is missing but required, please install file"
+      # before it ever looks at the AppDir, so the AppImage step failed here (2026-10-04).
+      - name: Install packaging prerequisites
+        run: >
+          dnf install -y --setopt=install_weak_deps=False
+          file glib2 msitools squashfs-tools
+
+      - name: Build the app bundle (Node, for macOS + Windows)
+        run: cd cli && gjsify run build:app:node
+
+      - name: Third-party licences are all decided
+        run: cd cli && gjsify run check:licenses
+
+      # Pinned by version AND digest, the same shape gjsify's own CI image uses (see
+      # easy6502's release.yml, carried into buchhaltung's ci.yml). The RUNTIME pin is the
+      # load-bearing half: appimagetool otherwise fetches it per-arch from type2-runtime's
+      # rolling `continuous` tag on every pack, so without this two packs of one build would
+      # not be byte-identical. Digests read back from `gh api repos/AppImage/…/releases/tags/…`
+      # for the 1.9.1 / 20251108 tags, not guessed.
+      - name: Install appimagetool and pin its runtime
+        env:
+          APPIMAGETOOL_VERSION: "1.9.1"
+          APPIMAGETOOL_SHA256: "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
+          APPIMAGE_RUNTIME_VERSION: "20251108"
+          APPIMAGE_RUNTIME_X86_64_SHA256: "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
+        run: |
+          set -eu
+          curl -fsSL -o /usr/local/bin/appimagetool \
+            "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
+          echo "${APPIMAGETOOL_SHA256}  /usr/local/bin/appimagetool" | sha256sum -c -
+          chmod +x /usr/local/bin/appimagetool
+          mkdir -p /usr/local/share/gjsify/appimage-runtime
+          curl -fsSL -o /usr/local/share/gjsify/appimage-runtime/runtime-x86_64 \
+            "https://github.com/AppImage/type2-runtime/releases/download/${APPIMAGE_RUNTIME_VERSION}/runtime-x86_64"
+          echo "${APPIMAGE_RUNTIME_X86_64_SHA256}  /usr/local/share/gjsify/appimage-runtime/runtime-x86_64" | sha256sum -c -
+
+      # deb + rpm + AppImage, all explicitly `--arch x64`: the bundled Gwebgl typelib
+      # (`gjsify.ship.bundledTypelibs`, the linux-x64 default below) is built for x64, and
+      # `ship` labels the package after the ARCH ITS OWN HOST IS, not the payload's — measured
+      # locally on this maintainer's arm64 Mac, the implicit label refused with "the payload is
+      # x64, but the package would be labelled arm64". A Linux x64 runner would not hit this,
+      # but the flag is correct regardless of host and is what makes the artifact name below
+      # exact rather than incidental.
+      - name: Package for Linux (deb, rpm, AppImage)
+        run: cd cli && gjsify ship linux --skip-build --target deb,rpm,appimage --arch x64
+
+      # The package must contain the APP and nothing else — `ship` stages every file beside
+      # the bundle, so a stray build output next to it would silently become part of every
+      # release.
+      - name: No test or CLI bundle in the deb/rpm packages
+        run: |
+          set -eu
+          for pkg in cli/ship/out/*.rpm; do
+            LIST=$(rpm -qlp "$pkg")
+            echo "$LIST"
+            for stray in test. bauplaner.gjs.mjs bauplaner.node.mjs; do
+              if echo "$LIST" | grep -q "$stray"; then
+                echo "::error::$stray is in $pkg"; exit 1
+              fi
+            done
+          done
+
+      # The 3D view imports gi://Gwebgl, which no distribution ships. The payload carries it —
+      # if that ever silently stops, the package installs and the 3D view dies at the first
+      # import.
+      - name: The bundled Gwebgl typelib is in the deb/rpm packages
+        run: |
+          set -eu
+          rpm -qlp cli/ship/out/*.rpm | grep -q "gi/Gwebgl-0.1.typelib" \
+            || { echo "::error::the Gwebgl typelib is not in the package"; exit 1; }
+          rpm -qlp cli/ship/out/*.rpm | grep -q "gi/libgwebgl.so" \
+            || { echo "::error::libgwebgl.so is not in the package — the typelib alone is useless"; exit 1; }
+
+      # Names are the ones a real local `gjsify ship` run actually printed, not guessed:
+      # `bauplaner_0.1.0-1_amd64.deb` (634858 bytes), `bauplaner-0.1.0-1.x86_64.rpm` (637504
+      # bytes) on this maintainer's workstation (run with `--arch x64` as above).
+      - name: Assert the Linux packaging artifacts arrived
+        working-directory: cli/ship/out
+        run: |
+          set -eu
+          ls -la
+          version=$(node -p "require('$GITHUB_WORKSPACE/cli/package.json').version")
+          missing=0
+          for f in \
+            "bauplaner_${version}-1_amd64.deb" \
+            "bauplaner-${version}-1.x86_64.rpm" \
+            "bauplaner-${version}-1.x86_64.AppImage"; do
+            if [ ! -s "$f" ]; then
+              echo "::error::missing or empty artifact: $f"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ]
+
+      # THE step. `dnf install` resolves every `Requires:` the rpm declares — an undeclared
+      # runtime dependency fails here instead of on a user's machine after the download.
+      - name: Install the rpm package
+        run: dnf install -y --setopt=install_weak_deps=False ./cli/ship/out/*.rpm
+
+      # libglvnd-gles: the bundled webgl prebuild links libGLESv2.so.2, which the rpm does not
+      # declare as a `Requires:` — on a bare container the app aborts at start. Installed here
+      # so the rest of the start proof can run; the missing `Requires:` itself belongs in
+      # `gjsify ship` (fixed upstream in gjsify: derive it for bundledTypelibs, then drop this).
+      - name: Install the runtime the start proof needs
+        run: dnf install -y --setopt=install_weak_deps=False xorg-x11-server-Xvfb dbus-daemon libglvnd-gles
+
+      # And the step after that: what was installed has to START. Under Xvfb because a GTK app
+      # needs a display, and inside `dbus-run-session` because the devtools control plane — the
+      # only way to ask a running GUI whether it is alive — speaks over the session bus.
+      - name: The installed app starts
+        run: |
+          set -eu
+          cat > /tmp/prove.sh <<'SH'
+          set -eu
+          export GJSIFY_DEVTOOLS=1 BP_APP_ID=eu.jumplink.Bauplaner.CI
+          export HOME=/tmp/fresh XDG_DATA_HOME=/tmp/fresh/data XDG_CONFIG_HOME=/tmp/fresh/config
+          mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME"
+          bauplaner &
+          APP=$!
+          for _ in $(seq 1 60); do
+            if gdbus call --session --dest eu.jumplink.Bauplaner.CI \
+                 --object-path /eu/jumplink/Bauplaner/CI/devtools \
+                 --method org.gjsify.Devtools.GetStatus >/tmp/status.json 2>/dev/null; then
+              echo "the installed app answered:"; cat /tmp/status.json
+              kill "$APP" 2>/dev/null || true
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the installed app never answered GetStatus — it did not start"
+          kill "$APP" 2>/dev/null || true
+          exit 1
+          SH
+          chmod +x /tmp/prove.sh
+          # A fresh HOME on purpose: this is the first launch a stranger gets.
+          xvfb-run -a dbus-run-session -- /tmp/prove.sh
+
+      # macOS and Windows runtimes are `optionalDependencies` gated by os/cpu, which a plain
+      # install on this Linux host SKIPS — naming the target installs it instead, and `ship`
+      # picks up both that runtime and the matching native addon from node_modules at pack
+      # time. Assembly is not host-bound (ADR 0024 § A1 in gjsify): a Mac or Windows runner
+      # would be for VERIFYING the Mach-O/PE payload, not for assembling one.
+      #
+      # `gjsify.ship.bundledTypelibs` is a FLAT array with no per-OS variant (unlike
+      # `ship.bundle`/`ship.app`, which gjsify resolves per target itself) — confirmed by
+      # reading gjsify's `utils/ship/discover.ts` + `types.ts`, and by a failing local darwin
+      # ship before this patch existed ("names ../node_modules/@gjsify/webgl-linux-x64/…,
+      # which does not exist"). Patched inline here per target, which is the documented
+      # workaround; fixing gjsify to resolve a per-OS map (mirroring `ship.bundle`) belongs
+      # upstream — not duplicated per consumer, and not attempted in this PR.
+      - name: Package for macOS (arm64)
+        run: |
+          gjsify install --os darwin --cpu arm64 --immutable
+          node -e "
+            const fs = require('node:fs');
+            const p = 'cli/package.json';
+            const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            pkg.gjsify.ship.bundledTypelibs = ['../node_modules/@gjsify/webgl-darwin-arm64/prebuilds/darwin-arm64'];
+            fs.writeFileSync(p, JSON.stringify(pkg, null, 4) + '\n');
+          "
+          cd cli && gjsify ship darwin --arch arm64 --skip-build --target macos-app-zip
+
+      - name: Package for macOS (x64)
+        run: |
+          gjsify install --os darwin --cpu x64 --immutable
+          node -e "
+            const fs = require('node:fs');
+            const p = 'cli/package.json';
+            const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            pkg.gjsify.ship.bundledTypelibs = ['../node_modules/@gjsify/webgl-darwin-x64/prebuilds/darwin-x64'];
+            fs.writeFileSync(p, JSON.stringify(pkg, null, 4) + '\n');
+          "
+          cd cli && gjsify ship darwin --arch x64 --skip-build --target macos-app-zip
+
+      - name: Package for Windows (x64)
+        run: |
+          gjsify install --os win32 --cpu x64 --immutable
+          node -e "
+            const fs = require('node:fs');
+            const p = 'cli/package.json';
+            const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            pkg.gjsify.ship.bundledTypelibs = ['../node_modules/@gjsify/webgl-win32-x64/prebuilds/win32-x64'];
+            fs.writeFileSync(p, JSON.stringify(pkg, null, 4) + '\n');
+          "
+          cd cli && gjsify ship windows --arch x64 --skip-build --target windows-dir-zip,msi
+
+      # UNSIGNED on all three, by design — a legitimate deliverable, not a placeholder. Where
+      # signing would attach, on a runner that actually holds the identity:
+      #   macOS   — `gjsify ship darwin --arch <arch> --skip-build --target macos-app-zip
+      #             --sign <identity>` (Developer ID; `--notarize <keychain-profile>` on top)
+      #   Windows — same shape, `--sign <certificate thumbprint or PFX path>` reaching
+      #             `signtool` (UNVERIFIED upstream: no run in gjsify has ever invoked it)
+
+      # Names are the ones real local `gjsify ship` runs printed (macOS arm64: 1747832 bytes,
+      # macOS x64: 2790358 bytes, Windows x64: 228735874 bytes — all built with the
+      # corresponding `@gjsify/webgl-<target>` typelib patched in above), not guessed.
+      - name: Assert the macOS and Windows artifacts arrived
+        working-directory: cli/ship/out
+        run: |
+          set -eu
+          ls -la
+          version=$(node -p "require('$GITHUB_WORKSPACE/cli/package.json').version")
+          missing=0
+          for f in \
+            "bauplaner-${version}-1.macos.arm64.zip" \
+            "bauplaner-${version}-1.macos.x86_64.zip" \
+            "bauplaner-${version}-1.windows.x64.zip" \
+            "bauplaner-${version}-1.x64.msi"; do
+            if [ ! -s "$f" ]; then
+              echo "::error::missing or empty artifact: $f"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ]
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ship-bauplaner
+          path: cli/ship/out/*
+          compression-level: 0
+
+  # The Flatpak half of `gjsify ship`, split out for two reasons the job above must not inherit
+  # (same as troedler's/beifahrer's ci.yml).
+  #
+  # flatpak-builder is one: gjsify writes `.deb` and `.rpm` itself and EXECS nothing, but a
+  # Flatpak is an OSTree static delta and `flatpak build-bundle` is the only thing that writes
+  # one — `utils/ship/formats.ts` declares `['flatpak-builder', 'flatpak']` as its required
+  # tools, against `[]` for the two packages above.
+  #
+  # PRIVILEGE is the other: flatpak-builder runs every module's `build-commands` under `bwrap`,
+  # which a `fedora:44` container without `options: --privileged` refuses ("Can't mount proc on
+  # /proc: Permission denied").
+  ship-flatpak:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:44
+      options: --privileged
+    steps:
+      - name: Install system prerequisites
+        run: >
+          dnf install -y --setopt=install_weak_deps=False
+          git tar xz findutils gjs pango libsoup3 json-glib glib2 flatpak flatpak-builder
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Cache gjsify tarball store
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/gjsify/tarballs
+          key: gjsify-tarballs-${{ hashFiles('gjsify-lock.json') }}
+          restore-keys: gjsify-tarballs-
+
+      - name: Bootstrap the gjsify CLI
+        run: |
+          VERSION=$(node -p "require('./cli/package.json').devDependencies['@gjsify/cli']")
+          echo "Bootstrapping @gjsify/cli@$VERSION (from cli/package.json)"
+          npm install -g "@gjsify/cli@$VERSION"
+
+      - name: Install dependencies (gjsify install --immutable)
+        run: gjsify install --immutable
+
+      - name: Build the app bundle
+        run: cd cli && gjsify run build:app
+
+      # Read out of `cli/package.json`, never repeated here — the same rule as the bootstrap
+      # above. `gjsify.ship.flatpak.runtimeVersion` when the project sets one, else gjsify's
+      # `DEFAULT_GNOME_RUNTIME_VERSION`.
+      - name: Resolve the runtime version
+        id: runtime
+        run: |
+          set -eu
+          version=$(node -p "require('./cli/package.json').gjsify.ship?.flatpak?.runtimeVersion ?? 50")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "building the Flatpak against org.gnome.Platform//$version + org.gnome.Sdk//$version"
+
+      - name: Cache the flatpak runtimes
+        uses: actions/cache@v4
+        with:
+          path: /var/lib/flatpak
+          key: flatpak-gnome-${{ steps.runtime.outputs.version }}-f44
+
+      - name: Install the GNOME runtime and SDK
+        run: |
+          set -eu
+          flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak remote-modify --enable flathub
+          flatpak install --system --noninteractive \
+            "org.gnome.Platform//${{ steps.runtime.outputs.version }}" \
+            "org.gnome.Sdk//${{ steps.runtime.outputs.version }}"
+          flatpak list --runtime --columns=ref | grep "^org.gnome.\(Platform\|Sdk\)/"
+
+      # `--arch x64`, same reasoning as the deb/rpm/AppImage job: the bundled Gwebgl typelib is
+      # built for x64.
+      - name: Package the app (.flatpak)
+        run: cd cli && gjsify ship linux --skip-build --target flatpak --arch x64
+
+      # `appstreamcli compose` reports `file-read-error` without naming the file; the hint report
+      # does. Runs only when the package step failed, so a green build pays nothing for it.
+      - name: Name the file appstream could not read
+        if: failure()
+        run: |
+          root=cli/ship/flatpak/build/files
+          echo "--- dangling symlinks in the build root:"
+          find "$root" -xtype l | head -20
+          echo "--- appstream hint report:"
+          appstreamcli --verbose compose --prefix=/ --origin=flatpak --result-root=/tmp/as \
+            --components=eu.jumplink.Bauplaner --hints-dir=/tmp/as-hints "$root" 2>&1 | tail -30 || true
+          find /tmp/as-hints -type f | head -5
+          find /tmp/as-hints -type f -exec cat {} + | head -40
+
+      # `ship` writes nothing and still exits 0 when the target is filtered away, and a
+      # Flatpak is the format where a filtered-away target is easiest to miss — the build
+      # prints nothing that looks like a bundle.
+      - name: Assert the bundle arrived
+        working-directory: cli/ship/out
+        run: |
+          set -eu
+          ls -la
+          version=$(node -p "require('$GITHUB_WORKSPACE/cli/package.json').version")
+          f="eu.jumplink.Bauplaner-${version}-1.x86_64.flatpak"
+          if [ ! -s "$f" ]; then
+            echo "::error::missing or empty artifact: $f"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ship-flatpak
+          path: cli/ship/out/*.flatpak
+          compression-level: 0
